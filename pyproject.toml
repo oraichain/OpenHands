@@ -106,6 +106,15 @@ notebook = "*"
 jupyter_kernel_gateway = "*"
 flake8 = "*"
 
+
+
+
+
+
+
+[tool.poetry.group.kubernetes.dependencies]
+kubernetes = ">=25.3.0"
+
 [build-system]
 build-backend = "poetry.core.masonry.api"
 requires = [

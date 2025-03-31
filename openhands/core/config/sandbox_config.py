@@ -38,6 +38,10 @@ class SandboxConfig(BaseModel):
         enable_gpu: Whether to enable GPU.
         docker_runtime_kwargs: Additional keyword arguments to pass to the Docker runtime when running containers.
             This should be a JSON string that will be parsed into a dictionary.
+        k8s_namespace: The Kubernetes namespace to use for the runtime.
+        storage_class_name: The Kubernetes StorageClass name to use for PVCs.
+        pvc_storage_size: The size of the Persistent Volume Claim to create.
+        k8s_service_type: The Kubernetes service type (NodePort, LoadBalancer, etc.).
     """
 
     remote_runtime_api_url: str | None = Field(default='http://localhost:8000')
@@ -75,6 +79,11 @@ class SandboxConfig(BaseModel):
     enable_gpu: bool = Field(default=False)
     docker_runtime_kwargs: dict | None = Field(default=None)
     selected_repo: str | None = Field(default=None)
+    # Kubernetes specific configurations
+    k8s_namespace: str = Field(default='openhands-runtime')
+    storage_class_name: str = Field(default='standard')
+    pvc_storage_size: str = Field(default='10Gi')
+    k8s_service_type: str = Field(default='NodePort')
 
     model_config = {'extra': 'forbid'}
 
