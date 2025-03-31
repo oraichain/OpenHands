@@ -34,10 +34,17 @@ const isAssistantMessage = (
   event.source === "agent" &&
   event.type === "message";
 
+// TODO: this is a temporary solution to filter out terminal data events
+const isTerminalDataEvent = (event: OpenHandsParsedEvent) =>
+  "source" in event && "type" in event;
+// event.source === "terminal"
+
 const isMessageAction = (
   event: OpenHandsParsedEvent,
 ): event is UserMessageAction | AssistantMessageAction =>
-  isUserMessage(event) || isAssistantMessage(event);
+  isUserMessage(event) ||
+  isAssistantMessage(event) ||
+  isTerminalDataEvent(event);
 
 export enum WsClientProviderStatus {
   CONNECTED,
@@ -126,6 +133,7 @@ export function WsClientProvider({
   }
 
   function handleMessage(event: Record<string, unknown>) {
+    console.log("handleMessage", event);
     if (isOpenHandsEvent(event) && isMessageAction(event)) {
       messageRateHandler.record(new Date().getTime());
     }
