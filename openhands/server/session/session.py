@@ -126,6 +126,7 @@ class Session:
 
         llm = self._create_llm(agent_cls)
         agent_config = self.config.get_agent_config(agent_cls)
+        planning_agent_config = self.config.get_agent_config('planning_agent')
 
         if settings.enable_default_condenser:
             default_condenser_config = LLMSummarizingCondenserConfig(
@@ -135,6 +136,7 @@ class Session:
             agent_config.condenser = default_condenser_config
 
         agent = Agent.get_cls(agent_cls)(llm, agent_config)
+        planning_agent = Agent.get_cls(agent_cls)(llm, planning_agent_config)
 
         git_provider_tokens = None
         selected_repository = None
@@ -149,6 +151,7 @@ class Session:
                 runtime_name=self.config.runtime,
                 config=self.config,
                 agent=agent,
+                planning_agent=planning_agent,
                 max_iterations=max_iterations,
                 max_budget_per_task=self.config.max_budget_per_task,
                 agent_to_llm_config=self.config.get_agent_to_llm_config_map(),

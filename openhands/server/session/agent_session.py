@@ -81,6 +81,7 @@ class AgentSession:
         runtime_name: str,
         config: AppConfig,
         agent: Agent,
+        planning_agent: Agent,
         max_iterations: int,
         git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
         max_budget_per_task: float | None = None,
@@ -202,6 +203,7 @@ class AgentSession:
             else:
                 self.controller = self._create_controller(
                     agent,
+                    # planning_agent,
                     config.security.confirmation_mode,
                     max_iterations,
                     max_budget_per_task=max_budget_per_task,

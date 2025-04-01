@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any
 
 import openhands
+from openhands.controller.state.plan import Plan
 from openhands.controller.state.task import RootTask
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.schema import AgentState
@@ -71,6 +72,11 @@ class State:
     - Extra data:
       - additional task-specific data
     """
+
+    # plans created by the agent
+    plans: list[dict[str, Plan]] = field(default_factory=list)
+    active_plan_id: str = ''
+    current_task_index: str = ''
 
     root_task: RootTask = field(default_factory=RootTask)
     session_id: str = ''

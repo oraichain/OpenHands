@@ -22,6 +22,7 @@ from openhands.utils.shutdown_listener import should_continue
 
 
 class EventStreamSubscriber(str, Enum):
+    PLANNING_CONTROLLER = 'planning_controller'
     AGENT_CONTROLLER = 'agent_controller'
     SECURITY_ANALYZER = 'security_analyzer'
     RESOLVER = 'openhands_resolver'

@@ -1,0 +1,152 @@
+"""This file contains the function calling implementation for different actions.
+
+This is similar to the functionality of `CodeActResponseParser`.
+"""
+
+import json
+
+from litellm import (
+    ChatCompletionToolParam,
+    ModelResponse,
+)
+
+from openhands.agenthub.planner_agent.tools import (
+    BrowserTool,
+    PlanningTool,
+    ThinkTool,
+    WebReadTool,
+)
+from openhands.core.exceptions import (
+    FunctionCallValidationError,
+)
+from openhands.core.logger import openhands_logger as logger
+from openhands.events.action import (
+    Action,
+    AgentThinkAction,
+    BrowseInteractiveAction,
+    BrowseURLAction,
+    MessageAction,
+)
+from openhands.events.action.mcp import McpAction
+from openhands.events.action.plan import CreatePlanAction
+from openhands.events.tool import ToolCallMetadata
+
+
+def combine_thought(action: Action, thought: str) -> Action:
+    if not hasattr(action, 'thought'):
+        return action
+    if thought and action.thought:
+        action.thought = f'{thought}\n{action.thought}'
+    elif thought:
+        action.thought = thought
+    return action
+
+
+def response_to_actions(response: ModelResponse) -> list[Action]:
+    actions: list[Action] = []
+    assert len(response.choices) == 1, 'Only one choice is supported for now'
+    choice = response.choices[0]
+    assistant_msg = choice.message
+    if hasattr(assistant_msg, 'tool_calls') and assistant_msg.tool_calls:
+        # Check if there's assistant_msg.content. If so, add it to the thought
+        thought = ''
+        if isinstance(assistant_msg.content, str):
+            thought = assistant_msg.content
+        elif isinstance(assistant_msg.content, list):
+            for msg in assistant_msg.content:
+                if msg['type'] == 'text':
+                    thought += msg['text']
+
+        # Process each tool call to OpenHands action
+        for i, tool_call in enumerate(assistant_msg.tool_calls):
+            action: Action
+            logger.warning(f'Tool call in function_calling.py: {tool_call}')
+            try:
+                arguments = json.loads(tool_call.function.arguments)
+            except json.decoder.JSONDecodeError as e:
+                raise RuntimeError(
+                    f'Failed to parse tool call arguments: {tool_call.function.arguments}'
+                ) from e
+
+            # if tool_call.function.name == 'delegate_to_browsing_agent':
+            #     action = AgentDelegateAction(
+            #         agent='BrowsingAgent',
+            #         inputs=arguments,
+            #     )
+
+            if tool_call.function.name == PlanningTool['function']['name']:
+                action = CreatePlanAction(
+                    plan_id=arguments.get('plan_id', ''),
+                    title=arguments.get('title', ''),
+                    tasks=arguments.get('tasks', []),
+                )
+
+            # ================================================
+            # AgentThinkAction
+            # ================================================
+            elif tool_call.function.name == ThinkTool['function']['name']:
+                action = AgentThinkAction(thought=arguments.get('thought', ''))
+
+            # ================================================
+            # BrowserTool
+            # ================================================
+            elif tool_call.function.name == BrowserTool['function']['name']:
+                if 'code' not in arguments:
+                    raise FunctionCallValidationError(
+                        f'Missing required argument "code" in tool call {tool_call.function.name}'
+                    )
+                action = BrowseInteractiveAction(browser_actions=arguments['code'])
+
+            # ================================================
+            # WebReadTool (simplified browsing)
+            # ================================================
+            elif tool_call.function.name == WebReadTool['function']['name']:
+                if 'url' not in arguments:
+                    raise FunctionCallValidationError(
+                        f'Missing required argument "url" in tool call {tool_call.function.name}'
+                    )
+                action = BrowseURLAction(url=arguments['url'])
+
+            # ================================================
+            # Other cases -> McpTool (MCP)
+            # ================================================
+            else:
+                # if 'mcp_actions' not in arguments:
+                #     raise FunctionCallNotExistsError(
+                #     f'Tool {tool_call.function.name} is not registered. (arguments: {arguments}). Please check the tool name and retry with an existing tool.'
+                # )
+                action = McpAction(
+                    name=tool_call.function.name, arguments=tool_call.function.arguments
+                )
+                action.set_hard_timeout(120)
+                logger.warning(f'MCP action in function_calling.py: {action}')
+
+            # We only add thought to the first action
+            if i == 0:
+                action = combine_thought(action, thought)
+            # Add metadata for tool calling
+            action.tool_call_metadata = ToolCallMetadata(
+                tool_call_id=tool_call.id,
+                function_name=tool_call.function.name,
+                model_response=response,
+                total_calls_in_response=len(assistant_msg.tool_calls),
+            )
+            actions.append(action)
+    else:
+        actions.append(
+            MessageAction(
+                content=str(assistant_msg.content) if assistant_msg.content else '',
+                wait_for_response=True,
+            )
+        )
+
+    assert len(actions) >= 1
+    return actions
+
+
+def get_tools() -> list[ChatCompletionToolParam]:
+    """
+    Get the list of tools that are available for function calling.
+    """
+
+    return [WebReadTool, BrowserTool, ThinkTool, PlanningTool]

@@ -9,7 +9,7 @@ MESSAGE_SEPARATOR = '\n\n----------\n\n'
 class DebugMixin:
     def log_prompt(self, messages: list[dict[str, Any]] | dict[str, Any]):
         if not messages:
-            logger.debug('No completion messages!')
+            logger.warning('No completion messages!')
             return
 
         messages = messages if isinstance(messages, list) else [messages]
@@ -20,13 +20,13 @@ class DebugMixin:
         )
 
         if debug_message:
-            llm_prompt_logger.debug(debug_message)
+            llm_prompt_logger.warning(debug_message)
         else:
-            logger.debug('No completion messages!')
+            logger.warning('No completion messages!')
 
     def log_response(self, message_back: str):
         if message_back:
-            llm_response_logger.debug(message_back)
+            llm_response_logger.warning(message_back)
 
     def _format_message_content(self, message: dict[str, Any]):
         content = message['content']
@@ -34,7 +34,11 @@ class DebugMixin:
             return '\n'.join(
                 self._format_content_element(element) for element in content
             )
-        return str(content)
+        return (
+            f"========================={message['role'].upper()}========================\n"
+            + str(content)
+            + '\n=========================================================='
+        )
 
     def _format_content_element(self, element: dict[str, Any]):
         if isinstance(element, dict):

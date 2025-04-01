@@ -2,6 +2,10 @@ from enum import Enum
 
 
 class ActionType(str, Enum):
+    PLAN = 'plan'
+    """Interact with the planner.
+    """
+
     MESSAGE = 'message'
     """Represents a message.
     """
