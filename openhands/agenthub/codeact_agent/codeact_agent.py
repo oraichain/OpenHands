@@ -4,7 +4,7 @@ from collections import deque
 import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
-from openhands.core.config import AgentConfig
+from openhands.core.config import AgentConfig, ModelRoutingConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import Message, TextContent
 from openhands.events.action import (
@@ -14,12 +14,14 @@ from openhands.events.action import (
 from openhands.llm.llm import LLM
 from openhands.memory.condenser import Condenser
 from openhands.memory.conversation_memory import ConversationMemory
+from openhands.router import BaseRouter, LLMBasedPlanRouter
 from openhands.runtime.plugins import (
     AgentSkillsRequirement,
     JupyterRequirement,
     PluginRequirement,
 )
 from openhands.utils.prompt import PromptManager
+from openhands.utils.trajectory import format_trajectory
 
 
 class CodeActAgent(Agent):
@@ -52,7 +54,12 @@ class CodeActAgent(Agent):
     ]
 
     def __init__(
-        self, llm: LLM, config: AgentConfig, mcp_tools: list[dict] | None = None
+        self,
+        llm: LLM,
+        config: AgentConfig,
+        mcp_tools: list[dict] | None = None,
+        model_routing_config: ModelRoutingConfig | None = None,
+        routing_llms: dict[str, LLM] | None = None,
     ) -> None:
         """Initializes a new instance of the CodeActAgent class.
 
@@ -60,6 +67,8 @@ class CodeActAgent(Agent):
         - llm (LLM): The llm to be used by this agent
         - config (AgentConfig): The configuration for this agent
         - mcp_tools (list[dict] | None, optional): List of MCP tools to be used by this agent. Defaults to None.
+        - model_routing_config (ModelRoutingConfig | None, optional): Configuration for model routing. Defaults to None.
+        - routing_llms (dict[str, LLM] | None, optional): The llms to be selected for routing. Defaults to None.
         """
         super().__init__(llm, config, mcp_tools)
         self.pending_actions: deque[Action] = deque()
@@ -87,6 +96,18 @@ class CodeActAgent(Agent):
 
         self.condenser = Condenser.from_config(self.config.condenser)
         logger.debug(f'Using condenser: {type(self.condenser)}')
+
+        self.router: BaseRouter | None = None
+
+        if config.enable_plan_routing:
+            assert model_routing_config is not None and routing_llms is not None
+            self.router = LLMBasedPlanRouter(
+                llm=self.llm,
+                routing_llms=routing_llms or dict(),
+                model_routing_config=model_routing_config,
+            )
+
+        self.active_llm: LLM | None = None  # The LLM chosen by the router
 
     def reset(self) -> None:
         """Resets the CodeAct Agent."""
@@ -116,16 +137,34 @@ class CodeActAgent(Agent):
         if latest_user_message and latest_user_message.content.strip() == '/exit':
             return AgentFinishAction()
 
-        # prepare what we want to send to the LLM
-        messages = self._get_messages(state)
-        params: dict = {
-            'messages': self.llm.format_messages_for_llm(messages),
-        }
+        params: dict = {}
+
+        # check if model routing is needed
+        if self.router:
+            messages = self._get_messages(state)
+            formatted_trajectory = format_trajectory(messages)
+            self.active_llm = self.router.should_route_to(formatted_trajectory)
+
+            if self.active_llm != self.llm:
+                logger.warning(f'🧭 Routing to custom model: {self.active_llm}')
+        else:
+            self.active_llm = self.llm
+
         params['tools'] = self.tools
+        if not self.active_llm.is_function_calling_active():
+            params['mock_function_calling'] = True
+
         # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
-        response = self.llm.completion(**params)
+
+        # prepare what we want to send to the LLM
+        # NOTE: We need to call this here when self.active_llm is correctly set
+        messages = self._get_messages(state)
+        params['messages'] = self.active_llm.format_messages_for_llm(messages)
+
+        response = self.active_llm.completion(**params)
         logger.debug(f'Response from LLM: {response}')
+
         actions = codeact_function_calling.response_to_actions(response)
         logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
@@ -167,7 +206,9 @@ class CodeActAgent(Agent):
         if not self.prompt_manager:
             raise Exception('Prompt Manager not instantiated.')
 
-        # Use ConversationMemory to process initial messages
+        # Use conversation_memory to process events instead of calling events_to_messages directly
+        active_llm_ = self.active_llm or self.llm
+
         messages = self.conversation_memory.process_initial_messages(
             with_caching=self.llm.is_caching_prompt_active()
         )
@@ -183,16 +224,35 @@ class CodeActAgent(Agent):
         messages = self.conversation_memory.process_events(
             condensed_history=events,
             initial_messages=messages,
-            max_message_chars=self.llm.config.max_message_chars,
-            vision_is_active=self.llm.vision_is_active(),
+            max_message_chars=active_llm_.config.max_message_chars,
+            vision_is_active=active_llm_.vision_is_active(),
+            enable_som_visual_browsing=self.config.enable_som_visual_browsing,
         )
 
         messages = self._enhance_messages(messages)
 
-        if self.llm.is_caching_prompt_active():
+        if active_llm_.is_caching_prompt_active():
             self.conversation_memory.apply_prompt_caching(messages)
 
         return messages
+
+    def _initial_messages(self) -> list[Message]:
+        """Creates the initial messages (including the system prompt) for the LLM conversation."""
+        assert self.prompt_manager, 'Prompt Manager not instantiated.'
+
+        active_llm_ = self.active_llm or self.llm
+
+        return [
+            Message(
+                role='system',
+                content=[
+                    TextContent(
+                        text=self.prompt_manager.get_system_message(),
+                        cache_prompt=active_llm_.is_caching_prompt_active(),
+                    )
+                ],
+            )
+        ]
 
     def _enhance_messages(self, messages: list[Message]) -> list[Message]:
         """Enhances the user message with additional context based on keywords matched.

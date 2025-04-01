@@ -236,6 +236,9 @@ codeact_enable_jupyter = true
 # length limit
 enable_history_truncation = true
 
+# Whether to enable plan routing to reasoning models
+#enable_plan_routing = false
+
 [agent.RepoExplorerAgent]
 # Example: use a cheaper model for RepoExplorerAgent to reduce cost, especially
 # useful when an agent doesn't demand high quality but uses a lot of tokens
@@ -378,6 +381,23 @@ type = "noop"
 #model = "gpt-4o"
 #temperature = 0.1
 #max_tokens = 1024
+
+################################ Model Routing ###############################
+# Configuration for model routing features
+##############################################################################
+[model_routing]
+
+# The reasoning model to use for plan generation
+reasoning_llm_config_name = 'reasoning_model'
+judge_llm_config_name = 'judge_model'
+
+[llm.judge_model]
+model = "gpt-4o"
+api_key = ""
+
+[llm.reasoning_model]
+model = "o1"
+api_key = ""
 
 #################################### Eval ####################################
 # Configuration for the evaluation, please refer to the specific evaluation

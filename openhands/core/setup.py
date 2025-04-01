@@ -9,9 +9,7 @@ import openhands.agenthub  # noqa F401 (we import this to get the agents registe
 from openhands.controller import AgentController
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
-from openhands.core.config import (
-    AppConfig,
-)
+from openhands.core.config import AppConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
 from openhands.events.event import Event
@@ -173,14 +171,29 @@ async def create_agent(config: AppConfig) -> Agent:
     agent_cls: Type[Agent] = Agent.get_cls(config.default_agent)
     agent_config = config.get_agent_config(config.default_agent)
     llm_config = config.get_llm_config_from_agent(config.default_agent)
+
+    # Set up MCP agents
     mcp_agents = await create_mcp_agents(
         config.mcp.sse.mcp_servers, config.mcp.stdio.commands, config.mcp.stdio.args
     )
     mcp_tools = convert_mcp_agents_to_tools(mcp_agents)
+
+    # Set up routing LLMs
+    routing_llms_config = config.routing_llms
+    model_routing_config = config.model_routing
+    routing_llms = {}
+    for config_name, routing_llm_config in routing_llms_config.items():
+        routing_llms[config_name] = LLM(
+            config=routing_llm_config,
+        )
+
+    # Create agent with all required parameters
     agent = agent_cls(
         llm=LLM(config=llm_config),
         config=agent_config,
         mcp_tools=mcp_tools,
+        model_routing_config=model_routing_config,
+        routing_llms=routing_llms,
     )
 
     # We only need to get the tools from the MCP agents, so we can safely close them after that
