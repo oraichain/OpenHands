@@ -9,7 +9,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: "#E4775D", // nice yellow
+        primary: "#FF6100", // nice yellow
         logo: "#E4775D", // color for logos and icons
         base: "#13141D", // dark background also used for tooltips
         "base-secondary": "#1A1C28", // lighter background
@@ -19,6 +19,9 @@ export default {
         "tertiary-light": "#B7BDC2", // lighter gray, used for borders and placeholder text
         content: "#ECEDEE", // light gray, used mostly for text
         "content-2": "#F9FBFE",
+        "sea-stone": {
+          900: "#181A17",
+        },
       },
     },
   },
