@@ -309,16 +309,14 @@ llm_config = 'gpt3'
 # Configuration for security features
 ##############################################################################
 [security]
-
-
-
-
-
-<<<<<<< HEAD
-# Whether to enable security analyzer# The security analyzer to use (For Headless / CLI only -  In Web this is overridden by Session Init)# Enable confirmation mode (For Headless / CLI only -  In Web this is overridden by Session Init)
-#confirmation_mode = false
-#security_analyzer = ""
+# Whether to enable security analyzer
 #enable_security_analyzer = false
+
+# The security analyzer to use (For Headless / CLI only -  In Web this is overridden by Session Init)
+#security_analyzer = ""
+
+# Enable confirmation mode (For Headless / CLI only -  In Web this is overridden by Session Init)
+#confirmation_mode = false
 
 #################################### Condenser #################################
 # Condensers control how conversation history is managed and compressed when
@@ -367,10 +365,6 @@ type = "noop"
 # Maximum size of history before triggering forgetting
 #max_size = 100
 
-
-
-
-=======
 # 6. LLM Attention Condenser
 #type = "llm_attention"
 # Reference to an LLM config to use for attention scoring
@@ -379,12 +373,14 @@ type = "noop"
 #keep_first = 1
 # Maximum size of history before triggering attention mechanism
 #max_size = 100
+
 # Example of a custom LLM configuration for condensers that require an LLM
 # If not provided, it falls back to the default LLM
 #[llm.condenser]
 #model = "gpt-4o"
 #temperature = 0.1
 #max_tokens = 1024
+
 ################################ Model Routing ###############################
 # Configuration for model routing features
 ##############################################################################
@@ -399,11 +395,10 @@ model = "gpt-4o"
 api_key = ""
 
 [llm.reasoning_model]
-
->>>>>>> c076a3282b5be79c44c0b1ca002b9fe385a69bb7
-
-#################################### Eval ####################################model = "o1"
+model = "o1"
 api_key = ""
+
+#################################### Eval ####################################
 # Configuration for the evaluation, please refer to the specific evaluation
 # plugin for the available options
 ##############################################################################

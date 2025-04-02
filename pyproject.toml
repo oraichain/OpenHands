@@ -13,13 +13,9 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-
-<<<<<<< HEAD
+python = "^3.12"
 mcp = "1.4.1"
-=======
-
->>>>>>> 6851215410237b5be69a8a0028f6e4e3489c4c22
-python-json-logger = "^3.2.1"python = "^3.12"
+python-json-logger = "^3.2.1"
 datasets = "*"
 pandas = "*"
 litellm = "^1.60.0"
@@ -81,7 +77,6 @@ stripe = "^11.5.0"
 ipywidgets = "^8.1.5"
 qtconsole = "^5.6.1"
 memory-profiler = "^0.61.0"
-daytona-sdk = "0.10.4"
 daytona-sdk = "0.11.2"
 
 [tool.poetry.group.dev.dependencies]

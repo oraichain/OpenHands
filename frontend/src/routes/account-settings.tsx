@@ -12,7 +12,7 @@ import { useSaveSettings } from "#/hooks/mutation/use-save-settings";
 import { useAIConfigOptions } from "#/hooks/query/use-ai-config-options";
 import { useConfig } from "#/hooks/query/use-config";
 import { useSettings } from "#/hooks/query/use-settings";
-// import { useAppLogout } from "#/hooks/use-app-logout";
+import { useAppLogout } from "#/hooks/use-app-logout";
 import { AvailableLanguages } from "#/i18n";
 import { DEFAULT_SETTINGS } from "#/services/settings";
 import { handleCaptureConsent } from "#/utils/handle-capture-consent";
@@ -46,12 +46,8 @@ function AccountSettings() {
     isSuccess: isSuccessfulResources,
   } = useAIConfigOptions();
   const { mutate: saveSettings } = useSaveSettings();
-<<<<<<< HEAD
-  // const { handleLogout } = useAppLogout();
-=======
   const { handleLogout } = useAppLogout();
   const { providerTokensSet, providersAreSet } = useAuth();
->>>>>>> 6851215410237b5be69a8a0028f6e4e3489c4c22
 
   const isFetching = isFetchingSettings || isFetchingResources;
   const isSuccess = isSuccessfulSettings && isSuccessfulResources;
@@ -75,16 +71,11 @@ function AccountSettings() {
     return false;
   };
 
-<<<<<<< HEAD
-  // const hasAppSlug = !!config?.APP_SLUG;
-  // const isGitHubTokenSet = settings?.GITHUB_TOKEN_IS_SET;
-=======
   const hasAppSlug = !!config?.APP_SLUG;
   const isGitHubTokenSet =
     providerTokensSet.includes(ProviderOptions.github) || false;
   const isGitLabTokenSet =
     providerTokensSet.includes(ProviderOptions.gitlab) || false;
->>>>>>> 6851215410237b5be69a8a0028f6e4e3489c4c22
   const isLLMKeySet = settings?.LLM_API_KEY === "**********";
   const isAnalyticsEnabled = settings?.USER_CONSENTS_TO_ANALYTICS;
   const isAdvancedSettingsSet = determineWhetherToToggleAdvancedSettings();
@@ -378,130 +369,6 @@ function AccountSettings() {
               )}
             </section>
           )}
-
-          {/* <section className="flex flex-col gap-6">
-            <h2 className="text-[28px] leading-8 tracking-[-0.02em] font-bold">
-              Git Provider Settings
-            </h2>
-            {isSaas && hasAppSlug && (
-              <Link
-                to={`https://github.com/apps/${config.APP_SLUG}/installations/new`}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                <BrandButton type="button" variant="secondary">
-                  Configure GitHub Repositories
-                </BrandButton>
-              </Link>
-            )}
-            {!isSaas && (
-              <>
-                <SettingsInput
-                  testId="github-token-input"
-                  name="github-token-input"
-                  label="GitHub Token"
-                  type="password"
-                  className="w-[680px]"
-                  startContent={
-                    isGitHubTokenSet && (
-                      <KeyStatusIcon isSet={!!isGitHubTokenSet} />
-                    )
-                  }
-                  placeholder={isGitHubTokenSet ? "<hidden>" : ""}
-                />
-                <p data-testid="github-token-help-anchor" className="text-xs">
-                  {" "}
-                  Generate a token on{" "}
-                  <b>
-                    {" "}
-                    <a
-                      href="https://github.com/settings/tokens/new?description=openhands-app&scopes=repo,user,workflow"
-                      target="_blank"
-                      className="underline underline-offset-2"
-                      rel="noopener noreferrer"
-                    >
-                      GitHub
-                    </a>{" "}
-                  </b>
-                  or see the{" "}
-                  <b>
-                    <a
-                      href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
-                      target="_blank"
-                      className="underline underline-offset-2"
-                      rel="noopener noreferrer"
-                    >
-                      documentation
-                    </a>
-                  </b>
-                  .
-                </p>
-
-                <SettingsInput
-                  testId="gitlab-token-input"
-                  name="gitlab-token-input"
-                  label="GitLab Token"
-                  type="password"
-                  className="w-[680px]"
-                  startContent={
-                    isGitLabTokenSet && (
-                      <KeyStatusIcon isSet={!!isGitLabTokenSet} />
-                    )
-                  }
-                  placeholder={isGitHubTokenSet ? "<hidden>" : ""}
-                />
-
-                <p data-testId="gitlab-token-help-anchor" className="text-xs">
-                  {" "}
-                  Generate a token on{" "}
-                  <b>
-                    {" "}
-                    <a
-                      href="https://gitlab.com/-/user_settings/personal_access_tokens?name=openhands-app&scopes=api,read_user,read_repository,write_repository"
-                      target="_blank"
-                      className="underline underline-offset-2"
-                      rel="noopener noreferrer"
-                    >
-                      GitLab
-                    </a>{" "}
-                  </b>
-                  or see the{" "}
-                  <b>
-                    <a
-                      href="https://docs.gitlab.com/user/profile/personal_access_tokens/"
-                      target="_blank"
-                      className="underline underline-offset-2"
-                      rel="noopener noreferrer"
-                    >
-                      documentation
-                    </a>
-                  </b>
-                  .
-                </p>
-                <BrandButton
-                  type="button"
-                  variant="secondary"
-                  onClick={handleLogout}
-                  isDisabled={!providersAreSet}
-                >
-                  Disconnect Tokens
-                </BrandButton>
-              </>
-            )}
-<<<<<<< HEAD
-
-            <BrandButton
-              type="button"
-              variant="secondary"
-              onClick={handleLogout}
-              isDisabled={!isGitHubTokenSet}
-            >
-              Disconnect from GitHub
-            </BrandButton>
-          </section> */}
-=======
-          </section>
->>>>>>> 6851215410237b5be69a8a0028f6e4e3489c4c22
 
           <section className="flex flex-col gap-6">
             <h2 className="text-[28px] leading-8 tracking-[-0.02em] font-bold">
