@@ -10,8 +10,10 @@ from litellm import (
     ModelResponse,
 )
 
-from openhands.agenthub.codeact_agent.tools import (
+from openhands.agenthub.react_agent.tools import (
     BrowserTool,
+    DelegateBrowserTool,
+    DelegateCodeActTool,
     FinishTool,
     # IPythonTool,
     # LLMBasedFileEditTool,
@@ -102,7 +104,11 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                     agent='BrowsingAgent',
                     inputs=arguments,
                 )
-
+            elif tool_call.function.name == 'delegate_to_codeact_agent':
+                action = AgentDelegateAction(
+                    agent='CodeActAgent',
+                    inputs=arguments,
+                )
             # ================================================
             # AgentFinishAction
             # ================================================
@@ -223,7 +229,9 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
             )
         )
 
-    assert len(actions) >= 1
+    # assert len(actions) >= 1
+    if len(actions) >= 1:
+        actions = actions[:1]
     return actions
 
 
@@ -250,6 +258,8 @@ def get_tools(
     if codeact_enable_browsing:
         tools.append(WebReadTool)
         tools.append(BrowserTool)
+    tools.append(DelegateBrowserTool)
+    tools.append(DelegateCodeActTool)
     # if codeact_enable_jupyter:
     #     tools.append(IPythonTool)
     # if codeact_enable_llm_editor:
