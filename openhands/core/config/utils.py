@@ -22,16 +22,13 @@ from openhands import __version__
 from openhands.core import logger
 from openhands.core.config.agent_config import AgentConfig
 from openhands.core.config.app_config import AppConfig
-from openhands.core.config.condenser_config import condenser_config_from_toml_section
+from openhands.core.config.condenser_config import condenser_config_from_toml_section, NoOpCondenserConfig
 from openhands.core.config.config_utils import (
     OH_DEFAULT_AGENT,
     OH_MAX_ITERATIONS,
 )
 from openhands.core.config.extended_config import ExtendedConfig
 from openhands.core.config.llm_config import LLMConfig
-<< << << < HEAD
-== == == =
->>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
 
 JWT_SECRET = '.jwt_secret'
 load_dotenv()

@@ -190,7 +190,8 @@ class ActionExecutor:
                 f'Setting max memory to {self.max_memory_gb}GB (according to the RUNTIME_MAX_MEMORY_GB environment variable)'
             )
         else:
-            logger.info('No max memory limit set, using all available system memory')
+            logger.info(
+                'No max memory limit set, using all available system memory')
 
         self.memory_monitor = MemoryMonitor(
             enable=os.environ.get('RUNTIME_MEMORY_MONITOR', 'False').lower()
@@ -223,10 +224,12 @@ class ActionExecutor:
         if self.browser is None:
             if self.browser_init_task is None:
                 # Start browser initialization if it hasn't been started
-                self.browser_init_task = asyncio.create_task(self._init_browser_async())
+                self.browser_init_task = asyncio.create_task(
+                    self._init_browser_async())
             elif self.browser_init_task.done():
                 # If the task is done but browser is still None, restart initialization
-                self.browser_init_task = asyncio.create_task(self._init_browser_async())
+                self.browser_init_task = asyncio.create_task(
+                    self._init_browser_async())
 
             # Wait for browser to be initialized
             if self.browser_init_task:
@@ -235,7 +238,8 @@ class ActionExecutor:
 
             # Check if browser was successfully initialized
             if self.browser is None:
-                raise BrowserUnavailableException('Browser initialization failed')
+                raise BrowserUnavailableException(
+                    'Browser initialization failed')
 
         # If we get here, the browser is ready
         logger.debug('Browser is ready')
@@ -255,7 +259,8 @@ class ActionExecutor:
         logger.debug('Bash session initialized')
 
         # Start browser initialization in the background
-        self.browser_init_task = asyncio.create_task(self._init_browser_async())
+        self.browser_init_task = asyncio.create_task(
+            self._init_browser_async())
         logger.debug('Browser initialization started in background')
 
         await wait_all(
@@ -305,7 +310,8 @@ class ActionExecutor:
             if os.environ.get('LOCAL_RUNTIME_MODE') == '1'
             else 'git config --global user.name "openhands" && git config --global user.email "openhands@all-hands.dev" && alias git="git --no-pager"'
         ]
-        logger.debug(f'Initializing by running {len(INIT_COMMANDS)} bash commands...')
+        logger.debug(
+            f'Initializing by running {len(INIT_COMMANDS)} bash commands...')
         for command in INIT_COMMANDS:
             action = CmdRunAction(command=command)
             action.set_hard_timeout(300)
@@ -334,7 +340,8 @@ class ActionExecutor:
     async def run_ipython(self, action: IPythonRunCellAction) -> Observation:
         assert self.bash_session is not None
         if 'jupyter' in self.plugins:
-            _jupyter_plugin: JupyterPlugin = self.plugins['jupyter']  # type: ignore
+            # type: ignore
+            _jupyter_plugin: JupyterPlugin = self.plugins['jupyter']
             # This is used to make AgentSkills in Jupyter aware of the
             # current working directory in Bash
             jupyter_cwd = getattr(self, '_jupyter_cwd', None)
@@ -398,7 +405,8 @@ class ActionExecutor:
             if filepath.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
                 with open(filepath, 'rb') as file:  # noqa: ASYNC101
                     image_data = file.read()
-                    encoded_image = base64.b64encode(image_data).decode('utf-8')
+                    encoded_image = base64.b64encode(
+                        image_data).decode('utf-8')
                     mime_type, _ = mimetypes.guess_type(filepath)
                     if mime_type is None:
                         mime_type = 'image/png'  # default to PNG if mime type cannot be determined
@@ -414,7 +422,8 @@ class ActionExecutor:
             elif filepath.lower().endswith(('.mp4', '.webm', '.ogg')):
                 with open(filepath, 'rb') as file:  # noqa: ASYNC101
                     video_data = file.read()
-                    encoded_video = base64.b64encode(video_data).decode('utf-8')
+                    encoded_video = base64.b64encode(
+                        video_data).decode('utf-8')
                     mime_type, _ = mimetypes.guess_type(filepath)
                     if mime_type is None:
                         mime_type = 'video/mp4'  # default to MP4 if MIME type cannot be determined
@@ -458,7 +467,8 @@ class ActionExecutor:
             with open(filepath, mode, encoding='utf-8') as file:  # noqa: ASYNC101
                 if mode != 'w':
                     all_lines = file.readlines()
-                    new_file = insert_lines(insert, all_lines, action.start, action.end)
+                    new_file = insert_lines(
+                        insert, all_lines, action.start, action.end)
                 else:
                     new_file = [i + '\n' for i in insert]
 
@@ -623,11 +633,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('port', type=int, help='Port to listen on')
     parser.add_argument('--working-dir', type=str, help='Working directory')
-    parser.add_argument('--plugins', type=str, help='Plugins to initialize', nargs='+')
+    parser.add_argument('--plugins', type=str,
+                        help='Plugins to initialize', nargs='+')
     parser.add_argument(
         '--username', type=str, help='User to run as', default='openhands'
     )
-    parser.add_argument('--user-id', type=int, help='User ID to run as', default=1000)
+    parser.add_argument('--user-id', type=int,
+                        help='User ID to run as', default=1000)
     parser.add_argument(
         '--browsergym-eval-env',
         type=str,
@@ -640,15 +652,12 @@ if __name__ == '__main__':
 
     # example: python client.py 8000 --working-dir /workspace --plugins JupyterRequirement
     args = parser.parse_args()
-<<<<<<< HEAD
-=======
 
     port_path = '/tmp/oh-server-url'
     os.makedirs(os.path.dirname(port_path), exist_ok=True)
     with open(port_path, 'w') as f:
         f.write(f'http://127.0.0.1:{args.port}')
 
->>>>>>> 6851215410237b5be69a8a0028f6e4e3489c4c22
     plugins_to_load: list[Plugin] = []
     if args.plugins:
         for plugin in args.plugins:
@@ -683,7 +692,8 @@ if __name__ == '__main__':
         logger.exception('Unhandled exception occurred:')
         return JSONResponse(
             status_code=500,
-            content={'detail': 'An unexpected error occurred. Please try again later.'},
+            content={
+                'detail': 'An unexpected error occurred. Please try again later.'},
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -698,7 +708,8 @@ if __name__ == '__main__':
         logger.error(f'Validation error occurred: {exc}')
         return JSONResponse(
             status_code=422,
-            content={'detail': 'Invalid request parameters', 'errors': exc.errors()},
+            content={'detail': 'Invalid request parameters',
+                     'errors': exc.errors()},
         )
 
     @app.middleware('http')
@@ -734,7 +745,8 @@ if __name__ == '__main__':
         try:
             action = event_from_dict(action_request.action)
             if not isinstance(action, Action):
-                raise HTTPException(status_code=400, detail='Invalid action type')
+                raise HTTPException(
+                    status_code=400, detail='Invalid action type')
             client.last_execution_time = time.time()
 
             client.process_request(action_request)
@@ -819,13 +831,15 @@ if __name__ == '__main__':
                         for file in files:
                             file_path = os.path.join(root, file)
                             zipf.write(
-                                file_path, arcname=os.path.relpath(file_path, path)
+                                file_path, arcname=os.path.relpath(
+                                    file_path, path)
                             )
                 return FileResponse(
                     path=temp_zip.name,
                     media_type='application/zip',
                     filename=f'{os.path.basename(path)}.zip',
-                    background=BackgroundTask(lambda: os.unlink(temp_zip.name)),
+                    background=BackgroundTask(
+                        lambda: os.unlink(temp_zip.name)),
                 )
 
         except Exception as e:
@@ -946,7 +960,8 @@ if __name__ == '__main__':
         # Security check: Only allow requests from localhost
         client_host = request.client.host if request.client else None
         if client_host not in ['127.0.0.1', 'localhost', '::1']:
-            logger.warning(f'Unauthorized file view attempt from {client_host}')
+            logger.warning(
+                f'Unauthorized file view attempt from {client_host}')
             return HTMLResponse(
                 content='<h1>Access Denied</h1><p>This endpoint is only accessible from localhost</p>',
                 status_code=403,

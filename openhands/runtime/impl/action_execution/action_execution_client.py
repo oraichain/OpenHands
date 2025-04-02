@@ -74,7 +74,8 @@ class ActionExecutionClient(Runtime):
         git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
     ):
         self.session = HttpSession()
-        self.action_semaphore = threading.Semaphore(1)  # Ensure one action at a time
+        self.action_semaphore = threading.Semaphore(
+            1)  # Ensure one action at a time
         self._runtime_initialized: bool = False
         self._runtime_closed: bool = False
         self._vscode_token: str | None = None  # initial dummy value
@@ -200,7 +201,8 @@ class ActionExecutionClient(Runtime):
             else:
                 upload_data = {'file': open(host_src, 'rb')}
 
-            params = {'destination': sandbox_dest, 'recursive': str(recursive).lower()}
+            params = {'destination': sandbox_dest,
+                      'recursive': str(recursive).lower()}
 
             response = self._send_action_server_request(
                 'POST',
@@ -248,7 +250,8 @@ class ActionExecutionClient(Runtime):
         # set timeout to default if not set
         if action.timeout is None:
             # We don't block the command if this is a default timeout action
-            action.set_hard_timeout(self.config.sandbox.timeout, blocking=False)
+            action.set_hard_timeout(
+                self.config.sandbox.timeout, blocking=False)
 
         with self.action_semaphore:
             if not action.runnable:
@@ -280,30 +283,14 @@ class ActionExecutionClient(Runtime):
             assert action.timeout is not None
 
             try:
-<<<<<<< HEAD
-                execution_action_body = {
-                    'action': event_to_dict(action),
-                    'caller_platform': platform.system(),
-                }
-                if self.config.mcp.sse.mcp_servers:
-                    execution_action_body['sse_mcp_config'] = (
-                        self.config.mcp.sse.mcp_servers
-                    )
-                if self.config.mcp.stdio.commands:
-                    execution_action_body['stdio_mcp_config'] = (
-                        self.config.mcp.stdio.commands,
-                        self.config.mcp.stdio.args,
-                    )
-
-                with self._send_action_server_request(
-=======
                 response = self._send_action_server_request(
->>>>>>> 6851215410237b5be69a8a0028f6e4e3489c4c22
                     'POST',
                     f'{self._get_action_execution_server_host()}/execute_action',
-                    json=execution_action_body,
-                    # wait a few more seconds to get the timeout error from client side
-                    timeout=action.timeout + 5,
+                    json={
+                        'action': event_to_dict(action),
+                        'caller_platform': platform.system(),
+                    },
+                    timeout=action.timeout,
                 )
                 assert response.is_closed
                 output = response.json()

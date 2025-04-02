@@ -43,9 +43,6 @@ from openhands.core.config.agent_config import AgentConfig
 from litellm import ModelResponse
 from typing import Generator
 import json
-<< << << < HEAD
-== == == =
->>>>>> > 6851215410237b5be69a8a0028f6e4e3489c4c22
 
 
 class ConversationMemory:
@@ -77,7 +74,8 @@ class ConversationMemory:
         events = condensed_history
 
         # log visual browsing status
-        logger.debug(f'Visual browsing: {self.agent_config.enable_som_visual_browsing}')
+        logger.debug(
+            f'Visual browsing: {self.agent_config.enable_som_visual_browsing}')
 
         # Process special events first (system prompts, etc.)
         messages = initial_messages
@@ -126,7 +124,8 @@ class ConversationMemory:
                     messages_to_add.append(pending_message)
                     # -- 2. Add the tool calls **results***
                     for tool_call in pending_message.tool_calls:
-                        messages_to_add.append(tool_call_id_to_message[tool_call.id])
+                        messages_to_add.append(
+                            tool_call_id_to_message[tool_call.id])
                         tool_call_id_to_message.pop(tool_call.id)
                     _response_ids_to_remove.append(response_id)
             # Cleanup the processed pending tool messages
@@ -134,7 +133,8 @@ class ConversationMemory:
                 pending_tool_call_action_messages.pop(response_id)
 
             messages += messages_to_add
-        messages = list(ConversationMemory._filter_unmatched_tool_calls(messages))
+        messages = list(
+            ConversationMemory._filter_unmatched_tool_calls(messages))
         return messages
 
     def process_initial_messages(self, with_caching: bool = False) -> list[Message]:
@@ -272,7 +272,8 @@ class ConversationMemory:
             ]
         elif isinstance(action, CmdRunAction) and action.source == 'user':
             content = [
-                TextContent(text=f'User executed the command:\n{action.command}')
+                TextContent(
+                    text=f'User executed the command:\n{action.command}')
             ]
             return [
                 Message(
@@ -332,12 +333,14 @@ class ConversationMemory:
                     max_message_chars,
                 )
             else:
-                text = truncate_content(obs.to_agent_observation(), max_message_chars)
+                text = truncate_content(
+                    obs.to_agent_observation(), max_message_chars)
             message = Message(role='user', content=[TextContent(text=text)])
         # FIXME: This is a temporary solution to test MCP. Not sure if it's the best way to do it.
         elif isinstance(obs, MCPObservation):
             # logger.warning(f'MCPObservation: {obs}')
-            message = Message(role='assistant', content=[TextContent(text=obs.content)])
+            message = Message(role='assistant', content=[
+                              TextContent(text=obs.content)])
         elif isinstance(obs, PlaywrightMcpBrowserScreenshotObservation):
             text = 'Image: Current webpage screenshot\n'
             screenshot_content = json.loads(obs.content)
@@ -420,7 +423,8 @@ class ConversationMemory:
             text += '\n[Error occurred in processing last action]'
             message = Message(role='user', content=[TextContent(text=text)])
         elif isinstance(obs, UserRejectObservation):
-            text = 'OBSERVATION:\n' + truncate_content(obs.content, max_message_chars)
+            text = 'OBSERVATION:\n' + \
+                truncate_content(obs.content, max_message_chars)
             text += '\n[Last action has been rejected by the user]'
             message = Message(role='user', content=[TextContent(text=text)])
         elif isinstance(obs, AgentCondensationObservation):
@@ -489,7 +493,8 @@ class ConversationMemory:
                             repo_instructions=repo_instructions,
                         )
                     )
-                    message_content.append(TextContent(text=formatted_workspace_text))
+                    message_content.append(TextContent(
+                        text=formatted_workspace_text))
 
                 # Add microagent knowledge if present
                 if has_microagent_knowledge:
@@ -498,7 +503,8 @@ class ConversationMemory:
                             triggered_agents=filtered_agents,
                         )
                     )
-                    message_content.append(TextContent(text=formatted_microagent_text))
+                    message_content.append(TextContent(
+                        text=formatted_microagent_text))
 
                 # Return the combined message if we have any content
                 if message_content:

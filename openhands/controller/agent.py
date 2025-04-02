@@ -32,11 +32,8 @@ class Agent(ABC):
         self,
         llm: LLM,
         config: 'AgentConfig',
-        << << << < HEAD
         mcp_tools: list[dict] | None = None,
-        == == == =
         **kwargs,
-        >>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
     ):
         self.llm = llm
         self.config = config
