@@ -58,6 +58,7 @@ class ConversationMemory:
         initial_messages: list[Message],
         max_message_chars: int | None = None,
         vision_is_active: bool = False,
+        enable_som_visual_browsing: bool | None = None,
     ) -> list[Message]:
         """Process state history into a list of messages for the LLM.
 
@@ -69,13 +70,17 @@ class ConversationMemory:
             max_message_chars: The maximum number of characters in the content of an event included
                 in the prompt to the LLM. Larger observations are truncated.
             vision_is_active: Whether vision is active in the LLM. If True, image URLs will be included.
+            enable_som_visual_browsing: Whether to enable visual browsing for the SOM model. If None, use the agent_config value.
         """
 
         events = condensed_history
 
+        # Use the agent_config value if enable_som_visual_browsing is not provided
+        enable_som_visual_browsing = enable_som_visual_browsing if enable_som_visual_browsing is not None else self.agent_config.enable_som_visual_browsing
+
         # log visual browsing status
         logger.debug(
-            f'Visual browsing: {self.agent_config.enable_som_visual_browsing}')
+            f'Visual browsing: {enable_som_visual_browsing}')
 
         # Process special events first (system prompts, etc.)
         messages = initial_messages
@@ -98,7 +103,7 @@ class ConversationMemory:
                     tool_call_id_to_message=tool_call_id_to_message,
                     max_message_chars=max_message_chars,
                     vision_is_active=vision_is_active,
-                    enable_som_visual_browsing=self.agent_config.enable_som_visual_browsing,
+                    enable_som_visual_browsing=enable_som_visual_browsing,
                     current_index=i,
                     events=events,
                 )
