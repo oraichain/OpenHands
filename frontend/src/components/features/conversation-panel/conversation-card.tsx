@@ -146,10 +146,9 @@ export function ConversationCard({
         data-testid="conversation-card"
         onClick={onClick}
         className={cn(
-          "w-full px-[18px] py-3 cursor-pointer hover:bg-[#1F1F1F] rounded-xl",
-          isActive && "bg-[#1F1F1F] rounded-xl",
-          variant === "compact" &&
-            "h-auto w-fit rounded-xl border border-[#525252]",
+          "w-full px-3 pr-[10px] py-2 cursor-pointer hover:bg-[#1F1F1F] rounded-lg",
+          isActive && "bg-[#1F1F1F]",
+          variant === "compact" && "h-auto w-fit border border-[#525252]",
         )}
       >
         <div className="flex items-center justify-between w-full">

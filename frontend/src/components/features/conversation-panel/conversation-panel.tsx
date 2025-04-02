@@ -89,7 +89,7 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
     <div
       ref={ref}
       data-testid="conversation-panel"
-      className="w-[240px] pt-2 px-2 max-h-[calc(100dvh-125px)] bg-[#0F0F0F] rounded-2xl overflow-y-auto top-[125px] max-md:top-[0px] absolute"
+      className="w-[240px] pt-2 px-2 max-h-[calc(100dvh-125px)] bg-[#0F0F0F] rounded-2xl overflow-y-auto top-[125px] left-3 max-md:top-[0px] absolute"
     >
       {isFetching && (
         <div className="w-full h-full absolute flex justify-center items-center">
@@ -119,7 +119,7 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
                 </h3>
                 <div
                   onClick={handleEndSession}
-                  className="cursor-pointer mr-3 hover:bg-[#262525] rounded-full p-1"
+                  className="cursor-pointer mr-1 hover:bg-[#262525] rounded-full p-1"
                 >
                   <PlusIcon width={20} height={20} />
                 </div>
@@ -129,6 +129,7 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
                   key={project.conversation_id}
                   to={`/conversations/${project.conversation_id}`}
                   onClick={onClose}
+                  className="my-1 block"
                 >
                   {({ isActive }) => (
                     <ConversationCard

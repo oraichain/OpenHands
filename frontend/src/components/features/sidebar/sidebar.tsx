@@ -79,7 +79,6 @@ export function Sidebar() {
     posthog.reset();
   };
 
-  console.log({ settingsModalIsOpen });
   return (
     <>
       <aside className="h-[50px] bg-[#141415] md:h-auto px-3 py-3 flex flex-row md:flex-col gap-1">
@@ -120,7 +119,12 @@ export function Sidebar() {
               onLogout={handleLogout}
               isLoading={user.isFetching}
             />
-            <NavLink to="/settings">
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                isActive ? "text-[#EFEFEF]" : "text-[#595B57]"
+              }
+            >
               <SettingsButton />
             </NavLink>
           </div>
