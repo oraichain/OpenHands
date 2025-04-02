@@ -1,3 +1,7 @@
+from openhands.core.config.security_config import SecurityConfig
+from openhands.core.config.sandbox_config import SandboxConfig
+from openhands.core.config.model_routing_config import ModelRoutingConfig
+from openhands.core.config.mcp_config import MCPConfig
 from typing import ClassVar
 
 from pydantic import BaseModel, Field, SecretStr
@@ -11,10 +15,9 @@ from openhands.core.config.config_utils import (
 )
 from openhands.core.config.extended_config import ExtendedConfig
 from openhands.core.config.llm_config import LLMConfig
-from openhands.core.config.mcp_config import MCPConfig
-from openhands.core.config.model_routing_config import ModelRoutingConfig
-from openhands.core.config.sandbox_config import SandboxConfig
-from openhands.core.config.security_config import SecurityConfig
+<< << << < HEAD
+== == == =
+>>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
 
 
 class AppConfig(BaseModel):
@@ -59,8 +62,10 @@ class AppConfig(BaseModel):
     default_agent: str = Field(default=OH_DEFAULT_AGENT)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
-    extended: ExtendedConfig = Field(default_factory=lambda: ExtendedConfig({}))
-    model_routing: ModelRoutingConfig = Field(default_factory=ModelRoutingConfig)
+    extended: ExtendedConfig = Field(
+        default_factory=lambda: ExtendedConfig({}))
+    model_routing: ModelRoutingConfig = Field(
+        default_factory=ModelRoutingConfig)
     runtime: str = Field(default='docker')
     file_store: str = Field(default='local')
     file_store_path: str = Field(default='/tmp/openhands_file_store')
@@ -83,13 +88,15 @@ class AppConfig(BaseModel):
     debug: bool = Field(default=False)
     file_uploads_max_file_size_mb: int = Field(default=0)
     file_uploads_restrict_file_types: bool = Field(default=False)
-    file_uploads_allowed_extensions: list[str] = Field(default_factory=lambda: ['.*'])
+    file_uploads_allowed_extensions: list[str] = Field(
+        default_factory=lambda: ['.*'])
     runloop_api_key: SecretStr | None = Field(default=None)
     daytona_api_key: SecretStr | None = Field(default=None)
     daytona_api_url: str = Field(default='https://app.daytona.io/api')
     daytona_target: str = Field(default='eu')
     cli_multiline_input: bool = Field(default=False)
-    conversation_max_age_seconds: int = Field(default=864000)  # 10 days in seconds
+    conversation_max_age_seconds: int = Field(
+        default=864000)  # 10 days in seconds
     enable_default_condenser: bool = Field(default=True)
     max_concurrent_conversations: int = Field(
         default=3

@@ -1,11 +1,28 @@
-import json
-
-from litellm import ModelResponse
-
-from openhands.core.config.agent_config import AgentConfig
-from openhands.core.logger import openhands_logger as logger
-from openhands.core.message import ImageContent, Message, TextContent
-from openhands.core.schema import ActionType
+from openhands.utils.prompt import PromptManager, RepositoryInfo, RuntimeInfo
+from openhands.events.serialization.event import truncate_content
+from openhands.events.observation.playwright_mcp import (
+    PlaywrightMcpBrowserScreenshotObservation,
+)
+from openhands.events.observation.observation import Observation
+from openhands.events.observation.mcp import MCPObservation
+from openhands.events.observation.error import ErrorObservation
+from openhands.events.observation.agent import (
+    MicroagentKnowledge,
+    RecallObservation,
+)
+from openhands.events.observation import (
+    AgentCondensationObservation,
+    AgentDelegateObservation,
+    AgentThinkObservation,
+    BrowserOutputObservation,
+    CmdOutputObservation,
+    FileEditObservation,
+    FileReadObservation,
+    IPythonRunCellObservation,
+    UserRejectObservation,
+)
+from openhands.events.event import Event, RecallType
+from openhands.events.action.mcp import McpAction
 from openhands.events.action import (
     Action,
     AgentDelegateAction,
@@ -19,31 +36,16 @@ from openhands.events.action import (
     IPythonRunCellAction,
     MessageAction,
 )
-from openhands.events.action.mcp import McpAction
-from openhands.events.event import Event, RecallType
-from openhands.events.observation import (
-    AgentCondensationObservation,
-    AgentDelegateObservation,
-    AgentThinkObservation,
-    BrowserOutputObservation,
-    CmdOutputObservation,
-    FileEditObservation,
-    FileReadObservation,
-    IPythonRunCellObservation,
-    UserRejectObservation,
-)
-from openhands.events.observation.agent import (
-    MicroagentKnowledge,
-    RecallObservation,
-)
-from openhands.events.observation.error import ErrorObservation
-from openhands.events.observation.mcp import MCPObservation
-from openhands.events.observation.observation import Observation
-from openhands.events.observation.playwright_mcp import (
-    PlaywrightMcpBrowserScreenshotObservation,
-)
-from openhands.events.serialization.event import truncate_content
-from openhands.utils.prompt import PromptManager, RepositoryInfo, RuntimeInfo
+from openhands.core.schema import ActionType
+from openhands.core.message import ImageContent, Message, TextContent
+from openhands.core.logger import openhands_logger as logger
+from openhands.core.config.agent_config import AgentConfig
+from litellm import ModelResponse
+from typing import Generator
+import json
+<< << << < HEAD
+== == == =
+>>>>>> > 6851215410237b5be69a8a0028f6e4e3489c4c22
 
 
 class ConversationMemory:
@@ -132,7 +134,7 @@ class ConversationMemory:
                 pending_tool_call_action_messages.pop(response_id)
 
             messages += messages_to_add
-
+        messages = list(ConversationMemory._filter_unmatched_tool_calls(messages))
         return messages
 
     def process_initial_messages(self, with_caching: bool = False) -> list[Message]:
@@ -375,8 +377,6 @@ class ConversationMemory:
             text = obs.get_agent_obs_text()
             if (
                 obs.trigger_by_action == ActionType.BROWSE_INTERACTIVE
-                and obs.set_of_marks is not None
-                and len(obs.set_of_marks) > 0
                 and enable_som_visual_browsing
                 and vision_is_active
             ):
@@ -385,14 +385,27 @@ class ConversationMemory:
                     role='user',
                     content=[
                         TextContent(text=text),
-                        ImageContent(image_urls=[obs.set_of_marks]),
+                        ImageContent(
+                            image_urls=[
+                                # show set of marks if it exists
+                                # otherwise, show raw screenshot when using vision-supported model
+                                obs.set_of_marks
+                                if obs.set_of_marks is not None
+                                and len(obs.set_of_marks) > 0
+                                else obs.screenshot
+                            ]
+                        ),
                     ],
+                )
+                logger.debug(
+                    f'Vision enabled for browsing, showing {"set of marks" if obs.set_of_marks and len(obs.set_of_marks) > 0 else "screenshot"}'
                 )
             else:
                 message = Message(
                     role='user',
                     content=[TextContent(text=text)],
                 )
+                logger.debug('Vision disabled for browsing, showing text')
         elif isinstance(obs, AgentDelegateObservation):
             text = truncate_content(
                 obs.outputs['content'] if 'content' in obs.outputs else '',
@@ -427,13 +440,16 @@ class ConversationMemory:
                 else:
                     repo_info = None
 
+                date = obs.date
+
                 if obs.runtime_hosts or obs.additional_agent_instructions:
                     runtime_info = RuntimeInfo(
                         available_hosts=obs.runtime_hosts,
                         additional_agent_instructions=obs.additional_agent_instructions,
+                        date=date,
                     )
                 else:
-                    runtime_info = None
+                    runtime_info = RuntimeInfo(date=date)
 
                 repo_instructions = (
                     obs.repo_instructions if obs.repo_instructions else ''
@@ -606,3 +622,58 @@ class ConversationMemory:
                 ):
                     return True
         return False
+
+    @staticmethod
+    def _filter_unmatched_tool_calls(
+        messages: list[Message],
+    ) -> Generator[Message, None, None]:
+        """Filter out tool calls that don't have matching tool responses and vice versa.
+
+        This ensures that every tool_call_id in a tool message has a corresponding tool_calls[].id
+        in an assistant message, and vice versa. The original list is unmodified, when tool_calls is
+        updated the message is copied.
+
+        This does not remove items with id set to None.
+        """
+        tool_call_ids = {
+            tool_call.id
+            for message in messages
+            if message.tool_calls
+            for tool_call in message.tool_calls
+            if message.role == 'assistant' and tool_call.id
+        }
+        tool_response_ids = {
+            message.tool_call_id
+            for message in messages
+            if message.role == 'tool' and message.tool_call_id
+        }
+
+        for message in messages:
+            # Remove tool messages with no matching assistant tool call
+            if message.role == 'tool' and message.tool_call_id:
+                if message.tool_call_id in tool_call_ids:
+                    yield message
+
+            # Remove assistant tool calls with no matching tool response
+            elif message.role == 'assistant' and message.tool_calls:
+                all_tool_calls_match = all(
+                    tool_call.id in tool_response_ids
+                    for tool_call in message.tool_calls
+                )
+                if all_tool_calls_match:
+                    yield message
+                else:
+                    matched_tool_calls = [
+                        tool_call
+                        for tool_call in message.tool_calls
+                        if tool_call.id in tool_response_ids
+                    ]
+
+                    if matched_tool_calls:
+                        # Keep an updated message if there are tools calls left
+                        yield message.model_copy(
+                            update={'tool_calls': matched_tool_calls}
+                        )
+            else:
+                # Any other case is kept
+                yield message

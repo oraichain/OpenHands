@@ -1,3 +1,9 @@
+from openhands.storage.files import FileStore
+from openhands.storage import get_file_store
+from openhands.core.config.security_config import SecurityConfig
+from openhands.core.config.sandbox_config import SandboxConfig
+from openhands.core.config.model_routing_config import ModelRoutingConfig
+from openhands.core.config.mcp_config import MCPConfig
 import argparse
 import os
 import pathlib
@@ -23,12 +29,9 @@ from openhands.core.config.config_utils import (
 )
 from openhands.core.config.extended_config import ExtendedConfig
 from openhands.core.config.llm_config import LLMConfig
-from openhands.core.config.mcp_config import MCPConfig
-from openhands.core.config.model_routing_config import ModelRoutingConfig
-from openhands.core.config.sandbox_config import SandboxConfig
-from openhands.core.config.security_config import SecurityConfig
-from openhands.storage import get_file_store
-from openhands.storage.files import FileStore
+<< << << < HEAD
+== == == =
+>>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
 
 JWT_SECRET = '.jwt_secret'
 load_dotenv()
@@ -177,7 +180,8 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
     # Process security section if present
     if 'security' in toml_config:
         try:
-            security_mapping = SecurityConfig.from_toml_section(toml_config['security'])
+            security_mapping = SecurityConfig.from_toml_section(
+                toml_config['security'])
             # We only use the base security config for now
             if 'security' in security_mapping:
                 cfg.security = security_mapping['security']
@@ -196,7 +200,8 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
         # model_routing_config = ModelRoutingConfig(**value)
         # cfg.model_routing = model_routing_config
         try:
-            model_routing_config = ModelRoutingConfig(**toml_config['model_routing'])
+            model_routing_config = ModelRoutingConfig(
+                **toml_config['model_routing'])
             cfg.model_routing = model_routing_config
         except (TypeError, KeyError, ValidationError) as e:
             logger.openhands_logger.warning(
@@ -206,7 +211,8 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
     # Process sandbox section if present
     if 'sandbox' in toml_config:
         try:
-            sandbox_mapping = SandboxConfig.from_toml_section(toml_config['sandbox'])
+            sandbox_mapping = SandboxConfig.from_toml_section(
+                toml_config['sandbox'])
             # We only use the base sandbox config for now
             if 'sandbox' in sandbox_mapping:
                 cfg.sandbox = sandbox_mapping['sandbox']
@@ -301,7 +307,8 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
     }
     for key in toml_config:
         if key.lower() not in known_sections:
-            logger.openhands_logger.warning(f'Unknown section [{key}] in {toml_file}')
+            logger.openhands_logger.warning(
+                f'Unknown section [{key}] in {toml_file}')
 
 
 def get_or_create_jwt_secret(file_store: FileStore) -> str:
@@ -328,7 +335,8 @@ def finalize_config(cfg: AppConfig):
 
     # make sure log_completions_folder is an absolute path
     for llm in cfg.llms.values():
-        llm.log_completions_folder = os.path.abspath(llm.log_completions_folder)
+        llm.log_completions_folder = os.path.abspath(
+            llm.log_completions_folder)
 
     if cfg.sandbox.use_host_network and platform.system() == 'Darwin':
         logger.openhands_logger.warning(
@@ -379,7 +387,8 @@ def get_agent_config_arg(
     if agent_config_arg.startswith('agent.'):
         agent_config_arg = agent_config_arg[6:]
 
-    logger.openhands_logger.debug(f'Loading agent config from {agent_config_arg}')
+    logger.openhands_logger.debug(
+        f'Loading agent config from {agent_config_arg}')
 
     # load the toml file
     try:
@@ -397,7 +406,8 @@ def get_agent_config_arg(
     # update the agent config with the specified section
     if 'agent' in toml_config and agent_config_arg in toml_config['agent']:
         return AgentConfig(**toml_config['agent'][agent_config_arg])
-    logger.openhands_logger.debug(f'Loading from toml failed for {agent_config_arg}')
+    logger.openhands_logger.debug(
+        f'Loading from toml failed for {agent_config_arg}')
     return None
 
 
@@ -454,7 +464,8 @@ def get_llm_config_arg(
     # update the llm config with the specified section
     if 'llm' in toml_config and llm_config_arg in toml_config['llm']:
         return LLMConfig(**toml_config['llm'][llm_config_arg])
-    logger.openhands_logger.debug(f'Loading from toml failed for {llm_config_arg}')
+    logger.openhands_logger.debug(
+        f'Loading from toml failed for {llm_config_arg}')
     return None
 
 
@@ -626,7 +637,8 @@ def setup_config_from_args(args: argparse.Namespace) -> AppConfig:
         else:
             llm_config = config.llms[args.llm_config]
         if llm_config is None:
-            raise ValueError(f'Invalid toml file, cannot read {args.llm_config}')
+            raise ValueError(
+                f'Invalid toml file, cannot read {args.llm_config}')
         config.set_llm_config(llm_config)
 
     # Override default agent if provided

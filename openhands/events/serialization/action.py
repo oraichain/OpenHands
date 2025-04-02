@@ -8,6 +8,7 @@ from openhands.events.action.agent import (
     AgentRejectAction,
     AgentThinkAction,
     ChangeAgentStateAction,
+    CondensationAction,
     RecallAction,
 )
 from openhands.events.action.browse import BrowseInteractiveAction, BrowseURLAction
@@ -40,7 +41,11 @@ actions = (
     RecallAction,
     ChangeAgentStateAction,
     MessageAction,
+    << << << < HEAD
     McpAction,
+    == == == =
+    CondensationAction,
+    >>>>>> > 6851215410237b5be69a8a0028f6e4e3489c4c22
 )
 
 ACTION_TYPE_TO_CLASS = {action_class.action: action_class for action_class in actions}  # type: ignore[attr-defined]
@@ -67,7 +72,7 @@ def handle_action_deprecated_args(args: dict[str, Any]) -> dict[str, Any]:
                 import ast
 
                 # Extract the dictionary string between the prefix and the closing parentheses
-                dict_str = code[len(file_editor_prefix) : -2]  # Remove prefix and '))'
+                dict_str = code[len(file_editor_prefix): -2]  # Remove prefix and '))'
                 file_args = ast.literal_eval(dict_str)
 
                 # Update args with the extracted file editor arguments

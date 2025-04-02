@@ -54,21 +54,26 @@ class CodeActAgent(Agent):
     ]
 
     def __init__(
+<< << << < HEAD
+        self, llm: LLM, config: AgentConfig, mcp_tools: list[dict] | None = None
+== == == =
         self,
         llm: LLM,
         config: AgentConfig,
-        mcp_tools: list[dict] | None = None,
         model_routing_config: ModelRoutingConfig | None = None,
         routing_llms: dict[str, LLM] | None = None,
+>>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
     ) -> None:
         """Initializes a new instance of the CodeActAgent class.
 
         Parameters:
         - llm (LLM): The llm to be used by this agent
+<<<<<<< HEAD
         - config (AgentConfig): The configuration for this agent
         - mcp_tools (list[dict] | None, optional): List of MCP tools to be used by this agent. Defaults to None.
-        - model_routing_config (ModelRoutingConfig | None, optional): Configuration for model routing. Defaults to None.
-        - routing_llms (dict[str, LLM] | None, optional): The llms to be selected for routing. Defaults to None.
+=======
+        - routing_llms (dict[str, LLM]): The llms to be selected for routing
+>>>>>>> c076a3282b5be79c44c0b1ca002b9fe385a69bb7
         """
         super().__init__(llm, config, mcp_tools)
         self.pending_actions: deque[Action] = deque()
@@ -81,7 +86,8 @@ class CodeActAgent(Agent):
             llm=self.llm,
         )
 
-        self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
+        self.tools = built_in_tools + \
+            (mcp_tools if mcp_tools is not None else [])
 
         # Retrieve the enabled tools
         logger.info(
@@ -92,7 +98,8 @@ class CodeActAgent(Agent):
         )
 
         # Create a ConversationMemory instance
-        self.conversation_memory = ConversationMemory(self.config, self.prompt_manager)
+        self.conversation_memory = ConversationMemory(
+            self.config, self.prompt_manager)
 
         self.condenser = Condenser.from_config(self.config.condenser)
         logger.debug(f'Using condenser: {type(self.condenser)}')
@@ -151,11 +158,17 @@ class CodeActAgent(Agent):
             self.active_llm = self.llm
 
         params['tools'] = self.tools
+
+
+<< << << < HEAD
+        # log to litellm proxy if possible
+        params['extra_body'] = {
+            'metadata': state.to_llm_metadata(agent_name=self.name)}
+        response = self.llm.completion(**params)
+        logger.debug(f'Response from LLM: {response}')
+== == == =
         if not self.active_llm.is_function_calling_active():
             params['mock_function_calling'] = True
-
-        # log to litellm proxy if possible
-        params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
 
         # prepare what we want to send to the LLM
         # NOTE: We need to call this here when self.active_llm is correctly set
@@ -163,8 +176,8 @@ class CodeActAgent(Agent):
         params['messages'] = self.active_llm.format_messages_for_llm(messages)
 
         response = self.active_llm.completion(**params)
-        logger.debug(f'Response from LLM: {response}')
 
+>>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
         actions = codeact_function_calling.response_to_actions(response)
         logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
@@ -206,9 +219,13 @@ class CodeActAgent(Agent):
         if not self.prompt_manager:
             raise Exception('Prompt Manager not instantiated.')
 
+<<<<<<< HEAD
+        # Use ConversationMemory to process initial messages
+=======
         # Use conversation_memory to process events instead of calling events_to_messages directly
         active_llm_ = self.active_llm or self.llm
 
+>>>>>>> c076a3282b5be79c44c0b1ca002b9fe385a69bb7
         messages = self.conversation_memory.process_initial_messages(
             with_caching=self.llm.is_caching_prompt_active()
         )
@@ -224,9 +241,14 @@ class CodeActAgent(Agent):
         messages = self.conversation_memory.process_events(
             condensed_history=events,
             initial_messages=messages,
+<<<<<<< HEAD
+            max_message_chars=self.llm.config.max_message_chars,
+            vision_is_active=self.llm.vision_is_active(),
+=======
             max_message_chars=active_llm_.config.max_message_chars,
             vision_is_active=active_llm_.vision_is_active(),
             enable_som_visual_browsing=self.config.enable_som_visual_browsing,
+>>>>>>> c076a3282b5be79c44c0b1ca002b9fe385a69bb7
         )
 
         messages = self._enhance_messages(messages)

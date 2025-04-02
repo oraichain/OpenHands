@@ -20,7 +20,6 @@ class AgentConfig(BaseModel):
         condenser: Configuration for the memory condenser. Default is NoOpCondenserConfig.
         enable_history_truncation: Whether history should be truncated to continue the session when hitting LLM context length limit.
         enable_som_visual_browsing: Whether to enable SoM (Set of Marks) visual browsing. Default is False.
-        enable_plan_routing: Whether to enable plan routing. Default is False.
     """
 
     llm_config: str | None = Field(default=None)
@@ -31,16 +30,23 @@ class AgentConfig(BaseModel):
     disabled_microagents: list[str] = Field(default_factory=list)
     enable_history_truncation: bool = Field(default=True)
     enable_som_visual_browsing: bool = Field(default=False)
-    enable_plan_routing: bool = Field(default=False)
-    condenser: CondenserConfig = Field(
-        default_factory=lambda: NoOpCondenserConfig(type='noop')
-    )
 
-    model_config = {'extra': 'forbid'}
 
-    @classmethod
-    def from_toml_section(cls, data: dict) -> dict[str, AgentConfig]:
-        """
+<< << << < HEAD
+condenser: CondenserConfig = Field(
+    default_factory=lambda: NoOpCondenserConfig(type='noop')
+)
+== == == =
+enable_plan_routing: bool = Field(default=False)
+condenser: CondenserConfig = Field(default_factory=NoOpCondenserConfig)
+>>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
+
+model_config = {'extra': 'forbid'}
+
+
+@classmethod
+def from_toml_section(cls, data: dict) -> dict[str, AgentConfig]:
+    """
         Create a mapping of AgentConfig instances from a toml dictionary representing the [agent] section.
 
         The default configuration is built from all non-dict keys in data.
@@ -60,13 +66,13 @@ class AgentConfig(BaseModel):
             and additional keys represent custom configurations.
         """
 
-        # Initialize the result mapping
-        agent_mapping: dict[str, AgentConfig] = {}
+    # Initialize the result mapping
+    agent_mapping: dict[str, AgentConfig] = {}
 
-        # Extract base config data (non-dict values)
-        base_data = {}
-        custom_sections: dict[str, dict] = {}
-        for key, value in data.items():
+     # Extract base config data (non-dict values)
+     base_data = {}
+      custom_sections: dict[str, dict] = {}
+       for key, value in data.items():
             if isinstance(value, dict):
                 custom_sections[key] = value
             else:
@@ -77,7 +83,8 @@ class AgentConfig(BaseModel):
             base_config = cls.model_validate(base_data)
             agent_mapping['agent'] = base_config
         except ValidationError as e:
-            logger.warning(f'Invalid base agent configuration: {e}. Using defaults.')
+            logger.warning(
+                f'Invalid base agent configuration: {e}. Using defaults.')
             # If base config fails, create a default one
             base_config = cls()
             # Still add it to the mapping
