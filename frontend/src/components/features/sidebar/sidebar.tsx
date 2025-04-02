@@ -21,7 +21,7 @@ import { useLogout } from "#/hooks/mutation/use-logout";
 import { useConfig } from "#/hooks/query/use-config";
 import { cn } from "#/utils/utils";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
-
+import ChatIcon from "#/icons/chat-icon.svg?react";
 export function Sidebar() {
   const location = useLocation();
   const dispatch = useDispatch();
@@ -82,23 +82,30 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="h-[40px] md:h-auto px-1 flex flex-row md:flex-col gap-1">
+      <aside className="h-[40px] bg-[#141415] md:h-auto px-3 py-3 flex flex-row md:flex-col gap-1">
         <nav className="flex flex-row md:flex-col items-center justify-between w-full h-auto md:w-auto md:h-full">
           <div className="flex flex-row md:flex-col items-center gap-[26px]">
             <div className="flex items-center justify-center">
               <AllHandsLogoButton onClick={handleEndSession} />
             </div>
-            <ExitProjectButton onClick={handleEndSession} />
+            <ExitProjectButton
+              onClick={handleEndSession}
+              isActive={location.pathname === "/" && !conversationPanelIsOpen}
+            />
             <TooltipButton
               testId="toggle-conversation-panel"
               tooltip="Conversations"
+              className={cn(
+                "w-10 h-10 rounded-lg p-2 flex items-center justify-center",
+                conversationPanelIsOpen && "bg-[#262525]",
+              )}
               ariaLabel="Conversations"
               onClick={() => setConversationPanelIsOpen((prev) => !prev)}
             >
-              <FaListUl
-                size={22}
+              <ChatIcon
                 className={cn(
-                  conversationPanelIsOpen ? "text-white" : "text-[#9099AC]",
+                  "opacity-50 transition-colors",
+                  conversationPanelIsOpen && "opacity-100",
                 )}
               />
             </TooltipButton>
