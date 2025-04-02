@@ -650,7 +650,7 @@ if __name__ == '__main__':
         '--username', type=str, default='openhands', help='username to run as'
     )
     parser.add_argument(
-        '--uid', type=int, default=1000, help='user id to run as'
+        '--user-id', type=int, default=1000, help='user id to run as'
     )
     parser.add_argument(
         '--browsergym-eval-env',
@@ -688,7 +688,7 @@ if __name__ == '__main__':
             plugins_to_load,
             work_dir=args.working_dir,
             username=args.username,
-            user_id=args.uid,
+            user_id=args.user_id,
             browsergym_eval_env=args.browsergym_eval_env,
             runtime_mode=args.runtime_mode,
         )
