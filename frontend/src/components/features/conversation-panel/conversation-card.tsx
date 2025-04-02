@@ -146,16 +146,17 @@ export function ConversationCard({
         data-testid="conversation-card"
         onClick={onClick}
         className={cn(
-          "h-[100px] w-full px-[18px] py-4 border-b border-neutral-600 cursor-pointer",
+          "w-full px-[18px] py-3 cursor-pointer hover:bg-[#1F1F1F] rounded-xl",
+          isActive && "bg-[#1F1F1F] rounded-xl",
           variant === "compact" &&
             "h-auto w-fit rounded-xl border border-[#525252]",
         )}
       >
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden mr-2">
-            {isActive && (
+            {/* {isActive && (
               <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
-            )}
+            )} */}
             {titleMode === "edit" && (
               <input
                 ref={inputRef}
@@ -171,7 +172,7 @@ export function ConversationCard({
             {titleMode === "view" && (
               <p
                 data-testid="conversation-card-title"
-                className="text-sm leading-6 font-semibold bg-transparent truncate overflow-hidden"
+                className="text-sm text-[#E0E0E0] leading-6 font-medium bg-transparent truncate overflow-hidden"
                 title={title}
               >
                 {title}
@@ -180,9 +181,9 @@ export function ConversationCard({
           </div>
 
           <div className="flex items-center">
-            <ConversationStateIndicator status={status} />
+            {/* <ConversationStateIndicator status={status} /> */}
             {hasContextMenu && (
-              <div className="pl-2">
+              <div className="pl-2 flex items-center">
                 <EllipsisButton
                   onClick={(event) => {
                     event.preventDefault();
@@ -219,7 +220,7 @@ export function ConversationCard({
           {selectedRepository && (
             <ConversationRepoLink selectedRepository={selectedRepository} />
           )}
-          <p className="text-xs text-neutral-400">
+          {/* <p className="text-xs text-neutral-400">
             <span>Created </span>
             <time>
               {formatTimeDelta(new Date(createdAt || lastUpdatedAt))} ago
@@ -230,7 +231,7 @@ export function ConversationCard({
                 <time>{formatTimeDelta(new Date(lastUpdatedAt))} ago</time>
               </>
             )}
-          </p>
+          </p> */}
         </div>
       </div>
 

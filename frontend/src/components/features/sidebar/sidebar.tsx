@@ -1,5 +1,4 @@
 import React from "react";
-import { FaListUl } from "react-icons/fa";
 import { useDispatch } from "react-redux";
 import posthog from "posthog-js";
 import { NavLink, useLocation } from "react-router";
@@ -82,9 +81,9 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="h-[40px] bg-[#141415] md:h-auto px-3 py-3 flex flex-row md:flex-col gap-1">
+      <aside className="h-[50px] bg-[#141415] md:h-auto px-3 py-3 flex flex-row md:flex-col gap-1">
         <nav className="flex flex-row md:flex-col items-center justify-between w-full h-auto md:w-auto md:h-full">
-          <div className="flex flex-row md:flex-col items-center gap-[26px]">
+          <div className="flex flex-row md:flex-col items-center gap-[26px] max-md:gap-4">
             <div className="flex items-center justify-center">
               <AllHandsLogoButton onClick={handleEndSession} />
             </div>
@@ -111,16 +110,8 @@ export function Sidebar() {
             </TooltipButton>
           </div>
 
-          <div className="flex flex-row md:flex-col md:items-center gap-[26px] md:mb-4">
+          <div className="flex flex-row md:flex-col items-center gap-[26px] max-md:gap-3 md:mb-4">
             <DocsButton />
-            <NavLink
-              to="/settings"
-              className={({ isActive }) =>
-                `${isActive ? "text-white" : "text-[#9099AC]"} mt-0.5 md:mt-0`
-              }
-            >
-              <SettingsButton />
-            </NavLink>
             <UserActions
               user={
                 user.data ? { avatar_url: user.data.avatar_url } : undefined
@@ -128,6 +119,9 @@ export function Sidebar() {
               onLogout={handleLogout}
               isLoading={user.isFetching}
             />
+            <NavLink to="/settings" className="h-[28px]">
+              <SettingsButton />
+            </NavLink>
           </div>
         </nav>
 
