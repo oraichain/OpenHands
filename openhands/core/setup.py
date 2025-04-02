@@ -173,29 +173,29 @@ async def create_agent(config: AppConfig) -> Agent:
     agent_cls: Type[Agent] = Agent.get_cls(config.default_agent)
     agent_config = config.get_agent_config(config.default_agent)
     llm_config = config.get_llm_config_from_agent(config.default_agent)
-
-    # Create MCP agents
+<< << << < HEAD
     mcp_agents = await create_mcp_agents(
         config.mcp.sse.mcp_servers, config.mcp.stdio.commands, config.mcp.stdio.args
     )
     mcp_tools = convert_mcp_agents_to_tools(mcp_agents)
-
-    # Setup routing configuration if needed
-    routing_llms_config = config.routing_llms
-    model_routing_config = config.model_routing
-    routing_llms = {}
-    for config_name, routing_llm_config in routing_llms_config.items():
-        routing_llms[config_name] = LLM(
-            config=routing_llm_config,
-        )
-
-    # Create agent with all required parameters
     agent = agent_cls(
         llm=LLM(config=llm_config),
         config=agent_config,
         mcp_tools=mcp_tools,
+== == == =
+    routing_llms_config=config.routing_llms
+    model_routing_config=config.model_routing
+    routing_llms={}
+    for config_name, routing_llm_config in routing_llms_config.items():
+        routing_llms[config_name]=LLM(
+            config=routing_llm_config,
+        )
+    agent=agent_cls(
+        llm=LLM(config=llm_config),
+        config=agent_config,
         model_routing_config=model_routing_config,
         routing_llms=routing_llms,
+>>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
     )
 
     # We only need to get the tools from the MCP agents, so we can safely close them after that
@@ -209,7 +209,7 @@ async def create_agent(config: AppConfig) -> Agent:
 async def create_mcp_agents(
     sse_mcp_server: List[str], commands: List[str], args: List[List[str]]
 ) -> List[MCPAgent]:
-    mcp_agents: List[MCPAgent] = []
+    mcp_agents: List[MCPAgent]=[]
     # Initialize SSE connections
     if sse_mcp_server:
         for server_url in sse_mcp_server:
@@ -217,7 +217,7 @@ async def create_mcp_agents(
                 f'Initializing MCP agent for {server_url} with SSE connection...'
             )
 
-            agent = MCPAgent()
+            agent=MCPAgent()
             try:
                 await agent.initialize(connection_type='sse', server_url=server_url)
                 mcp_agents.append(agent)
@@ -233,7 +233,7 @@ async def create_mcp_agents(
                 f'Initializing MCP agent for {command} with stdio connection...'
             )
 
-            agent = MCPAgent()
+            agent=MCPAgent()
             try:
                 await agent.initialize(
                     connection_type='stdio', command=command, args=command_args
@@ -253,22 +253,22 @@ def create_controller(
     agent: Agent,
     runtime: Runtime,
     config: AppConfig,
-    headless_mode: bool = True,
-    replay_events: list[Event] | None = None,
+    headless_mode: bool=True,
+    replay_events: list[Event] | None=None,
 ) -> Tuple[AgentController, State | None]:
-    event_stream = runtime.event_stream
-    initial_state = None
+    event_stream=runtime.event_stream
+    initial_state=None
     try:
         logger.debug(
             f'Trying to restore agent state from session {event_stream.sid} if available'
         )
-        initial_state = State.restore_from_session(
+        initial_state=State.restore_from_session(
             event_stream.sid, event_stream.file_store
         )
     except Exception as e:
         logger.debug(f'Cannot restore agent state: {e}')
 
-    controller = AgentController(
+    controller=AgentController(
         agent=agent,
         max_iterations=config.max_iterations,
         max_budget_per_task=config.max_budget_per_task,
@@ -282,11 +282,11 @@ def create_controller(
     return (controller, initial_state)
 
 
-def generate_sid(config: AppConfig, session_name: str | None = None) -> str:
+def generate_sid(config: AppConfig, session_name: str | None=None) -> str:
     """Generate a session id based on the session name and the jwt secret."""
-    session_name = session_name or str(uuid.uuid4())
-    jwt_secret = config.jwt_secret
+    session_name=session_name or str(uuid.uuid4())
+    jwt_secret=config.jwt_secret
 
-    hash_str = hashlib.sha256(
+    hash_str=hashlib.sha256(
         f'{session_name}{jwt_secret}'.encode('utf-8')).hexdigest()
     return f'{session_name}-{hash_str[:16]}'

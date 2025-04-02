@@ -41,14 +41,13 @@ actions = (
     RecallAction,
     ChangeAgentStateAction,
     MessageAction,
-    << << << < HEAD
     McpAction,
-    == == == =
     CondensationAction,
-    >>>>>> > 6851215410237b5be69a8a0028f6e4e3489c4c22
 )
 
-ACTION_TYPE_TO_CLASS = {action_class.action: action_class for action_class in actions}  # type: ignore[attr-defined]
+# type: ignore[attr-defined]
+ACTION_TYPE_TO_CLASS = {
+    action_class.action: action_class for action_class in actions}
 
 
 def handle_action_deprecated_args(args: dict[str, Any]) -> dict[str, Any]:
@@ -72,7 +71,8 @@ def handle_action_deprecated_args(args: dict[str, Any]) -> dict[str, Any]:
                 import ast
 
                 # Extract the dictionary string between the prefix and the closing parentheses
-                dict_str = code[len(file_editor_prefix): -2]  # Remove prefix and '))'
+                # Remove prefix and '))'
+                dict_str = code[len(file_editor_prefix): -2]
                 file_args = ast.literal_eval(dict_str)
 
                 # Update args with the extracted file editor arguments
@@ -94,7 +94,8 @@ def action_from_dict(action: dict) -> Action:
         raise LLMMalformedActionError('action must be a dictionary')
     action = action.copy()
     if 'action' not in action:
-        raise LLMMalformedActionError(f"'action' key is not found in {action=}")
+        raise LLMMalformedActionError(
+            f"'action' key is not found in {action=}")
     if not isinstance(action['action'], str):
         raise LLMMalformedActionError(
             f"'{action['action']=}' is not defined. Available actions: {ACTION_TYPE_TO_CLASS.keys()}"
@@ -125,7 +126,8 @@ def action_from_dict(action: dict) -> Action:
         decoded_action = action_class(**args)
         if 'timeout' in action:
             blocking = args.get('blocking', False)
-            decoded_action.set_hard_timeout(action['timeout'], blocking=blocking)
+            decoded_action.set_hard_timeout(
+                action['timeout'], blocking=blocking)
 
         # Set timestamp if it was provided
         if timestamp:
