@@ -22,6 +22,7 @@ class Settings(BaseModel):
 
     language: str | None = None
     agent: str | None = None
+    planning_agent: str | None = None
     max_iterations: int | None = None
     security_analyzer: str | None = None
     confirmation_mode: bool | None = None

@@ -1,4 +1,4 @@
-from openhands.agenthub.codeact_agent.codeact_agent import CodeActAgent
+from openhands.agenthub.planner_agent.planner_agent import PlannerAgent
 from openhands.controller.agent import Agent
 
-Agent.register('CodeActAgent', CodeActAgent)
+Agent.register('PlannerAgent', PlannerAgent)

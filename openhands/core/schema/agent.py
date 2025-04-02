@@ -49,3 +49,7 @@ class AgentState(str, Enum):
     RATE_LIMITED = 'rate_limited'
     """The agent is rate limited.
     """
+
+    AWAITING_TASK_RESOLVING = 'awaiting_task_resolving'
+    """The agent is awaiting task resolving.
+    """

@@ -48,7 +48,8 @@ class PromptManager:
             raise ValueError('Prompt directory is not set')
         template_path = os.path.join(self.prompt_dir, f'{template_name}.j2')
         if not os.path.exists(template_path):
-            raise FileNotFoundError(f'Prompt file {template_path} not found')
+            # raise FileNotFoundError(f'Prompt file {template_path} not found')
+            return Template('')
         with open(template_path, 'r') as file:
             return Template(file.read())
 

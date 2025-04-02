@@ -2,7 +2,7 @@ import asyncio
 import copy
 import os
 import traceback
-from typing import Callable, ClassVar
+from typing import Callable, ClassVar, Dict
 
 import litellm  # noqa
 from litellm.exceptions import (  # noqa
@@ -20,7 +20,9 @@ from litellm.exceptions import (  # noqa
 )
 
 from openhands.controller.agent import Agent
+from openhands.controller.agent_controller import AgentController
 from openhands.controller.replay import ReplayManager
+from openhands.controller.state.plan import Plan
 from openhands.controller.state.state import State, TrafficControlState
 from openhands.controller.stuck import StuckDetector
 from openhands.core.config import AgentConfig, LLMConfig
@@ -47,6 +49,7 @@ from openhands.events.action import (
     ActionConfirmationStatus,
     AgentFinishAction,
     AgentRejectAction,
+    AsignTaskAction,
     ChangeAgentStateAction,
     CmdRunAction,
     CreatePlanAction,
@@ -54,6 +57,7 @@ from openhands.events.action import (
     MarkTaskAction,
     MessageAction,
     NullAction,
+    TaskStatus,
 )
 from openhands.events.action.agent import RecallAction
 from openhands.events.event import Event
@@ -63,6 +67,7 @@ from openhands.events.observation import (
     ErrorObservation,
     NullObservation,
     Observation,
+    PlanStatusObservation,
 )
 from openhands.events.serialization.event import event_to_trajectory, truncate_content
 from openhands.llm.metrics import Metrics, TokenUsage
@@ -90,12 +95,22 @@ class PlanController:
         NullObservation,
         ChangeAgentStateAction,
         AgentStateChangedObservation,
+        PlanStatusObservation,
+        MarkTaskAction,
     )
+    # pass type of events that should be passed to the agent when delegate agents are resolving tasks
+    pass_type: ClassVar[tuple[type[Event], ...]] = (AgentFinishAction, AsignTaskAction)
     _cached_first_user_message: MessageAction | None = None
+
+    # task_controllers
+    task_controllers: Dict[
+        str, Dict[int, AgentController]
+    ] = {}  # plan_id -> task_id -> agent_controller
 
     def __init__(
         self,
         agent: Agent,
+        planning_agent: Agent,
         event_stream: EventStream,
         max_iterations: int,
         max_budget_per_task: float | None = None,
@@ -128,6 +143,7 @@ class PlanController:
         """
         self.id = sid or event_stream.sid
         self.agent = agent
+        self.planning_agent = planning_agent
         self.headless_mode = headless_mode
 
         # the event stream must be set before maybe subscribing to it
@@ -187,7 +203,9 @@ class PlanController:
         )
 
         # unsubscribe from the event stream
-        self.event_stream.unsubscribe(EventStreamSubscriber.AGENT_CONTROLLER, self.id)
+        self.event_stream.unsubscribe(
+            EventStreamSubscriber.PLANNING_CONTROLLER, self.id
+        )
 
         self._closed = True
 
@@ -211,7 +229,7 @@ class PlanController:
 
     async def update_state_after_step(self):
         # update metrics especially for cost. Use deepcopy to avoid it being modified by agent._reset()
-        self.state.local_metrics = copy.deepcopy(self.agent.llm.metrics)
+        self.state.local_metrics = copy.deepcopy(self.planning_agent.llm.metrics)
 
     async def _react_to_exception(
         self,
@@ -274,6 +292,119 @@ class PlanController:
                 )
             await self._react_to_exception(reported)
 
+    async def _step(self) -> None:
+        """Executes a single step of the parent or delegate agent. Detects stuck agents and limits on the number of iterations and the task budget."""
+
+        if self._is_awaiting_for_task_resolving():
+            return
+
+        if self.get_agent_state() != AgentState.RUNNING:
+            return
+
+        if self._pending_action:
+            return
+
+        self.log(
+            'info',
+            f'LEVEL {self.state.delegate_level} LOCAL STEP {self.state.local_iteration} GLOBAL STEP {self.state.iteration}',
+            extra={'msg_type': 'STEP'},
+        )
+
+        stop_step = False
+        if self.state.iteration >= self.state.max_iterations:
+            stop_step = await self._handle_traffic_control(
+                'iteration', self.state.iteration, self.state.max_iterations
+            )
+        if self.max_budget_per_task is not None:
+            current_cost = self.state.metrics.accumulated_cost
+            if current_cost > self.max_budget_per_task:
+                stop_step = await self._handle_traffic_control(
+                    'budget', current_cost, self.max_budget_per_task
+                )
+        if stop_step:
+            logger.warning('Stopping agent due to traffic control')
+            return
+
+        if self._is_stuck():
+            await self._react_to_exception(
+                AgentStuckInLoopError('Agent got stuck in a loop')
+            )
+            return
+
+        self.update_state_before_step()
+        action: Action = NullAction()
+
+        if self._replay_manager.should_replay():
+            # in replay mode, we don't let the agent to proceed
+            # instead, we replay the action from the replay trajectory
+            action = self._replay_manager.step()
+        else:
+            try:
+                action = self.planning_agent.step(self.state)
+                if action is None:
+                    raise LLMNoActionError('No action was returned')
+                action._source = EventSource.AGENT  # type: ignore [attr-defined]
+            except (
+                LLMMalformedActionError,
+                LLMNoActionError,
+                LLMResponseError,
+                FunctionCallValidationError,
+                FunctionCallNotExistsError,
+            ) as e:
+                self.event_stream.add_event(
+                    ErrorObservation(
+                        content=str(e),
+                    ),
+                    EventSource.AGENT,
+                )
+                return
+            except (ContextWindowExceededError, BadRequestError, OpenAIError) as e:
+                # FIXME: this is a hack until a litellm fix is confirmed
+                # Check if this is a nested context window error
+                # We have to rely on string-matching because LiteLLM doesn't consistently
+                # wrap the failure in a ContextWindowExceededError
+                error_str = str(e).lower()
+                if (
+                    'contextwindowexceedederror' in error_str
+                    or 'prompt is too long' in error_str
+                    or 'input length and `max_tokens` exceed context limit' in error_str
+                    or isinstance(e, ContextWindowExceededError)
+                ):
+                    if self.planning_agent.config.enable_history_truncation:
+                        self._handle_long_context_error()
+                        return
+                    else:
+                        raise LLMContextWindowExceedError()
+                else:
+                    raise e
+
+        if action.runnable:
+            if self.state.confirmation_mode and (
+                type(action) is CmdRunAction or type(action) is IPythonRunCellAction
+            ):
+                action.confirmation_state = (
+                    ActionConfirmationStatus.AWAITING_CONFIRMATION
+                )
+            self._pending_action = action
+
+        if not isinstance(action, NullAction):
+            if (
+                hasattr(action, 'confirmation_state')
+                and action.confirmation_state
+                == ActionConfirmationStatus.AWAITING_CONFIRMATION
+            ):
+                await self.set_agent_state_to(AgentState.AWAITING_USER_CONFIRMATION)
+
+            # Create and log metrics for frontend display
+            self._prepare_metrics_for_frontend(action)
+
+            self.event_stream.add_event(action, action._source)  # type: ignore [attr-defined]
+
+        await self.update_state_after_step()
+
+        log_level = 'info' if LOG_ALL_EVENTS else 'debug'
+        self.log(log_level, str(action), extra={'msg_type': 'ACTION'})
+
     def should_step(self, event: Event) -> bool:
         """Whether the agent should take a step based on an event.
 
@@ -300,6 +431,8 @@ class PlanController:
             return False
 
         if isinstance(event, Observation):
+            if isinstance(event, PlanStatusObservation):
+                return False
             if (
                 isinstance(event, NullObservation)
                 and event.cause is not None
@@ -331,8 +464,12 @@ class PlanController:
         # Give others a little chance
         await asyncio.sleep(0.01)
 
-        # if the event is not filtered out, add it to the history
-        if not any(isinstance(event, filter_type) for filter_type in self.filter_out):
+        # if the event is not filtered out and tasks are not resolved by delegate agent, add it to the history
+        if (
+            not any(isinstance(event, filter_type) for filter_type in self.filter_out)
+            and any(isinstance(event, pass_type) for pass_type in self.pass_type)
+            and not self._is_awaiting_for_task_resolving()
+        ):
             self.state.history.append(event)
 
         if isinstance(event, Action):
@@ -349,26 +486,83 @@ class PlanController:
             await self.set_agent_state_to(action.agent_state)  # type: ignore
         elif isinstance(action, MessageAction):
             await self._handle_message_action(action)
-        # elif isinstance(action, AgentDelegateAction):
-        #     await self.start_delegate(action)
-        #     assert self.delegate is not None
-        #     # Post a MessageAction with the task for the delegate
-        #     if 'task' in action.inputs:
-        #         self.event_stream.add_event(
-        #             MessageAction(content='TASK: ' + action.inputs['task']),
-        #             EventSource.USER,
-        #         )
-        #         await self.delegate.set_agent_state_to(AgentState.RUNNING)
-        #     return
+        elif isinstance(action, MarkTaskAction):
+            if action.task_status == TaskStatus.IN_PROGRESS:
+                self.state.current_task_index = action.task_index
+                plan: Plan = self.state.plans[self.state.active_plan_id]
+                # asign the task to the agent
+                self.event_stream.add_event(
+                    AsignTaskAction(
+                        plan_id=self.state.active_plan_id,
+                        task_index=action.task_index,
+                        task_content=plan.tasks[action.task_index].content,
+                        delegate_id=self.id + f'_{action.task_index}',
+                    ),
+                    EventSource.USER,
+                )
+        elif isinstance(action, AsignTaskAction):
+            await self._asign_task_to_the_delegate(action)
 
         elif isinstance(action, AgentFinishAction):
-            self.state.outputs = action.outputs
-            self.state.metrics.merge(self.state.local_metrics)
-            await self.set_agent_state_to(AgentState.FINISHED)
+            # AgentFinishAction from current planning agent
+            if self._is_all_task_resolved():
+                self.state.outputs = action.outputs
+                self.state.metrics.merge(self.state.local_metrics)
+                await self.set_agent_state_to(AgentState.FINISHED)
+            # AgentFinishAction from delegate agent
+            else:
+                # mark the task as completed
+                active_plan_obj: Plan = self.state.plans[self.state.active_plan_id]
+                active_plan_obj.tasks[
+                    self.state.current_task_index
+                ].status = TaskStatus.COMPLETED
+                self.event_stream.add_event(
+                    MarkTaskAction(
+                        plan_id=self.state.active_plan_id,
+                        task_index=self.state.current_task_index,
+                        task_status=TaskStatus.COMPLETED,
+                    ),
+                    EventSource.AGENT,
+                )
+                # move to the next task
+                self.state.current_task_index += 1
+                active_plan_obj.tasks[
+                    self.state.current_task_index
+                ].status = TaskStatus.IN_PROGRESS
+                self.event_stream.add_event(
+                    MarkTaskAction(
+                        plan_id=self.state.active_plan_id,
+                        task_index=self.state.current_task_index,
+                        task_status=TaskStatus.IN_PROGRESS,
+                    ),
+                    EventSource.AGENT,
+                )
+
         elif isinstance(action, AgentRejectAction):
             self.state.outputs = action.outputs
             self.state.metrics.merge(self.state.local_metrics)
             await self.set_agent_state_to(AgentState.REJECTED)
+        elif isinstance(action, CreatePlanAction):
+            # Create a plan
+            self._create_plan(action)
+
+            # Add the plan status to the event stream
+            # self.event_stream.add_event(
+            #     self._get_active_plan_status(), EventSource.ENVIRONMENT #PlanStatusObservation
+            # )
+
+            # mark the first task as in progress
+            active_plan: Plan = self.state.plans[self.state.active_plan_id]
+            self.state.current_task_index = 0
+            active_plan.tasks[0].status = TaskStatus.IN_PROGRESS
+            self.event_stream.add_event(
+                MarkTaskAction(
+                    plan_id=self.state.active_plan_id,
+                    task_index=self.state.current_task_index,
+                    task_status=TaskStatus.IN_PROGRESS,
+                ),
+                EventSource.AGENT,
+            )
 
     async def _handle_observation(self, observation: Observation) -> None:
         """Handles observation from the event stream.
@@ -377,9 +571,13 @@ class PlanController:
             observation (observation): The observation to handle.
         """
         observation_to_print = copy.deepcopy(observation)
-        if len(observation_to_print.content) > self.agent.llm.config.max_message_chars:
+        if (
+            len(observation_to_print.content)
+            > self.planning_agent.llm.config.max_message_chars
+        ):
             observation_to_print.content = truncate_content(
-                observation_to_print.content, self.agent.llm.config.max_message_chars
+                observation_to_print.content,
+                self.planning_agent.llm.config.max_message_chars,
             )
         # Use info level if LOG_ALL_EVENTS is set
         log_level = 'info' if os.getenv('LOG_ALL_EVENTS') in ('true', '1') else 'debug'
@@ -388,7 +586,7 @@ class PlanController:
         )
 
         if observation.llm_metrics is not None:
-            self.agent.llm.metrics.merge(observation.llm_metrics)
+            self.planning_agent.llm.metrics.merge(observation.llm_metrics)
 
         # this happens for runnable actions and microagent actions
         if self._pending_action and self._pending_action.id == observation.cause:
@@ -486,7 +684,7 @@ class PlanController:
 
         # reset the pending action, this will be called when the agent is STOPPED or ERROR
         self._pending_action = None
-        self.agent.reset()
+        self.planning_agent.reset()
 
     async def set_agent_state_to(self, new_state: AgentState) -> None:
         """Updates the agent's state and handles side effects. Can emit events to the event stream.
@@ -496,7 +694,7 @@ class PlanController:
         """
         self.log(
             'info',
-            f'Setting agent({self.agent.name}) state from {self.state.agent_state} to {new_state}',
+            f'Setting agent({self.planning_agent.name}) state from {self.state.agent_state} to {new_state}',
         )
 
         if new_state == self.state.agent_state:
@@ -558,115 +756,6 @@ class PlanController:
             AgentState: The current state of the agent.
         """
         return self.state.agent_state
-
-    async def _step(self) -> None:
-        """Executes a single step of the parent or delegate agent. Detects stuck agents and limits on the number of iterations and the task budget."""
-        if self.get_agent_state() != AgentState.RUNNING:
-            return
-
-        if self._pending_action:
-            return
-
-        self.log(
-            'info',
-            f'LEVEL {self.state.delegate_level} LOCAL STEP {self.state.local_iteration} GLOBAL STEP {self.state.iteration}',
-            extra={'msg_type': 'STEP'},
-        )
-
-        stop_step = False
-        if self.state.iteration >= self.state.max_iterations:
-            stop_step = await self._handle_traffic_control(
-                'iteration', self.state.iteration, self.state.max_iterations
-            )
-        if self.max_budget_per_task is not None:
-            current_cost = self.state.metrics.accumulated_cost
-            if current_cost > self.max_budget_per_task:
-                stop_step = await self._handle_traffic_control(
-                    'budget', current_cost, self.max_budget_per_task
-                )
-        if stop_step:
-            logger.warning('Stopping agent due to traffic control')
-            return
-
-        if self._is_stuck():
-            await self._react_to_exception(
-                AgentStuckInLoopError('Agent got stuck in a loop')
-            )
-            return
-
-        self.update_state_before_step()
-        action: Action = NullAction()
-
-        if self._replay_manager.should_replay():
-            # in replay mode, we don't let the agent to proceed
-            # instead, we replay the action from the replay trajectory
-            action = self._replay_manager.step()
-        else:
-            try:
-                action = self.agent.step(self.state)
-                if action is None:
-                    raise LLMNoActionError('No action was returned')
-                action._source = EventSource.AGENT  # type: ignore [attr-defined]
-            except (
-                LLMMalformedActionError,
-                LLMNoActionError,
-                LLMResponseError,
-                FunctionCallValidationError,
-                FunctionCallNotExistsError,
-            ) as e:
-                self.event_stream.add_event(
-                    ErrorObservation(
-                        content=str(e),
-                    ),
-                    EventSource.AGENT,
-                )
-                return
-            except (ContextWindowExceededError, BadRequestError, OpenAIError) as e:
-                # FIXME: this is a hack until a litellm fix is confirmed
-                # Check if this is a nested context window error
-                # We have to rely on string-matching because LiteLLM doesn't consistently
-                # wrap the failure in a ContextWindowExceededError
-                error_str = str(e).lower()
-                if (
-                    'contextwindowexceedederror' in error_str
-                    or 'prompt is too long' in error_str
-                    or 'input length and `max_tokens` exceed context limit' in error_str
-                    or isinstance(e, ContextWindowExceededError)
-                ):
-                    if self.agent.config.enable_history_truncation:
-                        self._handle_long_context_error()
-                        return
-                    else:
-                        raise LLMContextWindowExceedError()
-                else:
-                    raise e
-
-        if action.runnable:
-            if self.state.confirmation_mode and (
-                type(action) is CmdRunAction or type(action) is IPythonRunCellAction
-            ):
-                action.confirmation_state = (
-                    ActionConfirmationStatus.AWAITING_CONFIRMATION
-                )
-            self._pending_action = action
-
-        if not isinstance(action, NullAction):
-            if (
-                hasattr(action, 'confirmation_state')
-                and action.confirmation_state
-                == ActionConfirmationStatus.AWAITING_CONFIRMATION
-            ):
-                await self.set_agent_state_to(AgentState.AWAITING_USER_CONFIRMATION)
-
-            # Create and log metrics for frontend display
-            self._prepare_metrics_for_frontend(action)
-
-            self.event_stream.add_event(action, action._source)  # type: ignore [attr-defined]
-
-        await self.update_state_after_step()
-
-        log_level = 'info' if LOG_ALL_EVENTS else 'debug'
-        self.log(log_level, str(action), extra={'msg_type': 'ACTION'})
 
     def _notify_on_llm_retry(self, retries: int, max: int) -> None:
         if self.status_callback is not None:
@@ -851,55 +940,7 @@ class PlanController:
         )
         events.extend(events_to_add)
 
-        # Find all delegate action/observation pairs
-        delegate_ranges: list[tuple[int, int]] = []
-        # delegate_action_ids: list[int] = []  # stack of unmatched delegate action IDs
-
-        # for event in events:
-        #     if isinstance(event, AgentDelegateAction):
-        #         delegate_action_ids.append(event.id)
-        #         # Note: we can get agent=event.agent and task=event.inputs.get('task','')
-        #         # if we need to track these in the future
-
-        #     elif isinstance(event, AgentDelegateObservation):
-        #         # Match with most recent unmatched delegate action
-        #         if not delegate_action_ids:
-        #             self.log(
-        #                 'warning',
-        #                 f'Found AgentDelegateObservation without matching action at id={event.id}',
-        #             )
-        #             continue
-
-        #         action_id = delegate_action_ids.pop()
-        #         delegate_ranges.append((action_id, event.id))
-
-        # Filter out events between delegate action/observation pairs
-        if delegate_ranges:
-            filtered_events: list[Event] = []
-            current_idx = 0
-
-            for start_id, end_id in sorted(delegate_ranges):
-                # Add events before delegate range
-                filtered_events.extend(
-                    event for event in events[current_idx:] if event.id < start_id
-                )
-
-                # Add delegate action and observation
-                filtered_events.extend(
-                    event for event in events if event.id in (start_id, end_id)
-                )
-
-                # Update index to after delegate range
-                current_idx = next(
-                    (i for i, e in enumerate(events) if e.id > end_id), len(events)
-                )
-
-            # Add any remaining events after last delegate range
-            filtered_events.extend(events[current_idx:])
-
-            self.state.history = filtered_events
-        else:
-            self.state.history = events
+        self.state.history = events
 
         # make sure history is in sync
         self.state.start_id = start_id
@@ -1029,10 +1070,10 @@ class PlanController:
         Args:
             action: The action to attach metrics to
         """
-        metrics = Metrics(model_name=self.agent.llm.metrics.model_name)
-        metrics.accumulated_cost = self.agent.llm.metrics.accumulated_cost
-        if self.agent.llm.metrics.token_usages:
-            latest_usage = self.agent.llm.metrics.token_usages[-1]
+        metrics = Metrics(model_name=self.planning_agent.llm.metrics.model_name)
+        metrics.accumulated_cost = self.planning_agent.llm.metrics.accumulated_cost
+        if self.planning_agent.llm.metrics.token_usages:
+            latest_usage = self.planning_agent.llm.metrics.token_usages[-1]
             metrics.add_token_usage(
                 prompt_tokens=latest_usage.prompt_tokens,
                 completion_tokens=latest_usage.completion_tokens,
@@ -1100,3 +1141,90 @@ class PlanController:
             None,
         )
         return self._cached_first_user_message
+
+    def _create_plan(self, action: CreatePlanAction) -> None:
+        """Creates a plan for the agent.
+
+        Args:
+            action: The CreatePlanAction to process.
+        """
+        self.state.plans[action.plan_id] = Plan.from_create_plan_action(action)
+
+        self.state.active_plan_id = action.plan_id
+        # self.state.current_task_index = 0
+
+    def _get_active_plan_status(self, w_result: bool = False) -> PlanStatusObservation:
+        """Returns the status of the active plan.
+
+        Returns:
+            PlanStatusObservation: The status of the active plan.
+        """
+        active_plan: Plan = self.state.plans[self.state.active_plan_id]
+        return PlanStatusObservation(
+            status=active_plan.to_dict(),
+            content=active_plan._format_plan(w_result=w_result),
+        )
+
+    async def _asign_task_to_the_delegate(self, action: AsignTaskAction) -> None:
+        """Asign a task to the delegate.
+
+        Args:
+            action: The AsignTaskAction to process.
+        """
+
+        # init the task controllers if not already done
+        if action.plan_id not in self.task_controllers:
+            self.task_controllers[action.plan_id] = {}
+
+        # init controller for the task
+        controller = AgentController(
+            sid=action.delegate_id,
+            event_stream=self.event_stream,
+            agent=self.agent,
+            max_iterations=self.state.max_iterations // 2,
+            max_budget_per_task=self.max_budget_per_task,
+            agent_to_llm_config=self.agent_to_llm_config,
+            agent_configs=self.agent_configs,
+            confirmation_mode=self.state.confirmation_mode,
+            headless_mode=False,
+            status_callback=self.status_callback,
+            initial_state=None,
+            replay_events=None,
+        )
+
+        self.task_controllers[action.plan_id][action.task_index] = controller
+
+        # asign the task to the agent controller
+        asign_plan: Plan = self.state.plans[action.plan_id]
+
+        asign_task_prompt = f"""
+        CURRENT PLAN STATUS:
+        {asign_plan._format_plan(w_result=True)}
+
+        YOUR CURRENT TASK:
+        You are now working on task {action.task_index}: "{asign_plan.tasks[action.task_index].content}".
+        """
+
+        self.event_stream.add_event(
+            MessageAction(
+                content=asign_task_prompt,
+            ),
+            EventSource.USER,
+        )
+
+    def _is_awaiting_for_task_resolving(self) -> bool:
+        for plan_id, task_controllers in self.task_controllers.items():
+            for task_index, controller in task_controllers.items():
+                if controller.get_agent_state() == AgentState.RUNNING:
+                    return True
+        return False
+
+    def _is_all_task_resolved(self) -> bool:
+        if not self.task_controllers:
+            return False
+
+        for plan_id, task_controllers in self.task_controllers.items():
+            for task_index, controller in task_controllers.items():
+                if controller.get_agent_state() != AgentState.FINISHED:
+                    return False
+        return True

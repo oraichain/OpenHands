@@ -11,9 +11,11 @@ from openhands.events.action import (
     AgentDelegateAction,
     AgentFinishAction,
     AgentThinkAction,
+    AsignTaskAction,
     BrowseInteractiveAction,
     BrowseURLAction,
     CmdRunAction,
+    CreatePlanAction,
     FileEditAction,
     FileReadAction,
     IPythonRunCellAction,
@@ -201,6 +203,7 @@ class ConversationMemory:
                 BrowseInteractiveAction,
                 BrowseURLAction,
                 McpAction,
+                CreatePlanAction,
             ),
         ) or (isinstance(action, CmdRunAction) and action.source == 'agent'):
             tool_metadata = action.tool_call_metadata
@@ -280,6 +283,8 @@ class ConversationMemory:
                     content=content,
                 )
             ]
+        elif isinstance(action, AsignTaskAction):
+            return [Message(role='user', content=[TextContent(text=action.message)])]
         return []
 
     def _process_observation(

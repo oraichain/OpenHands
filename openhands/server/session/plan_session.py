@@ -5,8 +5,8 @@ from logging import LoggerAdapter
 from types import MappingProxyType
 from typing import Callable, cast
 
-from openhands.controller import AgentController
 from openhands.controller.agent import Agent
+from openhands.controller.planning_controller import PlanController
 from openhands.controller.replay import ReplayManager
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig, AppConfig, LLMConfig
@@ -33,18 +33,18 @@ WAIT_TIME_BEFORE_CLOSE = 90
 WAIT_TIME_BEFORE_CLOSE_INTERVAL = 5
 
 
-class AgentSession:
+class PlanSession:
     """Represents a session with an Agent
 
     Attributes:
-        controller: The AgentController instance for controlling the agent.
+        controller: The PlanController instance for controlling the agent.
     """
 
     sid: str
     user_id: str | None
     event_stream: EventStream
     file_store: FileStore
-    controller: AgentController | None = None
+    controller: PlanController | None = None
     runtime: Runtime | None = None
     security_analyzer: SecurityAnalyzer | None = None
     _starting: bool = False
@@ -81,6 +81,7 @@ class AgentSession:
         runtime_name: str,
         config: AppConfig,
         agent: Agent,
+        planning_agent: Agent,
         max_iterations: int,
         git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
         max_budget_per_task: float | None = None,
@@ -193,6 +194,7 @@ class AgentSession:
                     initial_message,
                     replay_json,
                     agent,
+                    planning_agent,
                     config,
                     max_iterations,
                     max_budget_per_task,
@@ -201,9 +203,10 @@ class AgentSession:
                 )
             else:
                 self.controller = self._create_controller(
-                    agent,
-                    config.security.confirmation_mode,
-                    max_iterations,
+                    agent=agent,
+                    planning_agent=planning_agent,
+                    confirmation_mode=config.security.confirmation_mode,
+                    max_iterations=max_iterations,
                     max_budget_per_task=max_budget_per_task,
                     agent_to_llm_config=agent_to_llm_config,
                     agent_configs=agent_configs,
@@ -277,6 +280,7 @@ class AgentSession:
         initial_message: MessageAction | None,
         replay_json: str,
         agent: Agent,
+        planning_agent: Agent,
         config: AppConfig,
         max_iterations: int,
         max_budget_per_task: float | None,
@@ -292,9 +296,10 @@ class AgentSession:
         assert initial_message is None
         replay_events = ReplayManager.get_replay_events(json.loads(replay_json))
         self.controller = self._create_controller(
-            agent,
-            config.security.confirmation_mode,
-            max_iterations,
+            agent=agent,
+            planning_agent=planning_agent,
+            confirmation_mode=config.security.confirmation_mode,
+            max_iterations=max_iterations,
             max_budget_per_task=max_budget_per_task,
             agent_to_llm_config=agent_to_llm_config,
             agent_configs=agent_configs,
@@ -404,14 +409,15 @@ class AgentSession:
     def _create_controller(
         self,
         agent: Agent,
+        planning_agent: Agent,
         confirmation_mode: bool,
         max_iterations: int,
         max_budget_per_task: float | None = None,
         agent_to_llm_config: dict[str, LLMConfig] | None = None,
         agent_configs: dict[str, AgentConfig] | None = None,
         replay_events: list[Event] | None = None,
-    ) -> AgentController:
-        """Creates an AgentController instance
+    ) -> PlanController:
+        """Creates an PlanController instance
 
         Parameters:
         - agent:
@@ -443,10 +449,11 @@ class AgentSession:
         )
         self.logger.debug(msg)
 
-        controller = AgentController(
+        controller = PlanController(
             sid=self.sid,
             event_stream=self.event_stream,
             agent=agent,
+            planning_agent=planning_agent,
             max_iterations=int(max_iterations),
             max_budget_per_task=max_budget_per_task,
             agent_to_llm_config=agent_to_llm_config,

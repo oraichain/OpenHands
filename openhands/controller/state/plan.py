@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from openhands.events.action import Action
 from openhands.events.action.plan import CreatePlanAction, MarkTaskAction, TaskStatus
@@ -33,6 +33,9 @@ class Plan:
             action.title,
             [Task(content=content) for content in action.tasks],
         )
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
     def execute_plan_action(self, action: Action) -> str:
         if isinstance(action, CreatePlanAction):

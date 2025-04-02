@@ -3,7 +3,7 @@ import os
 import pickle
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Dict
 
 import openhands
 from openhands.controller.state.plan import Plan
@@ -74,9 +74,9 @@ class State:
     """
 
     # plans created by the agent
-    plans: list[dict[str, Plan]] = field(default_factory=list)
+    plans: Dict[str, Plan] = field(default_factory=Dict)
     active_plan_id: str = ''
-    current_task_index: str = ''
+    current_task_index: int = -1
 
     root_task: RootTask = field(default_factory=RootTask)
     session_id: str = ''

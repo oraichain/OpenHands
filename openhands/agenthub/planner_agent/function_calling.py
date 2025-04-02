@@ -12,6 +12,7 @@ from litellm import (
 
 from openhands.agenthub.planner_agent.tools import (
     BrowserTool,
+    FinishTool,
     PlanningTool,
     ThinkTool,
     WebReadTool,
@@ -22,13 +23,14 @@ from openhands.core.exceptions import (
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import (
     Action,
+    AgentFinishAction,
     AgentThinkAction,
     BrowseInteractiveAction,
     BrowseURLAction,
+    CreatePlanAction,
+    McpAction,
     MessageAction,
 )
-from openhands.events.action.mcp import McpAction
-from openhands.events.action.plan import CreatePlanAction
 from openhands.events.tool import ToolCallMetadata
 
 
@@ -74,11 +76,23 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
             #         inputs=arguments,
             #     )
 
+            # ================================================
+            # CreatePlanAction
+            # ================================================
             if tool_call.function.name == PlanningTool['function']['name']:
                 action = CreatePlanAction(
                     plan_id=arguments.get('plan_id', ''),
                     title=arguments.get('title', ''),
                     tasks=arguments.get('tasks', []),
+                )
+
+            # ================================================
+            # AgentFinishAction
+            # ================================================
+            elif tool_call.function.name == FinishTool['function']['name']:
+                action = AgentFinishAction(
+                    final_thought=arguments.get('message', ''),
+                    task_completed=arguments.get('task_completed', None),
                 )
 
             # ================================================
@@ -149,4 +163,4 @@ def get_tools() -> list[ChatCompletionToolParam]:
     Get the list of tools that are available for function calling.
     """
 
-    return [WebReadTool, BrowserTool, ThinkTool, PlanningTool]
+    return [WebReadTool, BrowserTool, ThinkTool, PlanningTool, FinishTool]
