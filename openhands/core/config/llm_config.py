@@ -84,18 +84,13 @@ class LLMConfig(BaseModel):
     custom_tokenizer: str | None = Field(default=None)
     native_tool_calling: bool | None = Field(default=None)
     reasoning_effort: str | None = Field(default='high')
+    seed: int | None = Field(default=None)
+    for_routing: bool = Field(default=False)
 
+    model_config = {'extra': 'forbid'}
 
-<< << << < HEAD
- seed: int | None = Field(default=None)
-== == == =
- for_routing: bool = Field(default=False)
->>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
-
- model_config = {'extra': 'forbid'}
-
-  @classmethod
-   def from_toml_section(cls, data: dict) -> dict[str, LLMConfig]:
+    @classmethod
+    def from_toml_section(cls, data: dict) -> dict[str, LLMConfig]:
         """
         Create a mapping of LLMConfig instances from a toml dictionary representing the [llm] section.
 

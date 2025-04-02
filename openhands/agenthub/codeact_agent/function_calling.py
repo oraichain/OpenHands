@@ -17,6 +17,7 @@ from openhands.agenthub.codeact_agent.tools import (
     FinishTool,
     IPythonTool,
     LLMBasedFileEditTool,
+    SequentialThinkingTool,
     ThinkTool,
     WebReadTool,
     create_cmd_run_tool,
@@ -30,6 +31,7 @@ from openhands.events.action import (
     Action,
     AgentDelegateAction,
     AgentFinishAction,
+    AgentSequentialThinkAction,
     AgentThinkAction,
     BrowseInteractiveAction,
     BrowseURLAction,
@@ -208,6 +210,20 @@ def response_to_actions(
                     thought_manager.add_thought(thought_obj)
 
             # ================================================
+            # SequentialThinkingTool
+            # ================================================
+            elif tool_call.function.name == SequentialThinkingTool['function']['name']:
+                # Create the AgentSequentialThinkAction
+                action = AgentSequentialThinkAction(
+                    current_step=arguments.get('currentStep', ''),
+                    step_number=arguments.get('stepNumber', 0),
+                    total_steps=arguments.get('totalSteps', 0),
+                    next_step_needed=arguments.get('nextStepNeeded', False),
+                    is_complete=arguments.get('isComplete', False),
+                    step_summary=arguments.get('stepSummary', ''),
+                )
+
+            # ================================================
             # BrowserTool
             # ================================================
             elif tool_call.function.name == BrowserTool['function']['name']:
@@ -289,6 +305,7 @@ def get_tools(
     tools = [
         create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
         ThinkTool,
+        SequentialThinkingTool,
         FinishTool,
     ]
     if codeact_enable_browsing:

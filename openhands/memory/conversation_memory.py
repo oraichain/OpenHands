@@ -43,9 +43,6 @@ from openhands.core.config.agent_config import AgentConfig
 from litellm import ModelResponse
 from typing import Generator
 import json
-<< << << < HEAD
-== == == =
->>>>>> > 6851215410237b5be69a8a0028f6e4e3489c4c22
 
 
 class ConversationMemory:

@@ -630,42 +630,53 @@ class ActionExecutor:
 
 if __name__ == '__main__':
     logger.warning('Starting Action Execution Server')
-    parser = argparse.ArgumentParser()
-    parser.add_argument('port', type=int, help='Port to listen on')
-    parser.add_argument('--working-dir', type=str, help='Working directory')
-    parser.add_argument('--plugins', type=str,
-                        help='Plugins to initialize', nargs='+')
+    parser = argparse.ArgumentParser(description='Action execution server')
     parser.add_argument(
-        '--username', type=str, help='User to run as', default='openhands'
+        'port', type=int, help='port to start the action execution server'
     )
-    parser.add_argument('--user-id', type=int,
-                        help='User ID to run as', default=1000)
+    parser.add_argument(
+        '--working-dir',
+        type=str,
+        default='/workspace',
+        help='working directory for the action execution server',
+    )
+    parser.add_argument(
+        '--plugins',
+        type=str,
+        nargs='+',
+        help='plugins to load',
+    )
+    parser.add_argument(
+        '--username', type=str, default='openhands', help='username to run as'
+    )
+    parser.add_argument(
+        '--uid', type=int, default=1000, help='user id to run as'
+    )
     parser.add_argument(
         '--browsergym-eval-env',
         type=str,
-        help='BrowserGym environment used for browser evaluation',
-        default=None,
+        help='BrowserGym environment to use for evaluation',
     )
     parser.add_argument(
-        '--runtime-mode', type=str, help='docker | others', default='others'
+        '--runtime-mode',
+        type=str,
+        default='docker',
+        help='Runtime mode, e.g. docker, modal, etc.',
     )
-
     # example: python client.py 8000 --working-dir /workspace --plugins JupyterRequirement
     args = parser.parse_args()
-<< << << < HEAD
-== == == =
 
-  port_path = '/tmp/oh-server-url'
-   os.makedirs(os.path.dirname(port_path), exist_ok=True)
+    port_path = '/tmp/oh-server-url'
+    os.makedirs(os.path.dirname(port_path), exist_ok=True)
     with open(port_path, 'w') as f:
         f.write(f'http://127.0.0.1:{args.port}')
 
->>>>>> > 6851215410237b5be69a8a0028f6e4e3489c4c22
-  plugins_to_load: list[Plugin] = []
-   if args.plugins:
+    plugins_to_load: list[Plugin] = []
+    if args.plugins:
         for plugin in args.plugins:
             if plugin not in ALL_PLUGINS:
                 raise ValueError(f'Plugin {plugin} not found')
+
             plugins_to_load.append(ALL_PLUGINS[plugin]())  # type: ignore
 
     client: ActionExecutor | None = None
@@ -677,7 +688,7 @@ if __name__ == '__main__':
             plugins_to_load,
             work_dir=args.working_dir,
             username=args.username,
-            user_id=args.user_id,
+            user_id=args.uid,
             browsergym_eval_env=args.browsergym_eval_env,
             runtime_mode=args.runtime_mode,
         )

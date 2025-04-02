@@ -30,23 +30,16 @@ class AgentConfig(BaseModel):
     disabled_microagents: list[str] = Field(default_factory=list)
     enable_history_truncation: bool = Field(default=True)
     enable_som_visual_browsing: bool = Field(default=False)
+    enable_plan_routing: bool = Field(default=False)
+    condenser: CondenserConfig = Field(
+        default_factory=lambda: NoOpCondenserConfig(type='noop')
+    )
 
+    model_config = {'extra': 'forbid'}
 
-<< << << < HEAD
-condenser: CondenserConfig = Field(
-    default_factory=lambda: NoOpCondenserConfig(type='noop')
-)
-== == == =
-enable_plan_routing: bool = Field(default=False)
-condenser: CondenserConfig = Field(default_factory=NoOpCondenserConfig)
->>>>>> > c076a3282b5be79c44c0b1ca002b9fe385a69bb7
-
-model_config = {'extra': 'forbid'}
-
-
-@classmethod
-def from_toml_section(cls, data: dict) -> dict[str, AgentConfig]:
-    """
+    @classmethod
+    def from_toml_section(cls, data: dict) -> dict[str, AgentConfig]:
+        """
         Create a mapping of AgentConfig instances from a toml dictionary representing the [agent] section.
 
         The default configuration is built from all non-dict keys in data.
@@ -66,13 +59,13 @@ def from_toml_section(cls, data: dict) -> dict[str, AgentConfig]:
             and additional keys represent custom configurations.
         """
 
-    # Initialize the result mapping
-    agent_mapping: dict[str, AgentConfig] = {}
+        # Initialize the result mapping
+        agent_mapping: dict[str, AgentConfig] = {}
 
-     # Extract base config data (non-dict values)
-     base_data = {}
-      custom_sections: dict[str, dict] = {}
-       for key, value in data.items():
+        # Extract base config data (non-dict values)
+        base_data = {}
+        custom_sections: dict[str, dict] = {}
+        for key, value in data.items():
             if isinstance(value, dict):
                 custom_sections[key] = value
             else:

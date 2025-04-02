@@ -202,7 +202,7 @@ class ActionExecutionClient(Runtime):
                 upload_data = {'file': open(host_src, 'rb')}
 
             params = {'destination': sandbox_dest,
-                'recursive': str(recursive).lower()}
+                      'recursive': str(recursive).lower()}
 
             response = self._send_action_server_request(
                 'POST',
@@ -283,9 +283,6 @@ class ActionExecutionClient(Runtime):
             assert action.timeout is not None
 
             try:
-
-
-<< << << < HEAD
                 execution_action_body = {
                     'action': event_to_dict(action),
                     'caller_platform': platform.system(),
@@ -300,10 +297,7 @@ class ActionExecutionClient(Runtime):
                         self.config.mcp.stdio.args,
                     )
 
-                with self._send_action_server_request(
-== == == =
-                response=self._send_action_server_request(
->>>>>> > 6851215410237b5be69a8a0028f6e4e3489c4c22
+                response = self._send_action_server_request(
                     'POST',
                     f'{self._get_action_execution_server_host()}/execute_action',
                     json=execution_action_body,
@@ -311,9 +305,9 @@ class ActionExecutionClient(Runtime):
                     timeout=action.timeout + 5,
                 )
                 assert response.is_closed
-                output=response.json()
-                obs=observation_from_dict(output)
-                obs._cause=action.id  # type: ignore[attr-defined]
+                output = response.json()
+                obs = observation_from_dict(output)
+                obs._cause = action.id  # type: ignore[attr-defined]
             except httpx.TimeoutException:
                 raise AgentRuntimeTimeoutError(
                     f'Runtime failed to return execute_action before the requested timeout of {action.timeout}s'
@@ -349,5 +343,5 @@ class ActionExecutionClient(Runtime):
         # Can happen in evaluation
         if self._runtime_closed:
             return
-        self._runtime_closed=True
+        self._runtime_closed = True
         self.session.close()

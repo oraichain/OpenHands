@@ -95,6 +95,39 @@ class AgentThinkAction(Action):
 
 
 @dataclass
+class AgentSequentialThinkAction(Action):
+    """An action where the agent logs a sequential thinking step.
+
+    Attributes:
+        current_step (str): The current step in the sequential thinking process.
+        action (str): The action type, namely ActionType.SEQUENTIAL_THINK.
+        step_number (int, optional): Current position in the sequence.
+        total_steps (int, optional): Total number of steps in the complete sequence.
+        next_step_needed (bool, optional): Whether another step is needed.
+        is_complete (bool, optional): Whether the sequential thinking process is complete.
+        step_summary (str, optional): Brief summary of what was accomplished in this step.
+    """
+
+    current_step: str = ''
+    action: str = ActionType.SEQUENTIAL_THINK
+    step_number: int = 0
+    total_steps: int = 0
+    next_step_needed: bool = False
+    is_complete: bool = False
+    step_summary: str = ''
+
+    @property
+    def message(self) -> str:
+        if self.step_number > 0 and self.total_steps > 0:
+            prefix = f'Step {self.step_number}/{self.total_steps}'
+            if self.is_complete:
+                prefix += ' (Complete)'
+            return f'{prefix}: {self.current_step}'
+
+        return f'Planning steps...: {self.current_step}'
+
+
+@dataclass
 class AgentRejectAction(Action):
     outputs: dict = field(default_factory=dict)
     thought: str = ''
