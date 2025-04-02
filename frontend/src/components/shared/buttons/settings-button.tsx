@@ -17,7 +17,7 @@ export function SettingsButton({ onClick }: SettingsButtonProps) {
       ariaLabel={t(I18nKey.SETTINGS$TITLE)}
       onClick={onClick}
     >
-      <SettingsIcon width={28} height={28} />
+      <SettingsIcon width={24} height={24} />
     </TooltipButton>
   );
 }

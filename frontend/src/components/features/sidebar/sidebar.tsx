@@ -119,7 +119,7 @@ export function Sidebar() {
               onLogout={handleLogout}
               isLoading={user.isFetching}
             />
-            <NavLink to="/settings" className="h-[28px]">
+            <NavLink to="/settings" className="h-[24px]">
               <SettingsButton />
             </NavLink>
           </div>

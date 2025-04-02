@@ -26,7 +26,7 @@ export function UserAvatar({ onClick, avatarUrl, isLoading }: UserAvatarProps) {
       )}
     >
       {!isLoading && avatarUrl && <Avatar src={avatarUrl} />}
-      {!isLoading && !avatarUrl && <UserIcon width={28} height={28} />}
+      {!isLoading && !avatarUrl && <UserIcon width={24} height={24} />}
       {isLoading && <LoadingSpinner size="small" />}
     </TooltipButton>
   );
