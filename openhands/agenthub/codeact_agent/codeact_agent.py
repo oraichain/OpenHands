@@ -67,7 +67,7 @@ class CodeActAgent(Agent):
         - llm (LLM): The llm to be used by this agent
         - config (AgentConfig): The configuration for this agent
         - mcp_tools (list[dict] | None, optional): List of MCP tools to be used by this agent. Defaults to None.
-        - model_routing_config (ModelRoutingConfig | None, optional): The model routing configuration. Defaults to None.
+        - model_routing_config (ModelRoutingConfig | None, optional): Configuration for model routing. Defaults to None.
         - routing_llms (dict[str, LLM] | None, optional): The llms to be selected for routing. Defaults to None.
         """
         super().__init__(llm, config, mcp_tools)
@@ -161,6 +161,10 @@ class CodeActAgent(Agent):
         # NOTE: We need to call this here when self.active_llm is correctly set
         messages = self._get_messages(state)
         params['messages'] = self.active_llm.format_messages_for_llm(messages)
+
+        # log to litellm proxy if possible
+        params['extra_body'] = {
+            'metadata': state.to_llm_metadata(agent_name=self.name)}
 
         response = self.active_llm.completion(**params)
 
