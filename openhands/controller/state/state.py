@@ -74,7 +74,7 @@ class State:
     """
 
     # plans created by the agent
-    plans: Dict[str, Plan] = field(default_factory=Dict)
+    plans: Dict[str, Plan] = field(default_factory=dict)
     active_plan_id: str = ''
     current_task_index: int = -1
 

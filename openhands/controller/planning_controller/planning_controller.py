@@ -465,12 +465,13 @@ class PlanController:
         await asyncio.sleep(0.01)
 
         # if the event is not filtered out and tasks are not resolved by delegate agent, add it to the history
-        if (
-            not any(isinstance(event, filter_type) for filter_type in self.filter_out)
-            and any(isinstance(event, pass_type) for pass_type in self.pass_type)
-            and not self._is_awaiting_for_task_resolving()
-        ):
-            self.state.history.append(event)
+        if not any(isinstance(event, filter_type) for filter_type in self.filter_out):
+            if not self._is_awaiting_for_task_resolving():
+                self.state.history.append(event)
+            elif any(isinstance(event, pass_type) for pass_type in self.pass_type):
+                self.state.history.append(event)
+            else:
+                pass
 
         if isinstance(event, Action):
             await self._handle_action(event)

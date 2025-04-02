@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from enum import Enum
 
 from openhands.core.schema import ActionType
 from openhands.events.action.action import Action
@@ -19,14 +18,15 @@ class CreatePlanAction(Action):
     plan_id: str
     title: str
     tasks: list[str]
-    action: str = ActionType.PLAN
+    action: str = ActionType.CREATE_PLAN
 
     @property
     def message(self) -> str:
         return f'Created a plan with title {self.title} and tasks {self.tasks}'
 
 
-class TaskStatus(Enum):
+@dataclass
+class TaskStatus:
     """The status of a task."""
 
     NOT_STARTED = 'not_started'
@@ -35,23 +35,18 @@ class TaskStatus(Enum):
     BLOCKED = 'blocked'
 
     @classmethod
-    def get_all_statuses(cls) -> list[str]:
-        """Return a list of all possible step status values"""
-        return [status.value for status in cls]
-
-    @classmethod
     def get_active_statuses(cls) -> list[str]:
         """Return a list of values representing active statuses (not started or in progress)"""
-        return [cls.NOT_STARTED.value, cls.IN_PROGRESS.value]
+        return [cls.NOT_STARTED, cls.IN_PROGRESS]
 
     @classmethod
     def get_status_marks(cls) -> dict[str, str]:
         """Return a mapping of statuses to their marker symbols"""
         return {
-            cls.COMPLETED.value: '[✓]',
-            cls.IN_PROGRESS.value: '[→]',
-            cls.BLOCKED.value: '[!]',
-            cls.NOT_STARTED.value: '[ ]',
+            cls.COMPLETED: '[✓]',
+            cls.IN_PROGRESS: '[→]',
+            cls.BLOCKED: '[!]',
+            cls.NOT_STARTED: '[ ]',
         }
 
 
@@ -69,9 +64,9 @@ class MarkTaskAction(Action):
 
     plan_id: str
     task_index: int
-    task_status: TaskStatus
+    task_status: str
     task_result: str = ''
-    action: str = ActionType.PLAN
+    action: str = ActionType.MASK_TASK
 
     @property
     def message(self) -> str:
@@ -93,7 +88,7 @@ class AsignTaskAction(Action):
     task_index: int
     task_content: str
     delegate_id: str
-    action: str = ActionType.PLAN
+    action: str = ActionType.ASIGN_TASK
 
     @property
     def message(self) -> str:

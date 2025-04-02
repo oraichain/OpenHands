@@ -348,6 +348,10 @@ class EventStream:
             event = None
             try:
                 event = self._queue.get(timeout=0.1)
+                logger.info(
+                    f'========== PROCESSING EVENT TYPE: {type(event)} ==========='
+                )
+                # logger.info(event)
             except queue.Empty:
                 continue
 

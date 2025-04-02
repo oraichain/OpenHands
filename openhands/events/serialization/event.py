@@ -112,6 +112,9 @@ def event_to_dict(event: 'Event') -> dict:
             d['tool_call_metadata'] = d['tool_call_metadata'].model_dump()
         if key == 'llm_metrics' and 'llm_metrics' in d:
             d['llm_metrics'] = d['llm_metrics'].get()
+        # if key == 'task_status' and 'task_status' in d:
+        #     d['task_status'] = d['task_status'].value
+
         props.pop(key, None)
     if 'security_risk' in props and props['security_risk'] is None:
         props.pop('security_risk')
@@ -136,6 +139,9 @@ def event_to_dict(event: 'Event') -> dict:
             d['success'] = event.success
     else:
         raise ValueError(f'Event must be either action or observation. has: {event}')
+
+    # logger.info(f'event_to_dict: {d}')
+
     return d
 
 

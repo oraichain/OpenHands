@@ -2,7 +2,7 @@ from litellm import ChatCompletionToolParam, ChatCompletionToolParamFunctionChun
 
 _PLANNING_DESCRIPTION = """
 A planning tool that allows the agent to create and manage plans for solving complex tasks.
-The tool provides functionality for creating plans, updating plan steps, and tracking progress.
+The tool provides functionality for creating plans, updating plan tasks, and tracking progress.
 """
 
 PlanningTool = ChatCompletionToolParam(
@@ -28,8 +28,8 @@ PlanningTool = ChatCompletionToolParam(
                     'description': 'Title for the plan. Required for create command.',
                     'type': 'string',
                 },
-                'steps': {
-                    'description': 'List of plan steps. Required for create command.',
+                'tasks': {
+                    'description': 'List of plan tasks. Required for create command.',
                     'type': 'array',
                     'items': {'type': 'string'},
                 },
@@ -65,8 +65,8 @@ implement_later_params = {
             'description': 'Title for the plan. Required for create command, optional for update command.',
             'type': 'string',
         },
-        'steps': {
-            'description': 'List of plan steps. Required for create command, optional for update command.',
+        'tasks': {
+            'description': 'List of plan tasks. Required for create command, optional for update command.',
             'type': 'array',
             'items': {'type': 'string'},
         },

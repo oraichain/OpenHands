@@ -2,8 +2,16 @@ from enum import Enum
 
 
 class ActionType(str, Enum):
-    PLAN = 'plan'
-    """Interact with the planner.
+    CREATE_PLAN = 'create_plan'
+    """Creates a new plan.
+    """
+
+    ASIGN_TASK = 'assign_task'
+    """Assigns a task to an agent.
+    """
+
+    MASK_TASK = 'mask_task'
+    """Masks a task in a plan.
     """
 
     MESSAGE = 'message'

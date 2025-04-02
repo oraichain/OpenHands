@@ -9,7 +9,7 @@ class Task:
     """A task in a plan."""
 
     content: str
-    status: TaskStatus = TaskStatus.NOT_STARTED
+    status: str = TaskStatus.NOT_STARTED
     result: str = ''
 
 
