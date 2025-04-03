@@ -55,7 +55,7 @@ class Plan:
         output += '=' * len(output) + '\n\n'
 
         # Calculate progress statistics
-        total_steps = len(self.tasks)
+        total_tasks = len(self.tasks)
         completed = sum(
             1
             for task in self.tasks
@@ -77,15 +77,15 @@ class Plan:
             if task.status == TaskStatus.NOT_STARTED  # Remove .value here
         )
 
-        output += f'Progress: {completed}/{total_steps} steps completed '
-        if total_steps > 0:
-            percentage = (completed / total_steps) * 100
+        output += f'Progress: {completed}/{total_tasks} tasks completed '
+        if total_tasks > 0:
+            percentage = (completed / total_tasks) * 100
             output += f'({percentage:.1f}%)\n'
         else:
             output += '(0%)\n'
 
         output += f'Status: {completed} completed, {in_progress} in progress, {blocked} blocked, {not_started} not started\n\n'
-        output += 'Steps:\n'
+        output += 'Tasks:\n'
 
         # Add each step with its status and notes
         for i, task in enumerate(self.tasks):
@@ -102,9 +102,14 @@ class Plan:
             }.get(task_status, '[ ]')
 
             task_result = task_result or ''
+            task_result = task_result.strip()
 
             if w_result:
-                output += f'{i}. {status_symbol} {task_content}\n------- task_result -------\n{task_result.strip()} \n\n'
+                output += (
+                    f'{i}. {status_symbol} {task_content}\n------- task_result -------\n{task_result.strip()} \n\n'
+                    if task_result
+                    else f'{i}. {status_symbol} {task_content}\n\n'
+                )
             else:
                 output += f'{i}. {status_symbol} {task_content}\n'
 

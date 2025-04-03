@@ -2,6 +2,7 @@ import asyncio
 import copy
 import os
 import traceback
+from datetime import datetime
 from typing import Callable, ClassVar, Dict
 
 import litellm  # noqa
@@ -525,6 +526,18 @@ class PlanController:
                     ),
                     EventSource.AGENT,
                 )
+
+                # update result to the active plan
+                active_plan_obj.tasks[
+                    self.state.current_task_index
+                ].result = action.message
+
+                # delete the controller corresponding to the task
+                if self.state.active_plan_id in self.task_controllers:
+                    del self.task_controllers[self.state.active_plan_id][
+                        self.state.current_task_index
+                    ]
+
                 # move to the next task
                 self.state.current_task_index += 1
                 active_plan_obj.tasks[
@@ -1204,6 +1217,7 @@ class PlanController:
 
         YOUR CURRENT TASK:
         You are now working on task {action.task_index}: "{asign_plan.tasks[action.task_index].content}".
+        Know that current time is {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.
         """
 
         self.event_stream.add_event(

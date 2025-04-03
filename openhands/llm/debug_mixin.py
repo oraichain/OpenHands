@@ -20,7 +20,9 @@ class DebugMixin:
         )
 
         if debug_message:
+            llm_prompt_logger.warning('#' * 20 + ' BEGINNING PROMPT ' + '#' * 20)
             llm_prompt_logger.warning(debug_message)
+            llm_prompt_logger.warning('#' * 20 + ' END PROMPT ' + '#' * 20)
         else:
             logger.warning('No completion messages!')
 
