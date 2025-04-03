@@ -42,6 +42,9 @@ const messageActions = {
     store.dispatch(setActiveFilepath(path));
     store.dispatch(setCode(content));
   },
+  [ActionType.CREATE_PLAN]: (message: ActionMessage) => {
+    store.dispatch(addAssistantMessage(message?.message));
+  },
   [ActionType.MESSAGE]: (message: ActionMessage) => {
     if (message.source === "user") {
       store.dispatch(
@@ -88,7 +91,7 @@ const messageActions = {
 };
 
 export function handleActionMessage(message: ActionMessage) {
-  if (message.args?.hidden) {
+  if (message.args?.hidden || !message.args?.displayable) {
     return;
   }
 
@@ -116,6 +119,7 @@ export function handleActionMessage(message: ActionMessage) {
   if ("args" in message && "security_risk" in message.args) {
     store.dispatch(appendSecurityAnalyzerInput(message));
   }
+
 
   if (message.source === "agent") {
     if (message.args && message.args.thought) {

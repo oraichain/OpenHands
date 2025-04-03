@@ -5,7 +5,11 @@ export const agentSlice = createSlice({
   name: "agent",
   initialState: {
     curAgentState: AgentState.LOADING,
-    currentTask: null,
+    currentTask: {
+      args: {
+        task_content: "",
+      },
+    },
   },
   reducers: {
     setCurrentAgentState: (state, action) => {

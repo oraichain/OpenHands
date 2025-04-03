@@ -5,6 +5,9 @@ enum ActionType {
   // Represents a message from the user or agent.
   MESSAGE = "message",
 
+  // Creates a plan for the agent.
+  CREATE_PLAN = "create_plan",
+
   // Reads the contents of a file.
   READ = "read",
 

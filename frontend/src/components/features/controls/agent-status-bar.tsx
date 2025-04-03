@@ -31,8 +31,7 @@ export function AgentStatusBar() {
   const { status } = useWsClient();
   const { notify } = useNotification();
 
-  const taskContent = (currentTask && currentTask?.args?.task_content) || "";
-
+  const taskContent = currentTask?.args?.task_content;
   const [statusMessage, setStatusMessage] = React.useState<string>("");
 
   const updateStatusMessage = () => {
