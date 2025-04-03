@@ -515,13 +515,13 @@ class PlanController:
             else:
                 # mark the task as completed
                 active_plan_obj: Plan = self.state.plans[self.state.active_plan_id]
-                active_plan_obj.tasks[
-                    self.state.current_task_index
-                ].status = TaskStatus.COMPLETED
+                current_task = active_plan_obj.tasks[self.state.current_task_index]
+                current_task.status = TaskStatus.COMPLETED
                 self.event_stream.add_event(
                     MarkTaskAction(
                         plan_id=self.state.active_plan_id,
                         task_index=self.state.current_task_index,
+                        task_content=current_task.content,
                         task_status=TaskStatus.COMPLETED,
                     ),
                     EventSource.AGENT,
@@ -541,13 +541,13 @@ class PlanController:
                 # move to the next task if plan is not finished
                 if self.state.current_task_index + 1 < len(active_plan_obj.tasks):
                     self.state.current_task_index += 1
-                    active_plan_obj.tasks[
-                        self.state.current_task_index
-                    ].status = TaskStatus.IN_PROGRESS
+                    current_task = active_plan_obj.tasks[self.state.current_task_index]
+                    current_task.status = TaskStatus.IN_PROGRESS
                     self.event_stream.add_event(
                         MarkTaskAction(
                             plan_id=self.state.active_plan_id,
                             task_index=self.state.current_task_index,
+                            task_content=current_task.content,
                             task_status=TaskStatus.IN_PROGRESS,
                         ),
                         EventSource.AGENT,
@@ -582,6 +582,7 @@ class PlanController:
                 MarkTaskAction(
                     plan_id=self.state.active_plan_id,
                     task_index=self.state.current_task_index,
+                    task_content=active_plan.tasks[0].content,
                     task_status=TaskStatus.IN_PROGRESS,
                 ),
                 EventSource.AGENT,
