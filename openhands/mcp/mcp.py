@@ -69,15 +69,23 @@ class MCPClients(ToolCollection):
         super().__init__()  # Initialize with empty tools list
         self.name = 'mcp'  # Keep name for backward compatibility
 
-    async def connect_sse(self, server_url: str) -> None:
+    async def connect_sse(
+        self, server_url: str, sid: Optional[str] = None, user_id: Optional[str] = None
+    ) -> None:
         """Connect to an MCP server using SSE transport."""
         if not server_url:
             raise ValueError('Server URL is required.')
         if self.session:
             await self.disconnect()
 
+        headers = {
+            k: v for k, v in {'sid': sid, 'user_id': user_id}.items() if v is not None
+        }
+        logger.info(f'sid: {sid}')
+        # logger.info(f'user_id: {user_id}')
+        logger.info(f'Connecting to MCP server with headers: {headers}')
         streams_context = sse_client(
-            url=server_url, timeout=60, sse_read_timeout=60 * 10
+            url=server_url, timeout=60, sse_read_timeout=60 * 10, headers=headers
         )
         streams = await self.exit_stack.enter_async_context(streams_context)
         self.session = await self.exit_stack.enter_async_context(

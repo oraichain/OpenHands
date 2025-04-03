@@ -17,14 +17,13 @@ import time
 import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from zipfile import ZipFile
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import APIKeyHeader
-from mcp.types import ImageContent
 from openhands_aci.editor.editor import OHEditor
 from openhands_aci.editor.exceptions import ToolError
 from openhands_aci.editor.results import ToolResult
@@ -63,6 +62,8 @@ from openhands.events.observation.playwright_mcp import (
     PlaywrightMcpBrowserScreenshotObservation,
 )
 from openhands.events.serialization import event_from_dict, event_to_dict
+from openhands.mcp.mcp_agent import MCPAgent
+from openhands.mcp.mcp_base import ExtendedImageContent
 from openhands.mcp.mcp_base import ToolResult as MCPToolResult
 from openhands.runtime.browser import browse
 from openhands.runtime.browser.browser_env import BrowserEnv
@@ -182,6 +183,7 @@ class ActionExecutor:
         self.last_execution_time = self.start_time
         self._initialized = False
         self.runtime_mode = runtime_mode
+        self.mcp_agents: List[MCPAgent] | None = None
 
         self.max_memory_gb: int | None = None
         if _override_max_memory_gb := os.environ.get('RUNTIME_MAX_MEMORY_GB', None):
@@ -547,38 +549,21 @@ class ActionExecutor:
         if not mcp_server_urls and not commands:
             raise ValueError('No MCP servers or stdio MCP config found')
 
-        if mcp_server_urls:
-            # Validate that all MCP server URLs are valid URLs
-            for i, server in enumerate(mcp_server_urls):
-                if not (server.startswith('http://') or server.startswith('https://')):
-                    raise ValueError(
-                        f'Invalid MCP server URL format: {server}. URLs must start with http:// or https://'
-                    )
-
-                logger.debug(f'Runtime mode: {self.runtime_mode}')
-                logger.debug(f'Caller platform: {self.caller_platform}')
-                # Convert URLs to use host.docker.internal for caller platform is macOS
-                if self.runtime_mode == 'docker' and self.caller_platform == 'Darwin':
-                    # Extract the path and port from the URL
-                    url_parts = server.split('://', 1)[1].split('/', 1)
-                    host_port = url_parts[0]
-                    path = url_parts[1] if len(url_parts) > 1 else ''
-                    # Replace IP with host.docker.internal but keep port
-                    port = host_port.split(':')[1] if ':' in host_port else ''
-                    docker_url = f'http://host.docker.internal:{port}/{path}'
-                    mcp_server_urls[i] = docker_url
-                else:
-                    mcp_server_urls[i] = server
-
-        logger.info(f'SSE MCP servers: {mcp_server_urls}')
-        mcp_agents = await create_mcp_agents(mcp_server_urls, commands, args)
-        logger.info(f'MCP action received: {action}')
+        logger.debug(f'SSE MCP servers: {mcp_server_urls}')
+        if self.mcp_agents is None:
+            self.mcp_agents = await create_mcp_agents(
+                mcp_server_urls, commands, args, sid=action.sid
+            )
+        mcp_agents = self.mcp_agents
+        logger.debug(f'MCP action received: {action}')
         # Find the MCP agent that has the matching tool name
         matching_agent = None
-        logger.info(f'MCP agents: {mcp_agents}')
-        logger.info(f'MCP action name: {action.name}')
+        logger.debug(f'MCP agents: {mcp_agents}')
+        logger.debug(f'MCP action name: {action.name}')
         for agent in mcp_agents:
+            agent.mcp_clients.tools
             if action.name in [tool.name for tool in agent.mcp_clients.tools]:
+                logger.debug(f'agent.mcp_clients.tools: {agent.mcp_clients.tools}')
                 matching_agent = agent
                 break
         if matching_agent is None:
@@ -589,11 +574,9 @@ class ActionExecutor:
         args_dict = json.loads(action.arguments)
         response = await matching_agent.run_tool(action.name, args_dict)
         logger.debug(f'MCP response: {response}')
-
-        # close agent connections
-        for agent in mcp_agents:
-            await agent.cleanup()
-
+        # # close agent connections
+        # for agent in mcp_agents:
+        #     await agent.cleanup()
         # special case for browser screenshot of playwright_mcp
         if action.name == 'browser_screenshot':
             return self.playwright_mcp_browser_screenshot(action, response)
@@ -612,7 +595,8 @@ class ActionExecutor:
             "url": "https://www.google.com"
         }
         """
-        screenshot_content: ImageContent = response.output
+        screenshot_content: ExtendedImageContent = response.output
+        logger.debug(f'Screenshot content: {screenshot_content}')
         return PlaywrightMcpBrowserScreenshotObservation(
             content=f'{response}',
             url=screenshot_content.url if screenshot_content.url is not None else '',
