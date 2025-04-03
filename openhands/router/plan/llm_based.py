@@ -63,6 +63,7 @@ class LLMBasedPlanRouter(BaseRouter):
     def _validate_model_routing_config(
         self, model_routing_config: ModelRoutingConfig, routing_llms: dict[str, LLM]
     ):
+
         if (
             not model_routing_config.judge_llm_config_name
             or not model_routing_config.reasoning_llm_config_name

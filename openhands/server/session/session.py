@@ -125,10 +125,11 @@ class Session:
 
         llm = self._create_llm(agent_cls)
         routing_llms = {}
-        for config_name, routing_llm_config in self.config.routing_llms.items():
+        for config_name, routing_llm_config in self.config.llms.items():
             routing_llms[config_name] = LLM(
                 config=routing_llm_config,
             )
+
         agent_config = self.config.get_agent_config(agent_cls)
 
         if settings.enable_default_condenser:

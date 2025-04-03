@@ -182,6 +182,7 @@ async def create_agent(config: AppConfig) -> Agent:
 
     # Setup model routing configurations
     routing_llms = {}
+
     if config.enable_plan_routing:
         model_routing_config = config.model_routing
         routing_llms_config = config.routing_llms
