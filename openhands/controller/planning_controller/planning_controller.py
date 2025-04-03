@@ -1200,6 +1200,20 @@ class PlanController:
         if action.plan_id not in self.task_controllers:
             self.task_controllers[action.plan_id] = {}
 
+        # init state
+        state = State(
+            session_id=action.delegate_id,
+            inputs={},
+            local_iteration=0,
+            iteration=self.state.iteration,
+            max_iterations=self.state.max_iterations,
+            delegate_level=self.state.delegate_level + 1,
+            # global metrics should be shared between parent and child
+            metrics=self.state.metrics,
+            # start on top of the stream
+            start_id=self.event_stream.get_latest_event_id() + 1,
+        )
+
         # init controller for the task
         controller = AgentController(
             sid=action.delegate_id,
@@ -1212,7 +1226,7 @@ class PlanController:
             confirmation_mode=self.state.confirmation_mode,
             headless_mode=False,
             status_callback=self.status_callback,
-            initial_state=None,
+            initial_state=state,
             replay_events=None,
         )
 
