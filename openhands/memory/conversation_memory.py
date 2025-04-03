@@ -11,7 +11,7 @@ from openhands.events.action import (
     AgentDelegateAction,
     AgentFinishAction,
     AgentThinkAction,
-    AsignTaskAction,
+    AssignTaskAction,
     BrowseInteractiveAction,
     BrowseURLAction,
     CmdRunAction,
@@ -283,7 +283,7 @@ class ConversationMemory:
                     content=content,
                 )
             ]
-        elif isinstance(action, AsignTaskAction):
+        elif isinstance(action, AssignTaskAction):
             return [Message(role='user', content=[TextContent(text=action.message)])]
         return []
 

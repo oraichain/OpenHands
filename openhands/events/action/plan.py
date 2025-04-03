@@ -74,7 +74,7 @@ class MarkTaskAction(Action):
 
 
 @dataclass
-class AsignTaskAction(Action):
+class AssignTaskAction(Action):
     """An action where the agent assigns a task to a delegate.
 
     Attributes:
