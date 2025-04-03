@@ -30,8 +30,7 @@ class MCPAgent(BaseModel):
         self,
         connection_type: Optional[str] = None,
         server_url: Optional[str] = None,
-        command: Optional[str] = None,
-        args: Optional[List[str]] = None,
+        command: Optional[List[List[str]]] = None,
     ) -> None:
         """Initialize the MCP connection.
 
@@ -52,7 +51,10 @@ class MCPAgent(BaseModel):
         elif self.connection_type == 'stdio':
             if not command:
                 raise ValueError('Command is required for stdio connection')
-            await self.mcp_clients.connect_stdio(command=command, args=args or [])
+            if command and len(command) > 1:
+                await self.mcp_clients.connect_stdio(command=command[0], args=command[1])
+            else:
+                await self.mcp_clients.connect_stdio(command=command[0], args=[])
         else:
             raise ValueError(f'Unsupported connection type: {self.connection_type}')
 
@@ -152,3 +154,43 @@ def convert_mcp_agents_to_tools(mcp_agents: list[MCPAgent] | None) -> list[dict]
         logger.error(f'Error in convert_mcp_agents_to_tools: {e}')
         return []
     return all_mcp_tools
+
+async def create_mcp_agents(
+    mcp_servers: List[str], commands: List[List[List[str]]]
+) -> List[MCPAgent]:
+    mcp_agents: List[MCPAgent] = []
+    # Initialize SSE connections
+    if mcp_servers:
+        for server_url in mcp_servers:
+            logger.info(
+                f'Initializing MCP agent for {server_url} with SSE connection...'
+            )
+
+            agent = MCPAgent()
+            try:
+                await agent.initialize(connection_type='sse', server_url=server_url)
+                mcp_agents.append(agent)
+                logger.info(f'Connected to MCP server {server_url} via SSE')
+            except Exception as e:
+                logger.error(f'Failed to connect to {server_url}: {str(e)}')
+                raise
+
+    # Initialize stdio connections
+    if commands:
+        for command in commands:
+            logger.info(
+                f'Initializing MCP agent for {command} with stdio connection...'
+            )
+
+            agent = MCPAgent()
+            try:
+                await agent.initialize(
+                    connection_type='stdio', command=command
+                )
+                mcp_agents.append(agent)
+                logger.info(f'Connected to MCP server via stdio with command {command}')
+            except Exception as e:
+                logger.error(f'Failed to connect with command {command}: {str(e)}')
+                raise
+
+    return mcp_agents

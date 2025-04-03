@@ -24,6 +24,7 @@ from openhands.controller.replay import ReplayManager
 from openhands.controller.state.state import State, TrafficControlState
 from openhands.controller.stuck import StuckDetector
 from openhands.core.config import AgentConfig, LLMConfig
+from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.exceptions import (
     AgentStuckInLoopError,
     FunctionCallNotExistsError,
@@ -67,6 +68,7 @@ from openhands.events.observation import (
 from openhands.events.serialization.event import event_to_trajectory, truncate_content
 from openhands.llm.llm import LLM
 from openhands.llm.metrics import Metrics, TokenUsage
+from openhands.mcp.mcp_agent import convert_mcp_agents_to_tools, create_mcp_agents
 
 # note: RESUME is only available on web GUI
 TRAFFIC_CONTROL_REMINDER = (
@@ -82,6 +84,7 @@ class AgentController:
     state: State
     confirmation_mode: bool
     agent_to_llm_config: dict[str, LLMConfig]
+    agent_to_mcp_config: dict[str, MCPConfig]
     agent_configs: dict[str, AgentConfig]
     parent: 'AgentController | None' = None
     delegate: 'AgentController | None' = None
@@ -603,7 +606,15 @@ class AgentController:
         agent_config = self.agent_configs.get(action.agent, self.agent.config)
         llm_config = self.agent_to_llm_config.get(action.agent, self.agent.llm.config)
         llm = LLM(config=llm_config, retry_listener=self._notify_on_llm_retry)
-        delegate_agent = agent_cls(llm=llm, config=agent_config)
+        
+        mcp_config = self.agent_to_mcp_config.get(action.agent, None)
+        mcp_agents = await create_mcp_agents(
+            mcp_config.mcp_servers, mcp_config.commands
+        )
+        mcp_tools = convert_mcp_agents_to_tools(mcp_agents)
+        for mcp_agent in mcp_agents:
+            await mcp_agent.cleanup()
+        delegate_agent = agent_cls(llm=llm, config=agent_config, mcp_tools=mcp_tools if mcp_tools else self.agent.mcp_tools)
         state = State(
             session_id=self.id.removesuffix('-delegate'),
             inputs=action.inputs or {},

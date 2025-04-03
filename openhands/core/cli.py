@@ -209,6 +209,8 @@ if __name__ == '__main__':
         print(f'Connection refused: {e}')
         sys.exit(1)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f'An error occurred: {e}')
         sys.exit(1)
     finally:

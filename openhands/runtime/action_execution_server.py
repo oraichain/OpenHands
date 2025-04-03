@@ -36,7 +36,6 @@ from uvicorn import run
 
 from openhands.core.exceptions import BrowserUnavailableException
 from openhands.core.logger import openhands_logger as logger
-from openhands.core.setup import create_mcp_agents
 from openhands.events.action import (
     Action,
     BrowseInteractiveAction,
@@ -63,6 +62,7 @@ from openhands.events.observation.playwright_mcp import (
     PlaywrightMcpBrowserScreenshotObservation,
 )
 from openhands.events.serialization import event_from_dict, event_to_dict
+from openhands.mcp.mcp_agent import create_mcp_agents
 from openhands.mcp.mcp_base import ToolResult as MCPToolResult
 from openhands.runtime.browser import browse
 from openhands.runtime.browser.browser_env import BrowserEnv
@@ -78,7 +78,7 @@ from openhands.utils.async_utils import call_sync_from_async, wait_all
 class ActionRequest(BaseModel):
     action: dict
     sse_mcp_config: Optional[list[str]] = None
-    stdio_mcp_config: Optional[tuple[list[str], list[list[str]]]] = None
+    stdio_mcp_config: Optional[list[list[list[str]]]] = None
     caller_platform: str = 'Linux'
 
 
@@ -203,7 +203,7 @@ class ActionExecutor:
 
     def process_request(self, action_request: ActionRequest):
         # update the sse_mcp_servers and stdio_mcp_config to prepare for MCP action if needed
-        self.sse_mcp_servers = action_request.sse_mcp_config
+        self.sse_mcp_config = action_request.sse_mcp_config
         self.stdio_mcp_config = action_request.stdio_mcp_config
         self.caller_platform = action_request.caller_platform
 
@@ -526,18 +526,12 @@ class ActionExecutor:
         return await browse(action, self.browser)
 
     async def call_tool_mcp(self, action: McpAction) -> Observation:
-        mcp_server_urls = self.sse_mcp_servers or []
-        commands: list[str] = []
-        args: list[list[str]] = []
-        if self.stdio_mcp_config:
-            commands = self.stdio_mcp_config[0]
-            if len(self.stdio_mcp_config) > 1:
-                args = self.stdio_mcp_config[1]
-        if not mcp_server_urls and not commands:
+        if not self.sse_mcp_config and not self.stdio_mcp_config:
             raise ValueError('No MCP servers or stdio MCP config found')
 
-        logger.debug(f'SSE MCP servers: {mcp_server_urls}')
-        mcp_agents = await create_mcp_agents(mcp_server_urls, commands, args)
+        logger.debug(f'SSE MCP servers: {self.sse_mcp_config}')
+        logger.debug(f'stdio MCP config: {self.stdio_mcp_config}')
+        mcp_agents = await create_mcp_agents(self.sse_mcp_config, self.stdio_mcp_config)
         logger.debug(f'MCP action received: {action}')
         # Find the MCP agent that has the matching tool name
         matching_agent = None

@@ -7,7 +7,6 @@ from typing import List
 from openhands.core.config.app_config import AppConfig
 from openhands.core.config.utils import get_parser, setup_config_from_args
 from openhands.core.logger import openhands_logger as logger
-from openhands.core.message import Message, TextContent
 from openhands.llm.llm import LLM
 from openhands.mcp.mcp_agent import MCPAgent, convert_mcp_agents_to_tools
 
@@ -31,8 +30,8 @@ class MCPRunner:
         mcp_config = self.config.mcp
 
         # Initialize SSE connections
-        if mcp_config.sse.mcp_servers:
-            for server_url in mcp_config.sse.mcp_servers:
+        if mcp_config.mcp_servers:
+            for server_url in mcp_config.mcp_servers:
                 logger.info(
                     f'Initializing MCP agent for {server_url} with SSE connection...'
                 )
@@ -47,8 +46,8 @@ class MCPRunner:
                     raise
 
         # Initialize stdio connections
-        if mcp_config.stdio.commands:
-            for command, args in zip(mcp_config.stdio.commands, mcp_config.stdio.args):
+        if mcp_config.commands:
+            for command in mcp_config.commands:
                 logger.info(
                     f'Initializing MCP agent for {command} with stdio connection...'
                 )
@@ -56,7 +55,7 @@ class MCPRunner:
                 agent = MCPAgent()
                 try:
                     await agent.initialize(
-                        connection_type='stdio', command=command, args=args
+                        connection_type='stdio', command=command
                     )
                     self.mcp_agents.append(agent)
                     logger.info(
@@ -68,18 +67,6 @@ class MCPRunner:
 
         mcp_tools = convert_mcp_agents_to_tools(self.mcp_agents)
         logger.info(f'MCP tools: {mcp_tools}')
-
-    async def run_single_prompt(self, prompt: str) -> None:
-        """Run the agent with a single prompt."""
-        logger.info(f'Running MCP agent with prompt: {prompt}')
-        messages: list[Message] = [
-            Message(role='user', content=[TextContent(text=prompt)])
-        ]
-        response = self.llm.completion(
-            messages=self.llm.format_messages_for_llm(messages),
-        )
-        print('response: ', response)
-        return response
 
     async def cleanup(self) -> None:
         """Clean up agent resources."""
@@ -104,8 +91,6 @@ async def run_mcp() -> None:
 
     try:
         await runner.initialize()
-        if args.prompt:
-            await runner.run_single_prompt(args.prompt)
 
     except KeyboardInterrupt:
         logger.info('Program interrupted by user')

@@ -52,7 +52,7 @@ class AppConfig(BaseModel):
     """
 
     llms: dict[str, LLMConfig] = Field(default_factory=dict)
-    agents: dict = Field(default_factory=dict)
+    agents: dict[str, AgentConfig] = Field(default_factory=dict)
     default_agent: str = Field(default=OH_DEFAULT_AGENT)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
@@ -90,6 +90,7 @@ class AppConfig(BaseModel):
     max_concurrent_conversations: int = Field(
         default=3
     )  # Maximum number of concurrent agent loops allowed per user
+    mcps: dict[str, MCPConfig] = Field(default_factory=dict)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
 
     defaults_dict: ClassVar[dict] = {}
@@ -139,8 +140,21 @@ class AppConfig(BaseModel):
         super().model_post_init(__context)
         if not AppConfig.defaults_dict:  # Only set defaults_dict if it's empty
             AppConfig.defaults_dict = model_defaults_to_dict(self)
-        # Validate MCP configurations
-        if self.mcp.sse.mcp_servers:
-            self.mcp.sse.validate_servers()
-        if self.mcp.stdio.commands:
-            self.mcp.stdio.validate_stdio()
+        
+            
+    def get_agent_to_mcp_config_map(self) -> dict[str, MCPConfig]:
+        """Get a map of agent names to mcp configs."""
+        return {name: self.get_mcp_config_from_agent(name) for name in self.agents}
+            
+    def get_mcp_config_from_agent(self, name='agent') -> MCPConfig:
+        agent_config: AgentConfig = self.get_agent_config(name)
+        mcp_config_name = agent_config.mcp_config
+        return self.get_mcp_config(mcp_config_name)
+    
+    def get_mcp_config(self, name='mcp') -> MCPConfig:
+        """'mcp' is the name for default config (for backward compatibility prior to 0.8)."""
+        if name in self.mcps:
+            return self.mcps[name]
+        if 'mcp' not in self.mcps:
+            self.mcps['mcp'] = MCPConfig()
+        return self.mcps['mcp']

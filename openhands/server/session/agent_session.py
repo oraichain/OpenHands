@@ -10,15 +10,15 @@ from openhands.controller.agent import Agent
 from openhands.controller.replay import ReplayManager
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig, AppConfig, LLMConfig
+from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.exceptions import AgentRuntimeUnavailableError
 from openhands.core.logger import OpenHandsLoggerAdapter
 from openhands.core.schema.agent import AgentState
-from openhands.core.setup import create_mcp_agents
 from openhands.events.action import ChangeAgentStateAction, MessageAction
 from openhands.events.event import Event, EventSource
 from openhands.events.stream import EventStream
 from openhands.integrations.provider import PROVIDER_TOKEN_TYPE, ProviderHandler
-from openhands.mcp.mcp_agent import convert_mcp_agents_to_tools
+from openhands.mcp.mcp_agent import convert_mcp_agents_to_tools, create_mcp_agents
 from openhands.memory.memory import Memory
 from openhands.microagent.microagent import BaseMicroAgent
 from openhands.runtime import get_runtime_cls
@@ -85,6 +85,7 @@ class AgentSession:
         git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
         max_budget_per_task: float | None = None,
         agent_to_llm_config: dict[str, LLMConfig] | None = None,
+        agent_to_mcp_config: dict[str, MCPConfig] | None = None,
         agent_configs: dict[str, AgentConfig] | None = None,
         selected_repository: str | None = None,
         selected_branch: str | None = None,
@@ -118,21 +119,19 @@ class AgentSession:
             # Initialize MCP agents first before creating runtime and controller
             try:
                 # Log MCP configuration to help with debugging
-                self.logger.info(f'MCP SSE servers: {config.mcp.sse.mcp_servers}')
-                self.logger.info(f'MCP stdio commands: {config.mcp.stdio.commands}')
-                self.logger.info(f'MCP stdio args: {config.mcp.stdio.args}')
+                self.logger.info(f'MCP SSE servers: {config.mcp.mcp_servers}')
+                self.logger.info(f'MCP stdio commands: {config.mcp.commands}')
 
                 # Check if MCP servers are available
-                if not config.mcp.sse.mcp_servers and not config.mcp.stdio.commands:
+                if not config.mcp.mcp_servers and not config.mcp.commands:
                     self.logger.warning(
                         'No MCP servers or commands configured. MCP integration will not work.'
                     )
                 else:
                     self.logger.info('Initializing MCP agents for server mode...')
                     mcp_agents = await create_mcp_agents(
-                        config.mcp.sse.mcp_servers,
-                        config.mcp.stdio.commands,
-                        config.mcp.stdio.args,
+                        config.mcp.mcp_servers,
+                        config.mcp.commands,
                     )
 
                     # Give some time for MCP connections to stabilize
@@ -206,6 +205,7 @@ class AgentSession:
                     max_iterations,
                     max_budget_per_task=max_budget_per_task,
                     agent_to_llm_config=agent_to_llm_config,
+                    agent_to_mcp_config=agent_to_mcp_config,
                     agent_configs=agent_configs,
                 )
 
@@ -408,6 +408,7 @@ class AgentSession:
         max_iterations: int,
         max_budget_per_task: float | None = None,
         agent_to_llm_config: dict[str, LLMConfig] | None = None,
+        agent_to_mcp_config: dict[str, MCPConfig] | None = None,
         agent_configs: dict[str, AgentConfig] | None = None,
         replay_events: list[Event] | None = None,
     ) -> AgentController:
@@ -420,6 +421,7 @@ class AgentSession:
         - max_budget_per_task:
         - agent_to_llm_config:
         - agent_configs:
+        - agent_to_mcp_config:
         """
 
         if self.controller is not None:
@@ -450,6 +452,7 @@ class AgentSession:
             max_iterations=int(max_iterations),
             max_budget_per_task=max_budget_per_task,
             agent_to_llm_config=agent_to_llm_config,
+            agent_to_mcp_config=agent_to_mcp_config,
             agent_configs=agent_configs,
             confirmation_mode=confirmation_mode,
             headless_mode=False,

@@ -387,16 +387,17 @@ type = "noop"
 #################################### MCP ####################################
 # Configuration for MCP (Model Context Protocol) settings
 ##############################################################################
-[mcp-sse]
-# List of MCP server URLs, separated by quotes
-# Example: mcp_servers = ["http://server1:8080/sse", "http://server2:8080/sse"]
-#mcp_servers = []
+[mcp]
+# Default MCP configuration
+mcp_servers = ["http://localhost:4000/sse"]
+commands = [["python", ["-c"]], ["bash", ["-c"]]]
 
-#################################### MCP ####################################
-# Configuration for MCP (Model Context Protocol) settings
-##############################################################################
-[mcp-stdio]
-# List of MCP server URLs, separated by quotes
-# Example: commands = [""]
-#commands = []
-#args = []
+# Custom MCP configuration for delegation
+[mcp.delegation]
+mcp_servers = ["http://localhost:4001/sse"]
+commands = [["node", ["-e"]], ["npm", ["run"]]]
+
+# Custom MCP configuration for browsing
+[mcp.browsing]
+mcp_servers = ["http://localhost:4002/sse"]
+commands = [["python", ["-c"]]]

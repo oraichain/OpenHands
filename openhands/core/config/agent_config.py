@@ -20,6 +20,7 @@ class AgentConfig(BaseModel):
         condenser: Configuration for the memory condenser. Default is NoOpCondenserConfig.
         enable_history_truncation: Whether history should be truncated to continue the session when hitting LLM context length limit.
         enable_som_visual_browsing: Whether to enable SoM (Set of Marks) visual browsing. Default is False.
+        mcp_config: The name of the mcp config to use. If specified, this will override global mcp config.
     """
 
     llm_config: str | None = Field(default=None)
@@ -33,6 +34,7 @@ class AgentConfig(BaseModel):
     condenser: CondenserConfig = Field(
         default_factory=lambda: NoOpCondenserConfig(type='noop')
     )
+    mcp_config: str | None = Field(default=None)
 
     model_config = {'extra': 'forbid'}
 
