@@ -6,6 +6,7 @@ from pydantic.fields import FieldInfo
 
 OH_DEFAULT_AGENT = 'CodeActAgent'
 OH_DEFAULT_PLANNING_AGENT = 'PlannerAgent'
+OH_DEFAULT_TASK_SOLVING_AGENT = 'ReActAgent'
 OH_MAX_ITERATIONS = 500
 
 

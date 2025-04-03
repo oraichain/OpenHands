@@ -7,6 +7,7 @@ from openhands.core.config.agent_config import AgentConfig
 from openhands.core.config.config_utils import (
     OH_DEFAULT_AGENT,
     OH_DEFAULT_PLANNING_AGENT,
+    OH_DEFAULT_TASK_SOLVING_AGENT,
     OH_MAX_ITERATIONS,
     model_defaults_to_dict,
 )
@@ -57,6 +58,7 @@ class AppConfig(BaseModel):
     agents: dict = Field(default_factory=dict)
     default_agent: str = Field(default=OH_DEFAULT_AGENT)
     default_planning_agent: str = Field(default=OH_DEFAULT_PLANNING_AGENT)
+    default_task_solving_agent: str = Field(default=OH_DEFAULT_TASK_SOLVING_AGENT)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     extended: ExtendedConfig = Field(default_factory=lambda: ExtendedConfig({}))

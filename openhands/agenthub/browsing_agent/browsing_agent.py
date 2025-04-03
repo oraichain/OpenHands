@@ -66,12 +66,7 @@ class BrowsingAgent(Agent):
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
-        built_in_tools = browsing_function_calling.get_tools(
-            codeact_enable_browsing=self.config.codeact_enable_browsing,
-            codeact_enable_jupyter=self.config.codeact_enable_jupyter,
-            codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
-            llm=self.llm,
-        )
+        built_in_tools = browsing_function_calling.get_tools()
 
         self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
 

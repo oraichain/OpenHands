@@ -40,7 +40,6 @@ from openhands.events.action import (
 from openhands.events.action.mcp import McpAction
 from openhands.events.event import FileEditSource, FileReadSource
 from openhands.events.tool import ToolCallMetadata
-from openhands.llm import LLM
 
 
 def combine_thought(action: Action, thought: str) -> Action:
@@ -231,37 +230,10 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
     return actions
 
 
-def get_tools(
-    codeact_enable_browsing: bool = False,
-    codeact_enable_llm_editor: bool = False,
-    codeact_enable_jupyter: bool = False,
-    llm: LLM | None = None,
-) -> list[ChatCompletionToolParam]:
-    # SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
-
-    # use_simplified_tool_desc = False
-    # if llm is not None:
-    #     use_simplified_tool_desc = any(
-    #         model_substr in llm.config.model
-    #         for model_substr in SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS
-    #     )
-
+def get_tools() -> list[ChatCompletionToolParam]:
     tools = [
-        # create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
         ThinkTool,
         FinishTool,
     ]
-    if codeact_enable_browsing:
-        tools.append(WebReadTool)
-        tools.append(BrowserTool)
-    # if codeact_enable_jupyter:
-    # tools.append(IPythonTool)
-    # if codeact_enable_llm_editor:
-    # tools.append(LLMBasedFileEditTool)
-    # else:
-    # tools.append(
-    # create_str_replace_editor_tool(
-    # use_simplified_description=use_simplified_tool_desc
-    # )
-    # )
+
     return tools

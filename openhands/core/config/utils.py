@@ -170,7 +170,20 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
                 cfg.set_agent_config(agent_conf, 'planning_agent')
         except (TypeError, KeyError, ValidationError) as e:
             logger.openhands_logger.warning(
-                f'Cannot parse [agent] config from toml, values have not been applied.\nError: {e}'
+                f'Cannot parse [planning_agent] config from toml, values have not been applied.\nError: {e}'
+            )
+
+    # process planning agent section if present
+    if 'task_solving_agent' in toml_config:
+        try:
+            agent_mapping = AgentConfig.from_toml_section(
+                toml_config['task_solving_agent']
+            )
+            for agent_key, agent_conf in agent_mapping.items():
+                cfg.set_agent_config(agent_conf, 'task_solving_agent')
+        except (TypeError, KeyError, ValidationError) as e:
+            logger.openhands_logger.warning(
+                f'Cannot parse [task_solving_agent] config from toml, values have not been applied.\nError: {e}'
             )
 
     # Process llm section if present

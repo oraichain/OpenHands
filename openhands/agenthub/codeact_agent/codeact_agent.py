@@ -72,7 +72,8 @@ class CodeActAgent(Agent):
             llm=self.llm,
         )
 
-        self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
+        # self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
+        self.tools = built_in_tools
 
         # Retrieve the enabled tools
         logger.info(

@@ -163,4 +163,5 @@ def get_tools() -> list[ChatCompletionToolParam]:
     Get the list of tools that are available for function calling.
     """
 
-    return [WebReadTool, BrowserTool, ThinkTool, PlanningTool, FinishTool]
+    # return [WebReadTool, BrowserTool, ThinkTool, PlanningTool, FinishTool]
+    return [ThinkTool, PlanningTool, FinishTool]
