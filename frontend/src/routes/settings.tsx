@@ -13,7 +13,7 @@ function SettingsScreen() {
       data-testid="settings-screen"
       className="bg-[#080808] h-full flex flex-col"
     >
-      <header className="px-5 py-1.5 border-b border-b-[#232521] flex items-center gap-2">
+      <header className="px-3 md:px-5 py-1.5 border-b border-b-[#232521] flex items-center gap-2">
         <SettingsIcon width={24} height={24} />
         <h1 className="text-[18px] font-semibold text-[#EFEFEF]">Settings</h1>
       </header>

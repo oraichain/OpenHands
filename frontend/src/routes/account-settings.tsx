@@ -199,7 +199,7 @@ const AccountSettings = () => {
       <form
         ref={formRef}
         action={onSubmit}
-        className="flex flex-col grow overflow-auto p-6"
+        className="flex flex-col grow overflow-auto p-3 md:p-6"
       >
         <div className="max-w-[680px]">
           {!shouldHandleSpecialSaasCase && (
@@ -209,7 +209,7 @@ const AccountSettings = () => {
               </h3>
               <Tabs
                 selectedKey={llmConfigMode}
-                onSelectionChange={(key) => setLlmConfigMode(key)}
+                onSelectionChange={(key: any) => setLlmConfigMode(key)}
                 classNames={{
                   base: "w-full",
                   tabList: "rounded-[12px]",
@@ -282,7 +282,7 @@ const AccountSettings = () => {
                       isClearable={false}
                     />
                   )}
-                  <div className="flex items-center gap-8">
+                  <div className="flex flex-col md:flex-row md:items-center gap-8">
                     <SettingsSwitch
                       testId="enable-confirmation-mode-switch"
                       onToggle={setConfirmationModeIsEnabled}
@@ -361,7 +361,7 @@ const AccountSettings = () => {
               defaultSelectedKey={settings.LANGUAGE}
               isClearable={false}
             />
-            <div className="flex items-center gap-8">
+            <div className="flex flex-col md:flex-row md:items-center gap-8">
               <SettingsSwitch
                 testId="enable-analytics-switch"
                 name="enable-analytics-switch"
@@ -380,7 +380,7 @@ const AccountSettings = () => {
           </section>
         </div>
       </form>
-      <footer className="flex justify-end gap-4 w-full p-6 py-4 border-t border-t-[#232521] bg-[#080808] rounded-b-xl">
+      <footer className="flex justify-end gap-4 w-full px-3 py-2 md:p-6 md:py-4 border-t border-t-[#232521] bg-[#080808] rounded-b-xl">
         <BrandButton
           type="button"
           variant="secondary"

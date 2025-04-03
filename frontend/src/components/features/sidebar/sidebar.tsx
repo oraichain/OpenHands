@@ -122,7 +122,7 @@ export function Sidebar() {
             <NavLink
               to="/settings"
               className={({ isActive }) =>
-                isActive ? "text-[#EFEFEF]" : "text-[#595B57]"
+                isActive ? "text-[#EFEFEF] h-6" : "text-[#595B57] h-6"
               }
             >
               <SettingsButton />
