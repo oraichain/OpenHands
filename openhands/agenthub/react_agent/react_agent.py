@@ -1,7 +1,7 @@
 import os
 from collections import deque
 
-import openhands.agenthub.browsing_agent.function_calling as browsing_function_calling
+import openhands.agenthub.react_agent.function_calling as react_function_calling
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
@@ -22,23 +22,23 @@ from openhands.runtime.plugins import (
 from openhands.utils.prompt import PromptManager
 
 
-class BrowsingAgent(Agent):
+class ReActAgent(Agent):
     VERSION = '2.2'
     """
-    The Browsing Agent is a minimalist agent.
+    The ReAct Agent is a minimalist agent.
     The agent works by passing the model a list of action-observation pairs and prompting the model to take the next step.
 
     ### Overview
 
-    This agent implements a browser interaction framework that consolidates LLM agents' **act**ions into a unified **browsing** action space for both *simplicity* and *performance*.
+    This agent implements the ReAct framework (Reasoning and Acting) that enables LLM agents to solve tasks through interleaved **reasoning** steps and **act**ions in a systematic manner for enhanced problem-solving capabilities.
 
     The conceptual idea is illustrated below. At each turn, the agent can:
 
     1. **Converse**: Communicate with humans in natural language to ask for clarification, confirmation, etc.
-    2. **BrowsingAct**: Choose to perform the task by executing browser actions
-    - Navigate to URLs and interact with web elements
-    - Extract information from web pages
-    - Handle forms, searches, and other interactive elements
+    2. **ReAct**: Choose to perform the task through reasoning and acting
+    - Thought: Internal reasoning about the current state and planning next steps
+    - Action: Execute one of several available actions to gather information
+    - Observation: Process the results of actions to inform future reasoning
 
     ![image](https://github.com/All-Hands-AI/OpenHands/assets/38853559/92b622e3-72ad-4a61-8f41-8c040b6d5fb3)
 
@@ -55,7 +55,7 @@ class BrowsingAgent(Agent):
     def __init__(
         self, llm: LLM, config: AgentConfig, mcp_tools: list[dict] | None = None
     ) -> None:
-        """Initializes a new instance of the BrowsingAgent class.
+        """Initializes a new instance of the ReActAgent class.
 
         Parameters:
         - llm (LLM): The llm to be used by this agent
@@ -66,7 +66,7 @@ class BrowsingAgent(Agent):
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
-        built_in_tools = browsing_function_calling.get_tools(
+        built_in_tools = react_function_calling.get_tools(
             codeact_enable_browsing=self.config.codeact_enable_browsing,
             codeact_enable_jupyter=self.config.codeact_enable_jupyter,
             codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
@@ -77,7 +77,7 @@ class BrowsingAgent(Agent):
 
         # Retrieve the enabled tools
         logger.info(
-            f"TOOLS loaded for BrowsingAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
+            f"TOOLS loaded for ReActAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
         )
         self.prompt_manager = PromptManager(
             prompt_dir=os.path.join(os.path.dirname(__file__), 'prompts'),
@@ -95,15 +95,13 @@ class BrowsingAgent(Agent):
         self.pending_actions.clear()
 
     def step(self, state: State) -> Action:
-        """Performs one step using the Browsing Agent.
+        """Performs one step using the CodeAct Agent.
         This includes gathering info on previous steps and prompting the model to make a command to execute.
 
         Parameters:
         - state (State): used to get updated info
 
         Returns:
-        - CmdRunAction(command) - bash command to run
-        - IPythonRunCellAction(code) - IPython code to run
         - AgentDelegateAction(agent, inputs) - delegate action for (sub)task
         - MessageAction(content) - Message action to run (e.g. ask for clarification)
         - AgentFinishAction() - end the interaction
@@ -127,7 +125,7 @@ class BrowsingAgent(Agent):
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         response = self.llm.completion(**params)
         logger.debug(f'Response from LLM: {response}')
-        actions = browsing_function_calling.response_to_actions(response)
+        actions = react_function_calling.response_to_actions(response)
         logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
             self.pending_actions.append(action)

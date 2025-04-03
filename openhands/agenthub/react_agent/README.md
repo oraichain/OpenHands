@@ -101,7 +101,7 @@ MyTool = ChatCompletionToolParam(
 
 The agent is implemented in two main files:
 
-1. `codeact_agent.py`: Core agent implementation with:
+1. `react_agent.py`: Core agent implementation with:
    - Message history management
    - Tool execution handling
    - State management

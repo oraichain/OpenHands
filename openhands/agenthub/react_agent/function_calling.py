@@ -10,16 +10,19 @@ from litellm import (
     ModelResponse,
 )
 
-from openhands.agenthub.codeact_agent.tools import (
+from openhands.agenthub.react_agent.tools import (
     BrowserTool,
+    DelegateBrowserTool,
+    DelegateCodeActTool,
     FinishTool,
-    IPythonTool,
-    LLMBasedFileEditTool,
+    # IPythonTool,
+    # LLMBasedFileEditTool,
     ThinkTool,
     WebReadTool,
-    create_cmd_run_tool,
-    create_str_replace_editor_tool,
 )
+
+# create_cmd_run_tool,
+# create_str_replace_editor_tool,
 from openhands.core.exceptions import (
     FunctionCallValidationError,
 )
@@ -31,14 +34,9 @@ from openhands.events.action import (
     AgentThinkAction,
     BrowseInteractiveAction,
     BrowseURLAction,
-    CmdRunAction,
-    FileEditAction,
-    FileReadAction,
-    IPythonRunCellAction,
     MessageAction,
 )
 from openhands.events.action.mcp import McpAction
-from openhands.events.event import FileEditSource, FileReadSource
 from openhands.events.tool import ToolCallMetadata
 from openhands.llm import LLM
 
@@ -83,30 +81,34 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
             # CmdRunTool (Bash)
             # ================================================
 
-            if tool_call.function.name == create_cmd_run_tool()['function']['name']:
-                if 'command' not in arguments:
-                    raise FunctionCallValidationError(
-                        f'Missing required argument "command" in tool call {tool_call.function.name}'
-                    )
-                # convert is_input to boolean
-                is_input = arguments.get('is_input', 'false') == 'true'
-                action = CmdRunAction(command=arguments['command'], is_input=is_input)
+            # if tool_call.function.name == create_cmd_run_tool()['function']['name']:
+            #     if 'command' not in arguments:
+            #         raise FunctionCallValidationError(
+            #             f'Missing required argument "command" in tool call {tool_call.function.name}'
+            #         )
+            #     # convert is_input to boolean
+            #     is_input = arguments.get('is_input', 'false') == 'true'
+            #     action = CmdRunAction(command=arguments['command'], is_input=is_input)
 
-            # ================================================
-            # IPythonTool (Jupyter)
-            # ================================================
-            elif tool_call.function.name == IPythonTool['function']['name']:
-                if 'code' not in arguments:
-                    raise FunctionCallValidationError(
-                        f'Missing required argument "code" in tool call {tool_call.function.name}'
-                    )
-                action = IPythonRunCellAction(code=arguments['code'])
-            elif tool_call.function.name == 'delegate_to_browsing_agent':
+            # # ================================================
+            # # IPythonTool (Jupyter)
+            # # ================================================
+            # elif tool_call.function.name == IPythonTool['function']['name']:
+            #     if 'code' not in arguments:
+            #         raise FunctionCallValidationError(
+            #             f'Missing required argument "code" in tool call {tool_call.function.name}'
+            #         )
+            #     action = IPythonRunCellAction(code=arguments['code'])
+            if tool_call.function.name == 'delegate_to_browsing_agent':
                 action = AgentDelegateAction(
                     agent='BrowsingAgent',
                     inputs=arguments,
                 )
-
+            elif tool_call.function.name == 'delegate_to_codeact_agent':
+                action = AgentDelegateAction(
+                    agent='CodeActAgent',
+                    inputs=arguments,
+                )
             # ================================================
             # AgentFinishAction
             # ================================================
@@ -119,55 +121,55 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
             # ================================================
             # LLMBasedFileEditTool (LLM-based file editor, deprecated)
             # ================================================
-            elif tool_call.function.name == LLMBasedFileEditTool['function']['name']:
-                if 'path' not in arguments:
-                    raise FunctionCallValidationError(
-                        f'Missing required argument "path" in tool call {tool_call.function.name}'
-                    )
-                if 'content' not in arguments:
-                    raise FunctionCallValidationError(
-                        f'Missing required argument "content" in tool call {tool_call.function.name}'
-                    )
-                action = FileEditAction(
-                    path=arguments['path'],
-                    content=arguments['content'],
-                    start=arguments.get('start', 1),
-                    end=arguments.get('end', -1),
-                )
-            elif (
-                tool_call.function.name
-                == create_str_replace_editor_tool()['function']['name']
-            ):
-                if 'command' not in arguments:
-                    raise FunctionCallValidationError(
-                        f'Missing required argument "command" in tool call {tool_call.function.name}'
-                    )
-                if 'path' not in arguments:
-                    raise FunctionCallValidationError(
-                        f'Missing required argument "path" in tool call {tool_call.function.name}'
-                    )
-                path = arguments['path']
-                command = arguments['command']
-                other_kwargs = {
-                    k: v for k, v in arguments.items() if k not in ['command', 'path']
-                }
+            # elif tool_call.function.name == LLMBasedFileEditTool['function']['name']:
+            #     if 'path' not in arguments:
+            #         raise FunctionCallValidationError(
+            #             f'Missing required argument "path" in tool call {tool_call.function.name}'
+            #         )
+            #     if 'content' not in arguments:
+            #         raise FunctionCallValidationError(
+            #             f'Missing required argument "content" in tool call {tool_call.function.name}'
+            #         )
+            #     action = FileEditAction(
+            #         path=arguments['path'],
+            #         content=arguments['content'],
+            #         start=arguments.get('start', 1),
+            #         end=arguments.get('end', -1),
+            #     )
+            # elif (
+            #     tool_call.function.name
+            #     == create_str_replace_editor_tool()['function']['name']
+            # ):
+            #     if 'command' not in arguments:
+            #         raise FunctionCallValidationError(
+            #             f'Missing required argument "command" in tool call {tool_call.function.name}'
+            #         )
+            #     if 'path' not in arguments:
+            #         raise FunctionCallValidationError(
+            #             f'Missing required argument "path" in tool call {tool_call.function.name}'
+            #         )
+            #     path = arguments['path']
+            #     command = arguments['command']
+            #     other_kwargs = {
+            #         k: v for k, v in arguments.items() if k not in ['command', 'path']
+            #     }
 
-                if command == 'view':
-                    action = FileReadAction(
-                        path=path,
-                        impl_source=FileReadSource.OH_ACI,
-                        view_range=other_kwargs.get('view_range', None),
-                    )
-                else:
-                    if 'view_range' in other_kwargs:
-                        # Remove view_range from other_kwargs since it is not needed for FileEditAction
-                        other_kwargs.pop('view_range')
-                    action = FileEditAction(
-                        path=path,
-                        command=command,
-                        impl_source=FileEditSource.OH_ACI,
-                        **other_kwargs,
-                    )
+            #     if command == 'view':
+            #         action = FileReadAction(
+            #             path=path,
+            #             impl_source=FileReadSource.OH_ACI,
+            #             view_range=other_kwargs.get('view_range', None),
+            #         )
+            #     else:
+            #         if 'view_range' in other_kwargs:
+            #             # Remove view_range from other_kwargs since it is not needed for FileEditAction
+            #             other_kwargs.pop('view_range')
+            #         action = FileEditAction(
+            #             path=path,
+            #             command=command,
+            #             impl_source=FileEditSource.OH_ACI,
+            #             **other_kwargs,
+            #         )
             # ================================================
             # AgentThinkAction
             # ================================================
@@ -227,7 +229,9 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
             )
         )
 
-    assert len(actions) >= 1
+    # assert len(actions) >= 1
+    if len(actions) >= 1:
+        actions = actions[:1]
     return actions
 
 
@@ -237,31 +241,33 @@ def get_tools(
     codeact_enable_jupyter: bool = False,
     llm: LLM | None = None,
 ) -> list[ChatCompletionToolParam]:
-    SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
+    # SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
 
-    use_simplified_tool_desc = False
-    if llm is not None:
-        use_simplified_tool_desc = any(
-            model_substr in llm.config.model
-            for model_substr in SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS
-        )
+    # use_simplified_tool_desc = False
+    # if llm is not None:
+    #     use_simplified_tool_desc = any(
+    #         model_substr in llm.config.model
+    #         for model_substr in SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS
+    #     )
 
     tools = [
-        create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
+        # create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
         ThinkTool,
         FinishTool,
     ]
-    # if codeact_enable_browsing:
-    #     tools.append(WebReadTool)
-    #     tools.append(BrowserTool)
-    if codeact_enable_jupyter:
-        tools.append(IPythonTool)
-    if codeact_enable_llm_editor:
-        tools.append(LLMBasedFileEditTool)
-    else:
-        tools.append(
-            create_str_replace_editor_tool(
-                use_simplified_description=use_simplified_tool_desc
-            )
-        )
+    if codeact_enable_browsing:
+        tools.append(WebReadTool)
+        tools.append(BrowserTool)
+    tools.append(DelegateBrowserTool)
+    tools.append(DelegateCodeActTool)
+    # if codeact_enable_jupyter:
+    #     tools.append(IPythonTool)
+    # if codeact_enable_llm_editor:
+    #     tools.append(LLMBasedFileEditTool)
+    # else:
+    #     tools.append(
+    #         create_str_replace_editor_tool(
+    #             use_simplified_description=use_simplified_tool_desc
+    #         )
+    #     )
     return tools

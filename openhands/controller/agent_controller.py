@@ -374,6 +374,7 @@ class AgentController:
         elif isinstance(action, MessageAction):
             await self._handle_message_action(action)
         elif isinstance(action, AgentDelegateAction):
+            logger.info(f'Starting delegate {action.agent}')
             await self.start_delegate(action)
             assert self.delegate is not None
             # Post a MessageAction with the task for the delegate
