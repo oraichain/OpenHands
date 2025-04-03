@@ -185,6 +185,21 @@ async def create_agent(config: AppConfig) -> Agent:
     if config.enable_plan_routing:
         model_routing_config = config.model_routing
         routing_llms_config = config.routing_llms
+
+        # Add default routing_llms if they don't exist
+        judge_name = model_routing_config.judge_llm_config_name
+        reasoning_name = model_routing_config.reasoning_llm_config_name
+
+        # If the required routing LLMs don't exist, create default ones using the main LLM config
+        if judge_name not in routing_llms_config:
+            logger.warning(f"Judge LLM config '{judge_name}' not found, using default LLM config")
+            routing_llms_config[judge_name] = llm_config
+
+        if reasoning_name not in routing_llms_config:
+            logger.warning(f"Reasoning LLM config '{reasoning_name}' not found, using default LLM config")
+            routing_llms_config[reasoning_name] = llm_config
+
+        # Now create the LLM instances
         for config_name, routing_llm_config in routing_llms_config.items():
             routing_llms[config_name] = LLM(
                 config=routing_llm_config,
