@@ -23,10 +23,15 @@ const notificationStates = [
 
 export function AgentStatusBar() {
   const { t, i18n } = useTranslation();
-  const { curAgentState } = useSelector((state: RootState) => state.agent);
+  const { curAgentState, currentTask } = useSelector(
+    (state: RootState) => state.agent,
+  );
+  console.log("🚀 ~ AgentStatusBar ~ currentTask:", currentTask);
   const { curStatusMessage } = useSelector((state: RootState) => state.status);
   const { status } = useWsClient();
   const { notify } = useNotification();
+
+  const taskContent = (currentTask && currentTask?.args?.task_content) || "";
 
   const [statusMessage, setStatusMessage] = React.useState<string>("");
 
@@ -104,7 +109,10 @@ export function AgentStatusBar() {
         <div
           className={`w-2 h-2 rounded-full animate-pulse ${indicatorColor}`}
         />
-        <span className="text-sm text-stone-400">{t(statusMessage)}</span>
+        <span className="text-sm text-stone-400">
+          {t(statusMessage)}
+          {curAgentState === AgentState.RUNNING ? taskContent : ""}
+        </span>
       </div>
     </div>
   );
