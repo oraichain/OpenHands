@@ -382,7 +382,9 @@ class AgentController:
                 # Post a MessageAction with the task for the delegate
                 if 'task' in action.inputs:
                     self.event_stream.add_event(
-                        MessageAction(content='TASK: ' + action.inputs['task']),
+                        MessageAction(
+                            content='TASK: ' + action.inputs['task'], displayable=False
+                        ),
                         EventSource.USER,
                     )
                     await self.delegate.set_agent_state_to(AgentState.RUNNING)
