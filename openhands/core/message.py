@@ -44,7 +44,21 @@ class ImageContent(Content):
     def serialize_model(self) -> list[dict[str, str | dict[str, str]]]:
         images: list[dict[str, str | dict[str, str]]] = []
         for url in self.image_urls:
+            # Ensure URL is in the format expected by Anthropic
+            # It requires a URL in the format: data:image/jpeg;base64,{base64_image}
+            if not (url.startswith('data:image/jpeg;base64,') or
+                    url.startswith('data:image/png;base64,') or
+                    url.startswith('data:image/gif;base64,') or
+                    url.startswith('data:image/webp;base64,')):
+                # For HTTP URLs, we don't try to convert them since we can't fetch the data
+                # but we can let the client know that the URL isn't in the expected format
+                import logging
+                logging.warning(f"Image URL not in expected base64 format for Anthropic models: {url}")
+                # Skip this URL since it will cause errors with Anthropic
+                continue
+
             images.append({'type': self.type, 'image_url': {'url': url}})
+
         if self.cache_prompt and images:
             images[-1]['cache_control'] = {'type': 'ephemeral'}
         return images
