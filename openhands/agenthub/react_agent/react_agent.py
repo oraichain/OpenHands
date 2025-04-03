@@ -119,9 +119,17 @@ class ReActAgent(Agent):
         params['tools'] = self.tools
         # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
-        response = self.llm.completion(**params)
-        logger.debug(f'Response from LLM: {response}')
-        actions = react_function_calling.response_to_actions(response)
+
+        actions = []
+        if len(params['messages']) >= 2:
+            response = self.llm.completion(**params)
+            logger.debug(f'Response from LLM: {response}')
+            actions = react_function_calling.response_to_actions(response)
+        else:
+            logger.warning(
+                'Not enough messages to process. Returning empty action list.'
+            )
+
         logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
             self.pending_actions.append(action)
