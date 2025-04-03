@@ -1,15 +1,16 @@
+import { setCurrentTask } from "#/state/agent-slice";
 import {
-  addAssistantMessage,
   addAssistantAction,
-  addUserMessage,
+  addAssistantMessage,
   addErrorMessage,
+  addUserMessage,
 } from "#/state/chat-slice";
-import { trackError } from "#/utils/error-handler";
-import { appendSecurityAnalyzerInput } from "#/state/security-analyzer-slice";
-import { setCode, setActiveFilepath } from "#/state/code-slice";
+import { setActiveFilepath, setCode } from "#/state/code-slice";
+import { appendInput } from "#/state/command-slice";
 import { appendJupyterInput } from "#/state/jupyter-slice";
-import { setCurStatusMessage } from "#/state/status-slice";
 import { setMetrics } from "#/state/metrics-slice";
+import { appendSecurityAnalyzerInput } from "#/state/security-analyzer-slice";
+import { setCurStatusMessage } from "#/state/status-slice";
 import store from "#/store";
 import ActionType from "#/types/action-type";
 import {
@@ -17,8 +18,8 @@ import {
   ObservationMessage,
   StatusMessage,
 } from "#/types/message";
+import { trackError } from "#/utils/error-handler";
 import { handleObservationMessage } from "./observations";
-import { appendInput } from "#/state/command-slice";
 
 const messageActions = {
   [ActionType.BROWSE]: (message: ActionMessage) => {
@@ -105,6 +106,11 @@ export function handleActionMessage(message: ActionMessage) {
 
   if (message.action === ActionType.RUN) {
     store.dispatch(appendInput(message.args.command));
+  }
+
+  // Mask task
+  if (message.action === ActionType.MASK_TASK) {
+    store.dispatch(setCurrentTask(message));
   }
 
   if ("args" in message && "security_risk" in message.args) {
