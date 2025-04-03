@@ -188,7 +188,7 @@ const AccountSettings = () => {
 
   if (isFetching || !settings) {
     return (
-      <div className="flex grow p-4">
+      <div className="flex items-center justify-center grow p-4">
         <LoadingSpinner size="large" />
       </div>
     );
