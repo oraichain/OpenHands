@@ -10,7 +10,7 @@ from litellm import (
     ModelResponse,
 )
 
-from openhands.agenthub.codeact_agent.tools import (
+from openhands.agenthub.browsing_agent.tools import (
     BrowserTool,
     FinishTool,
     IPythonTool,
@@ -237,31 +237,31 @@ def get_tools(
     codeact_enable_jupyter: bool = False,
     llm: LLM | None = None,
 ) -> list[ChatCompletionToolParam]:
-    SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
+    # SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
 
-    use_simplified_tool_desc = False
-    if llm is not None:
-        use_simplified_tool_desc = any(
-            model_substr in llm.config.model
-            for model_substr in SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS
-        )
+    # use_simplified_tool_desc = False
+    # if llm is not None:
+    #     use_simplified_tool_desc = any(
+    #         model_substr in llm.config.model
+    #         for model_substr in SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS
+    #     )
 
     tools = [
-        create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
+        # create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
         ThinkTool,
         FinishTool,
     ]
-    # if codeact_enable_browsing:
-    #     tools.append(WebReadTool)
-    #     tools.append(BrowserTool)
-    if codeact_enable_jupyter:
-        tools.append(IPythonTool)
-    if codeact_enable_llm_editor:
-        tools.append(LLMBasedFileEditTool)
-    else:
-        tools.append(
-            create_str_replace_editor_tool(
-                use_simplified_description=use_simplified_tool_desc
-            )
-        )
+    if codeact_enable_browsing:
+        tools.append(WebReadTool)
+        tools.append(BrowserTool)
+    # if codeact_enable_jupyter:
+    # tools.append(IPythonTool)
+    # if codeact_enable_llm_editor:
+    # tools.append(LLMBasedFileEditTool)
+    # else:
+    # tools.append(
+    # create_str_replace_editor_tool(
+    # use_simplified_description=use_simplified_tool_desc
+    # )
+    # )
     return tools

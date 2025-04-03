@@ -25,19 +25,20 @@ from openhands.utils.prompt import PromptManager
 class ReActAgent(Agent):
     VERSION = '2.2'
     """
-    The Code Act Agent is a minimalist agent.
+    The ReAct Agent is a minimalist agent.
     The agent works by passing the model a list of action-observation pairs and prompting the model to take the next step.
 
     ### Overview
 
-    This agent implements the CodeAct idea ([paper](https://arxiv.org/abs/2402.01030), [tweet](https://twitter.com/xingyaow_/status/1754556835703751087)) that consolidates LLM agents' **act**ions into a unified **code** action space for both *simplicity* and *performance* (see paper for more details).
+    This agent implements the ReAct framework (Reasoning and Acting) that enables LLM agents to solve tasks through interleaved **reasoning** steps and **act**ions in a systematic manner for enhanced problem-solving capabilities.
 
     The conceptual idea is illustrated below. At each turn, the agent can:
 
     1. **Converse**: Communicate with humans in natural language to ask for clarification, confirmation, etc.
-    2. **CodeAct**: Choose to perform the task by executing code
-    - Execute any valid Linux `bash` command
-    - Execute any valid `Python` code with [an interactive Python interpreter](https://ipython.org/). This is simulated through `bash` command, see plugin system below for more details.
+    2. **ReAct**: Choose to perform the task through reasoning and acting
+    - Thought: Internal reasoning about the current state and planning next steps
+    - Action: Execute one of several available actions to gather information
+    - Observation: Process the results of actions to inform future reasoning
 
     ![image](https://github.com/All-Hands-AI/OpenHands/assets/38853559/92b622e3-72ad-4a61-8f41-8c040b6d5fb3)
 
@@ -54,7 +55,7 @@ class ReActAgent(Agent):
     def __init__(
         self, llm: LLM, config: AgentConfig, mcp_tools: list[dict] | None = None
     ) -> None:
-        """Initializes a new instance of the CodeActAgent class.
+        """Initializes a new instance of the ReActAgent class.
 
         Parameters:
         - llm (LLM): The llm to be used by this agent
@@ -76,7 +77,7 @@ class ReActAgent(Agent):
 
         # Retrieve the enabled tools
         logger.info(
-            f"TOOLS loaded for CodeActAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
+            f"TOOLS loaded for ReActAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
         )
         self.prompt_manager = PromptManager(
             prompt_dir=os.path.join(os.path.dirname(__file__), 'prompts'),

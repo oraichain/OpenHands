@@ -1,9 +1,7 @@
 import os
+from collections import deque
 
-from browsergym.core.action.highlevel import HighLevelActionSet
-from browsergym.utils.obs import flatten_axtree_to_str
-
-from openhands.agenthub.browsing_agent.response_parser import BrowsingResponseParser
+import openhands.agenthub.browsing_agent.function_calling as browsing_function_calling
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
@@ -12,212 +10,223 @@ from openhands.core.message import Message, TextContent
 from openhands.events.action import (
     Action,
     AgentFinishAction,
-    BrowseInteractiveAction,
-    MessageAction,
 )
-from openhands.events.event import EventSource
-from openhands.events.observation import BrowserOutputObservation
-from openhands.events.observation.observation import Observation
 from openhands.llm.llm import LLM
+from openhands.memory.condenser import Condenser
+from openhands.memory.conversation_memory import ConversationMemory
 from openhands.runtime.plugins import (
+    AgentSkillsRequirement,
+    JupyterRequirement,
     PluginRequirement,
 )
-
-USE_NAV = (
-    os.environ.get('USE_NAV', 'true') == 'true'
-)  # only disable NAV actions when running webarena and miniwob benchmarks
-USE_CONCISE_ANSWER = (
-    os.environ.get('USE_CONCISE_ANSWER', 'false') == 'true'
-)  # only return concise answer when running webarena and miniwob benchmarks
-
-if not USE_NAV and USE_CONCISE_ANSWER:
-    EVAL_MODE = True  # disabled NAV actions and only return concise answer, for webarena and miniwob benchmarks\
-else:
-    EVAL_MODE = False
-
-
-def get_error_prefix(last_browser_action: str) -> str:
-    return f'IMPORTANT! Last action is incorrect:\n{last_browser_action}\nThink again with the current observation of the page.\n'
-
-
-def get_system_message(goal: str, action_space: str) -> str:
-    return f"""\
-# Instructions
-Review the current state of the page and all other information to find the best
-possible next action to accomplish your goal. Your answer will be interpreted
-and executed by a program, make sure to follow the formatting instructions.
-
-# Goal:
-{goal}
-
-# Action Space
-{action_space}
-"""
-
-
-CONCISE_INSTRUCTION = """\
-
-Here is another example with chain of thought of a valid action when providing a concise answer to user:
-"
-In order to accomplish my goal I need to send the information asked back to the user. This page list the information of HP Inkjet Fax Machine, which is the product identified in the objective. Its price is $279.49. I will send a message back to user with the answer.
-```send_msg_to_user("$279.49")```
-"
-"""
-
-
-def get_prompt(
-    error_prefix: str, cur_url: str, cur_axtree_txt: str, prev_action_str: str
-) -> str:
-    prompt = f"""\
-{error_prefix}
-
-# Current Page URL:
-{cur_url}
-
-# Current Accessibility Tree:
-{cur_axtree_txt}
-
-# Previous Actions
-{prev_action_str}
-
-Here is an example with chain of thought of a valid action when clicking on a button:
-"
-In order to accomplish my goal I need to click on the button with bid 12
-```click("12")```
-"
-""".strip()
-    if USE_CONCISE_ANSWER:
-        prompt += CONCISE_INSTRUCTION
-    return prompt
+from openhands.utils.prompt import PromptManager
 
 
 class BrowsingAgent(Agent):
-    VERSION = '1.0'
+    VERSION = '2.2'
     """
-    An agent that interacts with the browser.
+    The Browsing Agent is a minimalist agent.
+    The agent works by passing the model a list of action-observation pairs and prompting the model to take the next step.
+
+    ### Overview
+
+    This agent implements a browser interaction framework that consolidates LLM agents' **act**ions into a unified **browsing** action space for both *simplicity* and *performance*.
+
+    The conceptual idea is illustrated below. At each turn, the agent can:
+
+    1. **Converse**: Communicate with humans in natural language to ask for clarification, confirmation, etc.
+    2. **BrowsingAct**: Choose to perform the task by executing browser actions
+    - Navigate to URLs and interact with web elements
+    - Extract information from web pages
+    - Handle forms, searches, and other interactive elements
+
+    ![image](https://github.com/All-Hands-AI/OpenHands/assets/38853559/92b622e3-72ad-4a61-8f41-8c040b6d5fb3)
+
     """
 
-    sandbox_plugins: list[PluginRequirement] = []
-    response_parser = BrowsingResponseParser()
+    sandbox_plugins: list[PluginRequirement] = [
+        # NOTE: AgentSkillsRequirement need to go before JupyterRequirement, since
+        # AgentSkillsRequirement provides a lot of Python functions,
+        # and it needs to be initialized before Jupyter for Jupyter to use those functions.
+        AgentSkillsRequirement(),
+        JupyterRequirement(),
+    ]
 
     def __init__(
-        self,
-        llm: LLM,
-        config: AgentConfig,
+        self, llm: LLM, config: AgentConfig, mcp_tools: list[dict] | None = None
     ) -> None:
         """Initializes a new instance of the BrowsingAgent class.
 
         Parameters:
         - llm (LLM): The llm to be used by this agent
+        - config (AgentConfig): The configuration for this agent
+        - mcp_tools (list[dict] | None, optional): List of MCP tools to be used by this agent. Defaults to None.
         """
-        super().__init__(llm, config)
-        # define a configurable action space, with chat functionality, web navigation, and webpage grounding using accessibility tree and HTML.
-        # see https://github.com/ServiceNow/BrowserGym/blob/main/core/src/browsergym/core/action/highlevel.py for more details
-        action_subsets = ['chat', 'bid']
-        if USE_NAV:
-            action_subsets.append('nav')
-        self.action_space = HighLevelActionSet(
-            subsets=action_subsets,
-            strict=False,  # less strict on the parsing of the actions
-            multiaction=True,  # enable to agent to take multiple actions at once
-        )
-
+        super().__init__(llm, config, mcp_tools)
+        self.pending_actions: deque[Action] = deque()
         self.reset()
 
+        built_in_tools = browsing_function_calling.get_tools(
+            codeact_enable_browsing=self.config.codeact_enable_browsing,
+            codeact_enable_jupyter=self.config.codeact_enable_jupyter,
+            codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
+            llm=self.llm,
+        )
+
+        self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
+
+        # Retrieve the enabled tools
+        logger.info(
+            f"TOOLS loaded for BrowsingAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
+        )
+        self.prompt_manager = PromptManager(
+            prompt_dir=os.path.join(os.path.dirname(__file__), 'prompts'),
+        )
+
+        # Create a ConversationMemory instance
+        self.conversation_memory = ConversationMemory(self.config, self.prompt_manager)
+
+        self.condenser = Condenser.from_config(self.config.condenser)
+        logger.debug(f'Using condenser: {type(self.condenser)}')
+
     def reset(self) -> None:
-        """Resets the Browsing Agent."""
+        """Resets the CodeAct Agent."""
         super().reset()
-        self.cost_accumulator = 0
-        self.error_accumulator = 0
+        self.pending_actions.clear()
 
     def step(self, state: State) -> Action:
         """Performs one step using the Browsing Agent.
-        This includes gathering information on previous steps and prompting the model to make a browsing command to execute.
+        This includes gathering info on previous steps and prompting the model to make a command to execute.
 
         Parameters:
         - state (State): used to get updated info
 
         Returns:
-        - BrowseInteractiveAction(browsergym_command) - BrowserGym commands to run
+        - CmdRunAction(command) - bash command to run
+        - IPythonRunCellAction(code) - IPython code to run
+        - AgentDelegateAction(agent, inputs) - delegate action for (sub)task
         - MessageAction(content) - Message action to run (e.g. ask for clarification)
         - AgentFinishAction() - end the interaction
         """
-        messages: list[Message] = []
-        prev_actions = []
-        cur_url = ''
-        cur_axtree_txt = ''
-        error_prefix = ''
-        last_obs = None
-        last_action = None
+        # Continue with pending actions if any
+        if self.pending_actions:
+            return self.pending_actions.popleft()
 
-        if EVAL_MODE and len(state.history) == 1:
-            # for webarena and miniwob++ eval, we need to retrieve the initial observation already in browser env
-            # initialize and retrieve the first observation by issuing an noop OP
-            # For non-benchmark browsing, the browser env starts with a blank page, and the agent is expected to first navigate to desired websites
-            return BrowseInteractiveAction(browser_actions='noop()')
+        # if we're done, go back
+        latest_user_message = state.get_last_user_message()
+        if latest_user_message and latest_user_message.content.strip() == '/exit':
+            return AgentFinishAction()
 
-        for event in state.history:
-            if isinstance(event, BrowseInteractiveAction):
-                prev_actions.append(event.browser_actions)
-                last_action = event
-            elif isinstance(event, MessageAction) and event.source == EventSource.AGENT:
-                # agent has responded, task finished.
-                return AgentFinishAction(outputs={'content': event.content})
-            elif isinstance(event, Observation):
-                last_obs = event
+        # prepare what we want to send to the LLM
+        messages = self._get_messages(state)
+        params: dict = {
+            'messages': self.llm.format_messages_for_llm(messages),
+        }
+        params['tools'] = self.tools
+        # log to litellm proxy if possible
+        params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
+        response = self.llm.completion(**params)
+        logger.debug(f'Response from LLM: {response}')
+        actions = browsing_function_calling.response_to_actions(response)
+        logger.debug(f'Actions after response_to_actions: {actions}')
+        for action in actions:
+            self.pending_actions.append(action)
+        return self.pending_actions.popleft()
 
-        if EVAL_MODE:
-            prev_actions = prev_actions[1:]  # remove the first noop action
+    def _get_messages(self, state: State) -> list[Message]:
+        """Constructs the message history for the LLM conversation.
 
-        prev_action_str = '\n'.join(prev_actions)
-        # if the final BrowserInteractiveAction exec BrowserGym's send_msg_to_user,
-        # we should also send a message back to the user in OpenHands and call it a day
-        if (
-            isinstance(last_action, BrowseInteractiveAction)
-            and last_action.browsergym_send_msg_to_user
-        ):
-            return MessageAction(last_action.browsergym_send_msg_to_user)
+        This method builds a structured conversation history by processing events from the state
+        and formatting them into messages that the LLM can understand. It handles both regular
+        message flow and function-calling scenarios.
 
-        if isinstance(last_obs, BrowserOutputObservation):
-            if last_obs.error:
-                # add error recovery prompt prefix
-                error_prefix = get_error_prefix(last_obs.last_browser_action)
-                self.error_accumulator += 1
-                if self.error_accumulator > 5:
-                    return MessageAction('Too many errors encountered. Task failed.')
+        The method performs the following steps:
+        1. Initializes with system prompt and optional initial user message
+        2. Processes events (Actions and Observations) into messages
+        3. Handles tool calls and their responses in function-calling mode
+        4. Manages message role alternation (user/assistant/tool)
+        5. Applies caching for specific LLM providers (e.g., Anthropic)
+        6. Adds environment reminders for non-function-calling mode
 
-            cur_url = last_obs.url
+        Args:
+            state (State): The current state object containing conversation history and other metadata
 
-            try:
-                cur_axtree_txt = flatten_axtree_to_str(
-                    last_obs.axtree_object,
-                    extra_properties=last_obs.extra_element_properties,
-                    with_clickable=True,
-                    filter_visible_only=True,
-                )
-            except Exception as e:
-                logger.error(
-                    'Error when trying to process the accessibility tree: %s', e
-                )
-                return MessageAction('Error encountered when browsing.')
+        Returns:
+            list[Message]: A list of formatted messages ready for LLM consumption, including:
+                - System message with prompt
+                - Initial user message (if configured)
+                - Action messages (from both user and assistant)
+                - Observation messages (including tool responses)
+                - Environment reminders (in non-function-calling mode)
 
-        goal, _ = state.get_current_user_intent()
+        Note:
+            - In function-calling mode, tool calls and their responses are carefully tracked
+              to maintain proper conversation flow
+            - Messages from the same role are combined to prevent consecutive same-role messages
+            - For Anthropic models, specific messages are cached according to their documentation
+        """
+        if not self.prompt_manager:
+            raise Exception('Prompt Manager not instantiated.')
 
-        if goal is None:
-            goal = state.inputs['task']
-
-        system_msg = get_system_message(
-            goal,
-            self.action_space.describe(with_long_description=False, with_examples=True),
+        # Use ConversationMemory to process initial messages
+        messages = self.conversation_memory.process_initial_messages(
+            with_caching=self.llm.is_caching_prompt_active()
         )
 
-        messages.append(Message(role='system', content=[TextContent(text=system_msg)]))
+        # Condense the events from the state.
+        events = self.condenser.condensed_history(state)
 
-        prompt = get_prompt(error_prefix, cur_url, cur_axtree_txt, prev_action_str)
-        messages.append(Message(role='user', content=[TextContent(text=prompt)]))
-
-        response = self.llm.completion(
-            messages=self.llm.format_messages_for_llm(messages),
-            stop=[')```', ')\n```'],
+        logger.debug(
+            f'Processing {len(events)} events from a total of {len(state.history)} events'
         )
-        return self.response_parser.parse(response)
+
+        # Use ConversationMemory to process events
+        messages = self.conversation_memory.process_events(
+            condensed_history=events,
+            initial_messages=messages,
+            max_message_chars=self.llm.config.max_message_chars,
+            vision_is_active=self.llm.vision_is_active(),
+        )
+
+        messages = self._enhance_messages(messages)
+
+        if self.llm.is_caching_prompt_active():
+            self.conversation_memory.apply_prompt_caching(messages)
+
+        return messages
+
+    def _enhance_messages(self, messages: list[Message]) -> list[Message]:
+        """Enhances the user message with additional context based on keywords matched.
+
+        Args:
+            messages (list[Message]): The list of messages to enhance
+
+        Returns:
+            list[Message]: The enhanced list of messages
+        """
+        assert self.prompt_manager, 'Prompt Manager not instantiated.'
+
+        results: list[Message] = []
+        is_first_message_handled = False
+        prev_role = None
+
+        for msg in messages:
+            if msg.role == 'user' and not is_first_message_handled:
+                is_first_message_handled = True
+                # compose the first user message with examples
+                self.prompt_manager.add_examples_to_initial_message(msg)
+
+            elif msg.role == 'user':
+                # Add double newline between consecutive user messages
+                if prev_role == 'user' and len(msg.content) > 0:
+                    # Find the first TextContent in the message to add newlines
+                    for content_item in msg.content:
+                        if isinstance(content_item, TextContent):
+                            # If the previous message was also from a user, prepend two newlines to ensure separation
+                            content_item.text = '\n\n' + content_item.text
+                            break
+
+            results.append(msg)
+            prev_role = msg.role
+
+        return results
