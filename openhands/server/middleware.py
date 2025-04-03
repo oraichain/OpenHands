@@ -17,6 +17,9 @@ from openhands.server import shared
 from openhands.server.auth import get_user_id
 from openhands.server.routes.auth import JWT_SECRET
 from openhands.server.types import SessionMiddlewareInterface
+import jwt
+from socketio.exceptions import ConnectionRefusedError
+from openhands.server.routes.auth import JWT_SECRET, JWT_ALGORITHM
 
 
 class LocalhostCORSMiddleware(CORSMiddleware):
@@ -250,3 +253,25 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={'detail': 'Internal server error'},
             )
+        
+async def authenticate_socket_connection(environ):
+    """Authenticate WebSocket connection using JWT token."""
+    try:
+        auth_header = environ.get('HTTP_AUTHORIZATION', '')
+        logger.info(f'environ: {environ}')
+        logger.info(f'Auth header: {auth_header}')
+        if not auth_header.startswith('Bearer '):
+            raise ConnectionRefusedError('Missing or invalid authorization header')
+
+        token = auth_header.split(' ')[1]
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            logger.info(f'Payload: {payload}')
+            environ['user_id'] = payload['sub']
+            return True
+        except jwt.ExpiredSignatureError:
+            raise ConnectionRefusedError('Token has expired')
+        except jwt.InvalidTokenError:
+            raise ConnectionRefusedError('Invalid token')
+    except Exception as e:
+        raise ConnectionRefusedError(f'Authentication error: {str(e)}') 

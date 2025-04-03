@@ -13,3 +13,12 @@ User = Table(
     Column('jwt', String, nullable=False),
     Column('created_at', DateTime, server_default=func.now(), nullable=False),
 )
+
+# Define UsedSignatures table to prevent signature reuse
+UsedSignatures = Table(
+    'used_signatures',
+    metadata,
+    Column('signature', String, primary_key=True, nullable=False),
+    Column('public_key', String, nullable=False),
+    Column('used_at', DateTime, server_default=func.now(), nullable=False),
+)

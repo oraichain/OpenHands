@@ -9,7 +9,7 @@ from sqlalchemy import select
 from web3 import Web3
 
 from openhands.server.db import database
-from openhands.server.models import User
+from openhands.server.models import User, UsedSignatures
 from openhands.server.utils.crypto import generate_mnemonic
 
 app = APIRouter(prefix='/api/auth')
@@ -61,9 +61,25 @@ def verify_ethereum_signature(public_address: str, signature: str) -> bool:
 @app.post('/signup', response_model=SignupResponse)
 async def signup(request: SignupRequest) -> SignupResponse:
     """Sign up with Ethereum wallet."""
+    # TODO: uncomment this when we have a way to store used signatures
+    # # Check if signature has been used before
+    # query = select(UsedSignatures).where(UsedSignatures.c.signature == request.signature)
+    # used_signature = await database.fetch_one(query)
+    # if used_signature:
+    #     raise HTTPException(status_code=400, detail='Signature has already been used')
+
     # Verify the signature
     if not verify_ethereum_signature(request.publicAddress, request.signature):
         raise HTTPException(status_code=400, detail='Invalid signature')
+
+    # TODO: uncomment this when we have a way to store used signatures
+    # # Store the signature as used
+    # await database.execute(
+    #     UsedSignatures.insert().values({
+    #         'signature': request.signature,
+    #         'public_key': request.publicAddress.lower(),
+    #     })
+    # )
 
     # Check if user already exists
     query = select(User).where(User.c.public_key == request.publicAddress.lower())
@@ -80,6 +96,7 @@ async def signup(request: SignupRequest) -> SignupResponse:
 
     user_data = {
         'public_key': request.publicAddress.lower(),
+        # TODO: should encrypt this
         'mnemonic': generate_mnemonic(),
         'jwt': create_jwt_token(request.publicAddress.lower()),
     }

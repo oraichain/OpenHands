@@ -25,11 +25,16 @@ from openhands.server.shared import (
 from openhands.storage.conversation.conversation_validator import (
     ConversationValidatorImpl,
 )
+from openhands.server.middleware import authenticate_socket_connection
 
 
 @sio.event
-async def connect(connection_id: str, environ):
+async def connect(connection_id: str, environ, auth=None):
     logger.info(f'sio:connect: {connection_id}')
+    
+    # Authenticate the WebSocket connection
+    await authenticate_socket_connection(environ)
+    
     query_params = parse_qs(environ.get('QUERY_STRING', ''))
     latest_event_id = int(query_params.get('latest_event_id', [-1])[0])
     conversation_id = query_params.get('conversation_id', [None])[0]
@@ -39,9 +44,8 @@ async def connect(connection_id: str, environ):
 
     cookies_str = environ.get('HTTP_COOKIE', '')
     conversation_validator = ConversationValidatorImpl()
-    user_id, github_user_id = await conversation_validator.validate(
-        conversation_id, cookies_str
-    )
+    user_id = environ.get('user_id')  # Get user_id from authenticated token
+    github_user_id = None  # This can be obtained from GitHub token if needed
 
     settings_store = await SettingsStoreImpl.get_instance(config, user_id)
     settings = await settings_store.load()

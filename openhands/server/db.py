@@ -14,7 +14,7 @@ SQLALCHEMY_DATABASE_URI = f'postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSW
 # Create the SQLAlchemy async engine
 engine: AsyncEngine = create_async_engine(
     SQLALCHEMY_DATABASE_URI,
-    echo=True,  # Enable SQL query logging
+    echo=False,  # Enable SQL query logging
     pool_pre_ping=True,  # Enable connection health checks
 )
 

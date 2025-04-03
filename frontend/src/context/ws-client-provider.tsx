@@ -5,6 +5,7 @@ import { handleAssistantMessage } from "#/services/actions";
 import { showChatError } from "#/utils/error-handler";
 import { useRate } from "#/hooks/use-rate";
 import { OpenHandsParsedEvent } from "#/types/core";
+import usePersistStore from "#/zutand-stores/persist-config/usePersistStore";
 import {
   AssistantMessageAction,
   UserMessageAction,
@@ -110,6 +111,7 @@ export function WsClientProvider({
   );
   const [events, setEvents] = React.useState<Record<string, unknown>[]>([]);
   const lastEventRef = React.useRef<Record<string, unknown> | null>(null);
+  const jwt = usePersistStore((state) => state.jwt);
 
   const messageRateHandler = useRate({ threshold: 250 });
 
@@ -176,6 +178,14 @@ export function WsClientProvider({
     sio = io(baseUrl, {
       transports: ["websocket"],
       query,
+      auth: {
+        token: jwt,
+        // token: "asdfasdf",
+      },
+      extraHeaders: {
+        Authorization: `Bearer ${jwt}`,
+        // Authorization: `Bearer asdfasdf`,
+      },
     });
     sio.on("connect", handleConnect);
     sio.on("oh_event", handleMessage);
@@ -192,7 +202,7 @@ export function WsClientProvider({
       sio.off("connect_failed", handleError);
       sio.off("disconnect", handleDisconnect);
     };
-  }, [conversationId]);
+  }, [conversationId, jwt]);
 
   React.useEffect(
     () => () => {
