@@ -1232,9 +1232,7 @@ class PlanController:
         """
 
         self.event_stream.add_event(
-            MessageAction(
-                content=assign_task_prompt,
-            ),
+            MessageAction(content=assign_task_prompt, hidden=True),
             EventSource.USER,
         )
 
