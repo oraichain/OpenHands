@@ -3,6 +3,7 @@ from openhands.events.action.agent import (
     AgentDelegateAction,
     AgentFinishAction,
     AgentRejectAction,
+    AgentSequentialThinkAction,
     AgentThinkAction,
     ChangeAgentStateAction,
     RecallAction,
@@ -35,6 +36,7 @@ __all__ = [
     'MessageAction',
     'ActionConfirmationStatus',
     'AgentThinkAction',
+    'AgentSequentialThinkAction',
     'RecallAction',
     'McpAction',
 ]

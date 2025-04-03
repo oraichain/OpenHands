@@ -50,6 +50,10 @@ class ActionType(str, Enum):
     """Logs a thought.
     """
 
+    SEQUENTIAL_THINK = 'sequential_think'
+    """Logs a sequential thinking step.
+    """
+
     FINISH = 'finish'
     """If you're absolutely certain that you've completed your task and have tested your work,
     use the finish action to stop working.
@@ -84,3 +88,6 @@ class ActionType(str, Enum):
 
     RECALL = 'recall'
     """Retrieves content from a user workspace, microagent, or other source."""
+
+    CONDENSATION = 'condensation'
+    """Condenses a list of events into a summary."""

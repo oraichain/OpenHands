@@ -33,6 +33,7 @@ class Agent(ABC):
         llm: LLM,
         config: 'AgentConfig',
         mcp_tools: list[dict] | None = None,
+        **kwargs,
     ):
         self.llm = llm
         self.config = config

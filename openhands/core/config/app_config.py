@@ -1,3 +1,7 @@
+from openhands.core.config.security_config import SecurityConfig
+from openhands.core.config.sandbox_config import SandboxConfig
+from openhands.core.config.model_routing_config import ModelRoutingConfig
+from openhands.core.config.mcp_config import MCPConfig
 from typing import ClassVar
 
 from pydantic import BaseModel, Field, SecretStr
@@ -11,9 +15,6 @@ from openhands.core.config.config_utils import (
 )
 from openhands.core.config.extended_config import ExtendedConfig
 from openhands.core.config.llm_config import LLMConfig
-from openhands.core.config.mcp_config import MCPConfig
-from openhands.core.config.sandbox_config import SandboxConfig
-from openhands.core.config.security_config import SecurityConfig
 
 
 class AppConfig(BaseModel):
@@ -22,6 +23,7 @@ class AppConfig(BaseModel):
     Attributes:
         llms: Dictionary mapping LLM names to their configurations.
             The default configuration is stored under the 'llm' key.
+        routing_llms: Dictionary mapping LLM for routing' names to their configurations.
         agents: Dictionary mapping agent names to their configurations.
             The default configuration is stored under the 'agent' key.
         default_agent: Name of the default agent to use.
@@ -52,11 +54,15 @@ class AppConfig(BaseModel):
     """
 
     llms: dict[str, LLMConfig] = Field(default_factory=dict)
+    routing_llms: dict[str, LLMConfig] = Field(default_factory=dict)
     agents: dict = Field(default_factory=dict)
     default_agent: str = Field(default=OH_DEFAULT_AGENT)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
-    extended: ExtendedConfig = Field(default_factory=lambda: ExtendedConfig({}))
+    extended: ExtendedConfig = Field(
+        default_factory=lambda: ExtendedConfig({}))
+    model_routing: ModelRoutingConfig = Field(
+        default_factory=ModelRoutingConfig)
     runtime: str = Field(default='docker')
     file_store: str = Field(default='local')
     file_store_path: str = Field(default='/tmp/openhands_file_store')
@@ -79,13 +85,15 @@ class AppConfig(BaseModel):
     debug: bool = Field(default=False)
     file_uploads_max_file_size_mb: int = Field(default=0)
     file_uploads_restrict_file_types: bool = Field(default=False)
-    file_uploads_allowed_extensions: list[str] = Field(default_factory=lambda: ['.*'])
+    file_uploads_allowed_extensions: list[str] = Field(
+        default_factory=lambda: ['.*'])
     runloop_api_key: SecretStr | None = Field(default=None)
     daytona_api_key: SecretStr | None = Field(default=None)
     daytona_api_url: str = Field(default='https://app.daytona.io/api')
     daytona_target: str = Field(default='eu')
     cli_multiline_input: bool = Field(default=False)
-    conversation_max_age_seconds: int = Field(default=864000)  # 10 days in seconds
+    conversation_max_age_seconds: int = Field(
+        default=864000)  # 10 days in seconds
     enable_default_condenser: bool = Field(default=True)
     max_concurrent_conversations: int = Field(
         default=3
@@ -109,7 +117,10 @@ class AppConfig(BaseModel):
         return self.llms['llm']
 
     def set_llm_config(self, value: LLMConfig, name='llm') -> None:
-        self.llms[name] = value
+        if value.for_routing:
+            self.routing_llms[name] = value
+        else:
+            self.llms[name] = value
 
     def get_agent_config(self, name='agent') -> AgentConfig:
         """'agent' is the name for default config (for backward compatibility prior to 0.8)."""

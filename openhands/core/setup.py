@@ -9,9 +9,7 @@ import openhands.agenthub  # noqa F401 (we import this to get the agents registe
 from openhands.controller import AgentController
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
-from openhands.core.config import (
-    AppConfig,
-)
+from openhands.core.config import AppConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
 from openhands.events.event import Event
@@ -101,13 +99,15 @@ def initialize_repository_for_runtime(
     """
     # clone selected repository if provided
     github_token = (
-        SecretStr(os.environ.get('GITHUB_TOKEN')) if not github_token else github_token
+        SecretStr(os.environ.get('GITHUB_TOKEN')
+                  ) if not github_token else github_token
     )
 
     secret_store = (
         SecretStore(
             provider_tokens={
-                ProviderType.GITHUB: ProviderToken(token=SecretStr(github_token))
+                ProviderType.GITHUB: ProviderToken(
+                    token=SecretStr(github_token))
             }
         )
         if github_token
@@ -173,7 +173,6 @@ async def create_agent(config: AppConfig) -> Agent:
     agent_cls: Type[Agent] = Agent.get_cls(config.default_agent)
     agent_config = config.get_agent_config(config.default_agent)
     llm_config = config.get_llm_config_from_agent(config.default_agent)
-    # tmp create mcp agents for get list of tools
     mcp_agents = await create_mcp_agents(
         config.mcp.sse.mcp_servers,
         config.mcp.stdio.commands,
@@ -182,10 +181,42 @@ async def create_agent(config: AppConfig) -> Agent:
         'tmp-user-id',
     )
     mcp_tools = convert_mcp_agents_to_tools(mcp_agents)
+
+    # Setup model routing configurations
+    routing_llms = {}
+
+    if config.enable_plan_routing:
+        model_routing_config = config.model_routing
+        routing_llms_config = config.routing_llms
+
+        # Add default routing_llms if they don't exist
+        judge_name = model_routing_config.judge_llm_config_name
+        reasoning_name = model_routing_config.reasoning_llm_config_name
+
+        # If the required routing LLMs don't exist, create default ones using the main LLM config
+        if judge_name not in routing_llms_config:
+            logger.warning(f"Judge LLM config '{judge_name}' not found, using default LLM config")
+            routing_llms_config[judge_name] = llm_config
+
+        if reasoning_name not in routing_llms_config:
+            logger.warning(f"Reasoning LLM config '{reasoning_name}' not found, using default LLM config")
+            routing_llms_config[reasoning_name] = llm_config
+
+        # Now create the LLM instances
+        for config_name, routing_llm_config in routing_llms_config.items():
+            routing_llms[config_name] = LLM(
+                config=routing_llm_config,
+            )
+    else:
+        model_routing_config = None
+
+    # Create agent with appropriate parameters
     agent = agent_cls(
         llm=LLM(config=llm_config),
         config=agent_config,
         mcp_tools=mcp_tools,
+        model_routing_config=model_routing_config if config.enable_plan_routing else None,
+        routing_llms=routing_llms if routing_llms else None,
     )
 
     # We only need to get the tools from the MCP agents, so we can safely close them after that
@@ -237,9 +268,11 @@ async def create_mcp_agents(
                     connection_type='stdio', command=command, args=command_args
                 )
                 mcp_agents.append(agent)
-                logger.info(f'Connected to MCP server via stdio with command {command}')
+                logger.info(
+                    f'Connected to MCP server via stdio with command {command}')
             except Exception as e:
-                logger.error(f'Failed to connect with command {command}: {str(e)}')
+                logger.error(
+                    f'Failed to connect with command {command}: {str(e)}')
                 raise
 
     return mcp_agents
@@ -283,5 +316,6 @@ def generate_sid(config: AppConfig, session_name: str | None = None) -> str:
     session_name = session_name or str(uuid.uuid4())
     jwt_secret = config.jwt_secret
 
-    hash_str = hashlib.sha256(f'{session_name}{jwt_secret}'.encode('utf-8')).hexdigest()
+    hash_str = hashlib.sha256(
+        f'{session_name}{jwt_secret}'.encode('utf-8')).hexdigest()
     return f'{session_name}-{hash_str[:16]}'

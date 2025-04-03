@@ -12,7 +12,7 @@ import { useSaveSettings } from "#/hooks/mutation/use-save-settings";
 import { useAIConfigOptions } from "#/hooks/query/use-ai-config-options";
 import { useConfig } from "#/hooks/query/use-config";
 import { useSettings } from "#/hooks/query/use-settings";
-// import { useAppLogout } from "#/hooks/use-app-logout";
+import { useAppLogout } from "#/hooks/use-app-logout";
 import { AvailableLanguages } from "#/i18n";
 import { DEFAULT_SETTINGS } from "#/services/settings";
 import { handleCaptureConsent } from "#/utils/handle-capture-consent";
@@ -24,6 +24,8 @@ import {
   displayErrorToast,
   displaySuccessToast,
 } from "#/utils/custom-toast-handlers";
+import { ProviderOptions } from "#/types/settings";
+import { useAuth } from "#/context/auth-context";
 
 const REMOTE_RUNTIME_OPTIONS = [
   { key: 1, label: "1x (2 core, 8G)" },
@@ -44,7 +46,8 @@ function AccountSettings() {
     isSuccess: isSuccessfulResources,
   } = useAIConfigOptions();
   const { mutate: saveSettings } = useSaveSettings();
-  // const { handleLogout } = useAppLogout();
+  const { handleLogout } = useAppLogout();
+  const { providerTokensSet, providersAreSet } = useAuth();
 
   const isFetching = isFetchingSettings || isFetchingResources;
   const isSuccess = isSuccessfulSettings && isSuccessfulResources;
@@ -61,7 +64,6 @@ function AccountSettings() {
         isCustomModel(resources.models, settings.LLM_MODEL) ||
         hasAdvancedSettingsSet({
           ...settings,
-          PROVIDER_TOKENS: settings.PROVIDER_TOKENS || {},
         })
       );
     }
@@ -69,8 +71,11 @@ function AccountSettings() {
     return false;
   };
 
-  // const hasAppSlug = !!config?.APP_SLUG;
-  // const isGitHubTokenSet = settings?.GITHUB_TOKEN_IS_SET;
+  const hasAppSlug = !!config?.APP_SLUG;
+  const isGitHubTokenSet =
+    providerTokensSet.includes(ProviderOptions.github) || false;
+  const isGitLabTokenSet =
+    providerTokensSet.includes(ProviderOptions.gitlab) || false;
   const isLLMKeySet = settings?.LLM_API_KEY === "**********";
   const isAnalyticsEnabled = settings?.USER_CONSENTS_TO_ANALYTICS;
   const isAdvancedSettingsSet = determineWhetherToToggleAdvancedSettings();
@@ -120,6 +125,8 @@ function AccountSettings() {
         ? undefined // don't update if it's already set
         : ""); // reset if it's first time save to avoid 500 error
 
+    const githubToken = formData.get("github-token-input")?.toString();
+    const gitlabToken = formData.get("gitlab-token-input")?.toString();
     // we don't want the user to be able to modify these settings in SaaS
     const finalLlmModel = shouldHandleSpecialSaasCase
       ? undefined
@@ -129,15 +136,14 @@ function AccountSettings() {
       : llmBaseUrl;
     const finalLlmApiKey = shouldHandleSpecialSaasCase ? undefined : llmApiKey;
 
-    const githubToken = formData.get("github-token-input")?.toString();
     const newSettings = {
-      github_token: githubToken,
-      provider_tokens: githubToken
-        ? {
-            github: githubToken,
-            gitlab: "",
-          }
-        : undefined,
+      provider_tokens:
+        githubToken || gitlabToken
+          ? {
+              github: githubToken || "",
+              gitlab: gitlabToken || "",
+            }
+          : undefined,
       LANGUAGE: languageValue,
       user_consents_to_analytics: userConsentsToAnalytics,
       ENABLE_DEFAULT_CONDENSER: enableMemoryCondenser,
@@ -363,76 +369,6 @@ function AccountSettings() {
               )}
             </section>
           )}
-
-          {/* <section className="flex flex-col gap-6">
-            <h2 className="text-[28px] leading-8 tracking-[-0.02em] font-bold">
-              GitHub Settings
-            </h2>
-            {isSaas && hasAppSlug && (
-              <Link
-                to={`https://github.com/apps/${config.APP_SLUG}/installations/new`}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                <BrandButton type="button" variant="secondary">
-                  Configure GitHub Repositories
-                </BrandButton>
-              </Link>
-            )}
-            {!isSaas && (
-              <>
-                <SettingsInput
-                  testId="github-token-input"
-                  name="github-token-input"
-                  label="GitHub Token"
-                  type="password"
-                  className="w-[680px]"
-                  startContent={
-                    isGitHubTokenSet && (
-                      <KeyStatusIcon isSet={!!isGitHubTokenSet} />
-                    )
-                  }
-                  placeholder={isGitHubTokenSet ? "<hidden>" : ""}
-                />
-                <p data-testid="github-token-help-anchor" className="text-xs">
-                  {" "}
-                  Generate a token on{" "}
-                  <b>
-                    {" "}
-                    <a
-                      href="https://github.com/settings/tokens/new?description=openhands-app&scopes=repo,user,workflow"
-                      target="_blank"
-                      className="underline underline-offset-2"
-                      rel="noopener noreferrer"
-                    >
-                      GitHub
-                    </a>{" "}
-                  </b>
-                  or see the{" "}
-                  <b>
-                    <a
-                      href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
-                      target="_blank"
-                      className="underline underline-offset-2"
-                      rel="noopener noreferrer"
-                    >
-                      documentation
-                    </a>
-                  </b>
-                  .
-                </p>
-              </>
-            )}
-
-            <BrandButton
-              type="button"
-              variant="secondary"
-              onClick={handleLogout}
-              isDisabled={!isGitHubTokenSet}
-            >
-              Disconnect from GitHub
-            </BrandButton>
-          </section> */}
 
           <section className="flex flex-col gap-6">
             <h2 className="text-[28px] leading-8 tracking-[-0.02em] font-bold">

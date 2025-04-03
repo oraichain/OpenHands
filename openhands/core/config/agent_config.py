@@ -29,7 +29,8 @@ class AgentConfig(BaseModel):
     enable_prompt_extensions: bool = Field(default=True)
     disabled_microagents: list[str] = Field(default_factory=list)
     enable_history_truncation: bool = Field(default=True)
-    enable_som_visual_browsing: bool = Field(default=False)
+    enable_som_visual_browsing: bool = Field(default=True)
+    enable_plan_routing: bool = Field(default=False)
     condenser: CondenserConfig = Field(
         default_factory=lambda: NoOpCondenserConfig(type='noop')
     )
@@ -75,7 +76,8 @@ class AgentConfig(BaseModel):
             base_config = cls.model_validate(base_data)
             agent_mapping['agent'] = base_config
         except ValidationError as e:
-            logger.warning(f'Invalid base agent configuration: {e}. Using defaults.')
+            logger.warning(
+                f'Invalid base agent configuration: {e}. Using defaults.')
             # If base config fails, create a default one
             base_config = cls()
             # Still add it to the mapping

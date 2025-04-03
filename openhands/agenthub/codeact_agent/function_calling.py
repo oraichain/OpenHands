@@ -11,11 +11,13 @@ from litellm import (
     ModelResponse,
 )
 
+from openhands.agenthub.codeact_agent.thought_manager import Thought, ThoughtManager
 from openhands.agenthub.codeact_agent.tools import (
     BrowserTool,
     FinishTool,
     IPythonTool,
     LLMBasedFileEditTool,
+    SequentialThinkingTool,
     ThinkTool,
     WebReadTool,
     create_cmd_run_tool,
@@ -29,6 +31,7 @@ from openhands.events.action import (
     Action,
     AgentDelegateAction,
     AgentFinishAction,
+    AgentSequentialThinkAction,
     AgentThinkAction,
     BrowseInteractiveAction,
     BrowseURLAction,
@@ -54,7 +57,8 @@ def combine_thought(action: Action, thought: str) -> Action:
     return action
 
 
-def response_to_actions(response: ModelResponse, sid: Optional[str]) -> list[Action]:
+
+def response_to_actions(response: ModelResponse, thought_manager: Optional[ThoughtManager] = None, sid: Optional[str]) -> list[Action]:
     actions: list[Action] = []
     assert len(response.choices) == 1, 'Only one choice is supported for now'
     choice = response.choices[0]
@@ -173,7 +177,50 @@ def response_to_actions(response: ModelResponse, sid: Optional[str]) -> list[Act
             # AgentThinkAction
             # ================================================
             elif tool_call.function.name == ThinkTool['function']['name']:
-                action = AgentThinkAction(thought=arguments.get('thought', ''))
+                # Create the AgentThinkAction
+                action = AgentThinkAction(
+                    thought=arguments.get('thought', ''),
+                    thought_number=arguments.get('thoughtNumber', 0),
+                    total_thoughts=arguments.get('totalThoughts', 0),
+                    next_thought_needed=arguments.get('nextThoughtNeeded', False),
+                    is_revision=arguments.get('isRevision', False),
+                    revises_thought=arguments.get('revisesThought', 0),
+                    branch_from_thought=arguments.get('branchFromThought', 0),
+                    branch_id=arguments.get('branchId', ''),
+                    needs_more_thoughts=arguments.get('needsMoreThoughts', False),
+                )
+
+                # If we have a thought manager, add the thought to it
+                if thought_manager:
+                    # Create a Thought object from the arguments
+                    thought_obj = Thought(
+                        thought=arguments.get('thought', ''),
+                        thought_number=arguments.get('thoughtNumber', 0),
+                        total_thoughts=arguments.get('totalThoughts', 0),
+                        next_thought_needed=arguments.get('nextThoughtNeeded', False),
+                        is_revision=arguments.get('isRevision', False),
+                        revises_thought=arguments.get('revisesThought', 0),
+                        branch_from_thought=arguments.get('branchFromThought', 0),
+                        branch_id=arguments.get('branchId', ''),
+                        needs_more_thoughts=arguments.get('needsMoreThoughts', False),
+                    )
+
+                    # Add the thought to the manager
+                    thought_manager.add_thought(thought_obj)
+
+            # ================================================
+            # SequentialThinkingTool
+            # ================================================
+            elif tool_call.function.name == SequentialThinkingTool['function']['name']:
+                # Create the AgentSequentialThinkAction
+                action = AgentSequentialThinkAction(
+                    current_step=arguments.get('currentStep', ''),
+                    step_number=arguments.get('stepNumber', 0),
+                    total_steps=arguments.get('totalSteps', 0),
+                    next_step_needed=arguments.get('nextStepNeeded', False),
+                    is_complete=arguments.get('isComplete', False),
+                    step_summary=arguments.get('stepSummary', ''),
+                )
 
             # ================================================
             # BrowserTool
@@ -230,6 +277,13 @@ def response_to_actions(response: ModelResponse, sid: Optional[str]) -> list[Act
             )
         )
 
+    # Add response id to actions
+    # This will ensure we can match both actions without tool calls (e.g. MessageAction)
+    # and actions with tool calls (e.g. CmdRunAction, IPythonRunCellAction, etc.)
+    # with the token usage data
+    for action in actions:
+        action.response_id = response.id
+
     assert len(actions) >= 1
     return actions
 
@@ -252,6 +306,7 @@ def get_tools(
     tools = [
         create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
         ThinkTool,
+        SequentialThinkingTool,
         FinishTool,
     ]
     if codeact_enable_browsing:
