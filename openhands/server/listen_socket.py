@@ -2,8 +2,8 @@ from urllib.parse import parse_qs
 
 import jwt
 from socketio.exceptions import ConnectionRefusedError
-# from sqlalchemy import select
 
+# from sqlalchemy import select
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import (
     NullAction,
@@ -23,6 +23,10 @@ from openhands.server.shared import (
     conversation_manager,
     sio,
 )
+from openhands.storage.conversation.conversation_validator import (
+    create_conversation_validator,
+)
+
 # from openhands.server.db import database
 # from openhands.server.models import User
 from openhands.utils.get_user_setting import get_user_setting
@@ -43,6 +47,11 @@ async def connect(connection_id: str, environ):
     if not jwt_token:
         logger.error('No JWT token provided')
         raise ConnectionRefusedError('Authentication required')
+    cookies_str = environ.get('HTTP_COOKIE', '')
+    conversation_validator = create_conversation_validator()
+    user_id, github_user_id = await conversation_validator.validate(
+        conversation_id, cookies_str
+    )
 
     try:
         # Verify and decode JWT token
@@ -56,7 +65,7 @@ async def connect(connection_id: str, environ):
         # if not user:
         #     logger.error(f'User not found in database: {user_id}')
         #     raise ConnectionRefusedError('User not found')
-            
+
         # logger.info(f'Found user record: {user["public_key"]}')
         # mnemonic = user['mnemonic']
         mnemonic = ''

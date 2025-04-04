@@ -236,6 +236,9 @@ codeact_enable_jupyter = true
 # length limit
 enable_history_truncation = true
 
+# Whether to enable plan routing to reasoning models
+#enable_plan_routing = false
+
 [agent.RepoExplorerAgent]
 # Example: use a cheaper model for RepoExplorerAgent to reduce cost, especially
 # useful when an agent doesn't demand high quality but uses a lot of tokens
@@ -306,15 +309,14 @@ llm_config = 'gpt3'
 # Configuration for security features
 ##############################################################################
 [security]
-
-# Enable confirmation mode (For Headless / CLI only -  In Web this is overridden by Session Init)
-#confirmation_mode = false
+# Whether to enable security analyzer
+#enable_security_analyzer = false
 
 # The security analyzer to use (For Headless / CLI only -  In Web this is overridden by Session Init)
 #security_analyzer = ""
 
-# Whether to enable security analyzer
-#enable_security_analyzer = false
+# Enable confirmation mode (For Headless / CLI only -  In Web this is overridden by Session Init)
+#confirmation_mode = false
 
 #################################### Condenser #################################
 # Condensers control how conversation history is managed and compressed when
@@ -378,6 +380,23 @@ type = "noop"
 #model = "gpt-4o"
 #temperature = 0.1
 #max_tokens = 1024
+
+################################ Model Routing ###############################
+# Configuration for model routing features
+##############################################################################
+[model_routing]
+
+# The reasoning model to use for plan generation
+reasoning_llm_config_name = 'reasoning_model'
+judge_llm_config_name = 'judge_model'
+
+[llm.judge_model]
+model = "gpt-4o"
+api_key = ""
+
+[llm.reasoning_model]
+model = "o1"
+api_key = ""
 
 #################################### Eval ####################################
 # Configuration for the evaluation, please refer to the specific evaluation

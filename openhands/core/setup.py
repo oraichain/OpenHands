@@ -9,9 +9,7 @@ import openhands.agenthub  # noqa F401 (we import this to get the agents registe
 from openhands.controller import AgentController
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
-from openhands.core.config import (
-    AppConfig,
-)
+from openhands.core.config import AppConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
 from openhands.events.event import Event
@@ -84,7 +82,7 @@ def create_runtime(
     return runtime
 
 
-def initialize_repository_for_runtime(
+async def initialize_repository_for_runtime(
     runtime: Runtime,
     selected_repository: str | None = None,
     github_token: SecretStr | None = None,
@@ -118,7 +116,7 @@ def initialize_repository_for_runtime(
     repo_directory = None
     if selected_repository and provider_tokens:
         logger.debug(f'Selected repository {selected_repository}.')
-        repo_directory = runtime.clone_repo(
+        repo_directory = await runtime.clone_repo(
             provider_tokens,
             selected_repository,
             None,
@@ -173,7 +171,6 @@ async def create_agent(config: AppConfig) -> Agent:
     agent_cls: Type[Agent] = Agent.get_cls(config.default_agent)
     agent_config = config.get_agent_config(config.default_agent)
     llm_config = config.get_llm_config_from_agent(config.default_agent)
-    # tmp create mcp agents for get list of tools
     mcp_agents = await create_mcp_agents(
         config.mcp.sse.mcp_servers,
         config.mcp.stdio.commands,
@@ -182,10 +179,48 @@ async def create_agent(config: AppConfig) -> Agent:
         'tmp-user-id',
     )
     mcp_tools = convert_mcp_agents_to_tools(mcp_agents)
+
+    # Setup model routing configurations
+    routing_llms = {}
+
+    if config.enable_plan_routing:
+        model_routing_config = config.model_routing
+        routing_llms_config = config.routing_llms
+
+        # Add default routing_llms if they don't exist
+        judge_name = model_routing_config.judge_llm_config_name
+        reasoning_name = model_routing_config.reasoning_llm_config_name
+
+        # If the required routing LLMs don't exist, create default ones using the main LLM config
+        if judge_name not in routing_llms_config:
+            logger.warning(
+                f"Judge LLM config '{judge_name}' not found, using default LLM config"
+            )
+            routing_llms_config[judge_name] = llm_config
+
+        if reasoning_name not in routing_llms_config:
+            logger.warning(
+                f"Reasoning LLM config '{reasoning_name}' not found, using default LLM config"
+            )
+            routing_llms_config[reasoning_name] = llm_config
+
+        # Now create the LLM instances
+        for config_name, routing_llm_config in routing_llms_config.items():
+            routing_llms[config_name] = LLM(
+                config=routing_llm_config,
+            )
+    else:
+        model_routing_config = None
+
+    # Create agent with appropriate parameters
     agent = agent_cls(
         llm=LLM(config=llm_config),
         config=agent_config,
         mcp_tools=mcp_tools,
+        model_routing_config=model_routing_config
+        if config.enable_plan_routing
+        else None,
+        routing_llms=routing_llms if routing_llms else None,
     )
 
     # We only need to get the tools from the MCP agents, so we can safely close them after that

@@ -44,7 +44,7 @@ async def test_notify_on_llm_retry(
         file_store=InMemoryFileStore({}),
         config=config,
         sio=mock_sio,
-        user_id='..uid..',
+        user_id='..user_id..',
     )
     session.queue_status_message = AsyncMock()
 

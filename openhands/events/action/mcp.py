@@ -21,7 +21,6 @@ class McpAction(Action):
         arguments: str,
         sid: str | None = None,
         thought: str = '',
-        **kwargs,
     ):
         # Initialize first as Action with no args
         super().__init__()
@@ -30,6 +29,7 @@ class McpAction(Action):
         self.arguments = arguments
         self.sid = sid
         self.thought = thought
+        self.action = ActionType.MCP
 
     @property
     def message(self) -> str:

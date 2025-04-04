@@ -3,8 +3,9 @@ import json
 import time
 from logging import LoggerAdapter
 from types import MappingProxyType
-from typing import Callable, cast
+from typing import Callable, Dict, cast
 
+from openhands.agenthub.codeact_agent.thought_manager import ThoughtManager
 from openhands.controller import AgentController
 from openhands.controller.agent import Agent
 from openhands.controller.replay import ReplayManager
@@ -26,7 +27,7 @@ from openhands.runtime.base import Runtime
 from openhands.runtime.impl.remote.remote_runtime import RemoteRuntime
 from openhands.security import SecurityAnalyzer, options
 from openhands.storage.files import FileStore
-from openhands.utils.async_utils import call_sync_from_async
+from openhands.utils.async_utils import EXECUTOR, call_sync_from_async
 from openhands.utils.shutdown_listener import should_continue
 
 WAIT_TIME_BEFORE_CLOSE = 90
@@ -53,6 +54,8 @@ class AgentSession:
     loop: asyncio.AbstractEventLoop | None = None
     logger: LoggerAdapter
     mnemonic: str | None
+    thought_managers: Dict[str, ThoughtManager] = {}
+
     def __init__(
         self,
         sid: str,
@@ -273,7 +276,7 @@ class AgentSession:
             end_state.save_to_session(self.sid, self.file_store, self.user_id)
             await self.controller.close()
         if self.runtime is not None:
-            self.runtime.close()
+            EXECUTOR.submit(self.runtime.close)
         if self.security_analyzer is not None:
             await self.security_analyzer.close()
 
@@ -393,11 +396,8 @@ class AgentSession:
             return False
 
         if selected_repository and git_provider_tokens:
-            await call_sync_from_async(
-                self.runtime.clone_repo,
-                git_provider_tokens,
-                selected_repository,
-                selected_branch,
+            await self.runtime.clone_repo(
+                git_provider_tokens, selected_repository, selected_branch
             )
             await call_sync_from_async(self.runtime.maybe_run_setup_script)
 
@@ -462,6 +462,12 @@ class AgentSession:
             initial_state=self._maybe_restore_state(),
             replay_events=replay_events,
         )
+
+        # Initialize the thought manager for this agent
+        agent_id = agent.name
+        if agent_id not in self.thought_managers:
+            self.thought_managers[agent_id] = ThoughtManager()
+        controller.thought_manager = self.thought_managers[agent_id]
 
         return controller
 

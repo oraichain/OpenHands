@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Protocol
 
 from openhands.core.exceptions import LLMMalformedActionError
 from openhands.events.action.action import Action
@@ -6,8 +6,10 @@ from openhands.events.action.agent import (
     AgentDelegateAction,
     AgentFinishAction,
     AgentRejectAction,
+    AgentSequentialThinkAction,
     AgentThinkAction,
     ChangeAgentStateAction,
+    CondensationAction,
     RecallAction,
 )
 from openhands.events.action.browse import BrowseInteractiveAction, BrowseURLAction
@@ -24,7 +26,12 @@ from openhands.events.action.files import (
 from openhands.events.action.mcp import McpAction
 from openhands.events.action.message import MessageAction
 
-actions = (
+
+class ActionClass(Protocol):
+    action: str
+
+
+actions = [
     NullAction,
     CmdRunAction,
     IPythonRunCellAction,
@@ -34,6 +41,7 @@ actions = (
     FileWriteAction,
     FileEditAction,
     AgentThinkAction,
+    AgentSequentialThinkAction,
     AgentFinishAction,
     AgentRejectAction,
     AgentDelegateAction,
@@ -41,9 +49,15 @@ actions = (
     ChangeAgentStateAction,
     MessageAction,
     McpAction,
-)
+    CondensationAction,
+]
 
-ACTION_TYPE_TO_CLASS = {action_class.action: action_class for action_class in actions}  # type: ignore[attr-defined]
+# Each action class in 'actions' has an 'action' attribute
+# This is used to serialize and deserialize the action to and from a dictionary
+ACTION_TYPE_TO_CLASS = {
+    action_class.action: action_class  # type: ignore[attr-defined]
+    for action_class in actions  # type: ignore[attr-defined]
+}
 
 
 def handle_action_deprecated_args(args: dict[str, Any]) -> dict[str, Any]:
@@ -67,7 +81,8 @@ def handle_action_deprecated_args(args: dict[str, Any]) -> dict[str, Any]:
                 import ast
 
                 # Extract the dictionary string between the prefix and the closing parentheses
-                dict_str = code[len(file_editor_prefix) : -2]  # Remove prefix and '))'
+                # Remove prefix and '))'
+                dict_str = code[len(file_editor_prefix) : -2]
                 file_args = ast.literal_eval(dict_str)
 
                 # Update args with the extracted file editor arguments

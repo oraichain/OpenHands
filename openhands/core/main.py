@@ -110,7 +110,7 @@ async def run_controller(
 
         # Initialize repository if needed
         if config.sandbox.selected_repo:
-            repo_directory = initialize_repository_for_runtime(
+            repo_directory = await initialize_repository_for_runtime(
                 runtime,
                 selected_repository=config.sandbox.selected_repo,
             )
@@ -211,7 +211,7 @@ async def run_controller(
             file_path = config.save_trajectory_path
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         histories = controller.get_trajectory(config.save_screenshots_in_trajectory)
-        with open(file_path, 'w') as f:
+        with open(file_path, 'w') as f:  # noqa: ASYNC101
             json.dump(histories, f, indent=4)
 
     return state

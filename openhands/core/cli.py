@@ -172,7 +172,7 @@ async def main(loop: asyncio.AbstractEventLoop):
     # Initialize repository if needed
     repo_directory = None
     if config.sandbox.selected_repo:
-        repo_directory = initialize_repository_for_runtime(
+        repo_directory = await initialize_repository_for_runtime(
             runtime,
             selected_repository=config.sandbox.selected_repo,
         )

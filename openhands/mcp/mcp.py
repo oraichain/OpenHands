@@ -101,7 +101,7 @@ class MCPClients(ToolCollection):
         )
 
         logger.info('Connected to MCP server with client session')
-        
+
         await self._initialize_and_list_tools()
 
     async def connect_stdio(self, command: str, args: List[str]) -> None:

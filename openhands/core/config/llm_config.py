@@ -79,11 +79,13 @@ class LLMConfig(BaseModel):
     disable_vision: bool | None = Field(default=None)
     caching_prompt: bool = Field(default=True)
     log_completions: bool = Field(default=False)
-    log_completions_folder: str = Field(default=os.path.join(LOG_DIR, 'completions'))
+    log_completions_folder: str = Field(
+        default=os.path.join(LOG_DIR, 'completions'))
     custom_tokenizer: str | None = Field(default=None)
     native_tool_calling: bool | None = Field(default=None)
     reasoning_effort: str | None = Field(default='high')
     seed: int | None = Field(default=None)
+    for_routing: bool = Field(default=False)
 
     model_config = {'extra': 'forbid'}
 
