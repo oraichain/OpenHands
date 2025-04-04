@@ -17,14 +17,13 @@ import time
 import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from zipfile import ZipFile
 
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import APIKeyHeader
-from mcp.types import ImageContent
 from openhands_aci.editor.editor import OHEditor
 from openhands_aci.editor.exceptions import ToolError
 from openhands_aci.editor.results import ToolResult
@@ -63,6 +62,8 @@ from openhands.events.observation.playwright_mcp import (
     PlaywrightMcpBrowserScreenshotObservation,
 )
 from openhands.events.serialization import event_from_dict, event_to_dict
+from openhands.mcp.mcp_agent import MCPAgent
+from openhands.mcp.mcp_base import ExtendedImageContent
 from openhands.mcp.mcp_base import ToolResult as MCPToolResult
 from openhands.runtime.browser import browse
 from openhands.runtime.browser.browser_env import BrowserEnv
@@ -79,7 +80,6 @@ class ActionRequest(BaseModel):
     action: dict
     sse_mcp_config: Optional[list[str]] = None
     stdio_mcp_config: Optional[tuple[list[str], list[list[str]]]] = None
-    caller_platform: str = 'Linux'
 
 
 ROOT_GID = 0
@@ -158,7 +158,6 @@ class ActionExecutor:
         username: str,
         user_id: int,
         browsergym_eval_env: str | None,
-        runtime_mode: str,
     ) -> None:
         self.plugins_to_load = plugins_to_load
         self._initial_cwd = work_dir
@@ -180,7 +179,7 @@ class ActionExecutor:
         self.start_time = time.time()
         self.last_execution_time = self.start_time
         self._initialized = False
-        self.runtime_mode = runtime_mode
+        self.mcp_agents: List[MCPAgent] | None = None
 
         self.max_memory_gb: int | None = None
         if _override_max_memory_gb := os.environ.get('RUNTIME_MAX_MEMORY_GB', None):
@@ -196,6 +195,8 @@ class ActionExecutor:
             in ['true', '1', 'yes']
         )
         self.memory_monitor.start_monitoring()
+        self.sse_mcp_servers: Optional[list[str]] = None
+        self.stdio_mcp_config: Optional[tuple[list[str], list[list[str]]]] = None
 
     @property
     def initial_cwd(self):
@@ -203,9 +204,10 @@ class ActionExecutor:
 
     def process_request(self, action_request: ActionRequest):
         # update the sse_mcp_servers and stdio_mcp_config to prepare for MCP action if needed
-        self.sse_mcp_servers = action_request.sse_mcp_config
-        self.stdio_mcp_config = action_request.stdio_mcp_config
-        self.caller_platform = action_request.caller_platform
+        if action_request.sse_mcp_config:
+            self.sse_mcp_servers = action_request.sse_mcp_config
+        if action_request.stdio_mcp_config:
+            self.stdio_mcp_config = action_request.stdio_mcp_config
 
     async def _init_browser_async(self):
         """Initialize the browser asynchronously."""
@@ -537,14 +539,20 @@ class ActionExecutor:
             raise ValueError('No MCP servers or stdio MCP config found')
 
         logger.debug(f'SSE MCP servers: {mcp_server_urls}')
-        mcp_agents = await create_mcp_agents(mcp_server_urls, commands, args)
+        if self.mcp_agents is None:
+            self.mcp_agents = await create_mcp_agents(
+                mcp_server_urls, commands, args, sid=action.sid
+            )
+        mcp_agents = self.mcp_agents
         logger.debug(f'MCP action received: {action}')
         # Find the MCP agent that has the matching tool name
         matching_agent = None
         logger.debug(f'MCP agents: {mcp_agents}')
         logger.debug(f'MCP action name: {action.name}')
         for agent in mcp_agents:
+            agent.mcp_clients.tools
             if action.name in [tool.name for tool in agent.mcp_clients.tools]:
+                logger.debug(f'agent.mcp_clients.tools: {agent.mcp_clients.tools}')
                 matching_agent = agent
                 break
         if matching_agent is None:
@@ -555,11 +563,9 @@ class ActionExecutor:
         args_dict = json.loads(action.arguments)
         response = await matching_agent.run_tool(action.name, args_dict)
         logger.debug(f'MCP response: {response}')
-
-        # close agent connections
-        for agent in mcp_agents:
-            await agent.cleanup()
-
+        # # close agent connections
+        # for agent in mcp_agents:
+        #     await agent.cleanup()
         # special case for browser screenshot of playwright_mcp
         if action.name == 'browser_screenshot':
             return self.playwright_mcp_browser_screenshot(action, response)
@@ -578,7 +584,8 @@ class ActionExecutor:
             "url": "https://www.google.com"
         }
         """
-        screenshot_content: ImageContent = response.output
+        screenshot_content: ExtendedImageContent = response.output
+        logger.debug(f'Screenshot content: {screenshot_content}')
         return PlaywrightMcpBrowserScreenshotObservation(
             content=f'{response}',
             url=screenshot_content.url if screenshot_content.url is not None else '',
@@ -634,7 +641,6 @@ if __name__ == '__main__':
             username=args.username,
             user_id=args.user_id,
             browsergym_eval_env=args.browsergym_eval_env,
-            runtime_mode=args.runtime_mode,
         )
         await client.ainit()
         yield

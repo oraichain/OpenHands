@@ -15,6 +15,19 @@ import {
 import { openHands } from "./open-hands-axios";
 import { ApiSettings, PostApiSettings } from "#/types/settings";
 
+interface VerifySignatureResponse {
+  user: {
+    id: string;
+    publicAddress: string;
+  };
+  token: string;
+}
+
+interface VerifySignatureRequest {
+  signature: string;
+  message: string;
+}
+
 class OpenHands {
   /**
    * Retrieve the list of models available
@@ -357,6 +370,43 @@ class OpenHands {
     const endpoint =
       appMode === "saas" ? "/api/logout" : "/api/unset-settings-tokens";
     await openHands.post(endpoint);
+  }
+
+  /**
+   * Verify user's wallet signature and get JWT token
+   * @param signature The signature from MetaMask
+   * @param publicAddress The public address of the user's wallet
+   * @returns The user's public key and JWT token
+   */
+  static async verifySignature(
+    signature: string,
+    publicAddress: string,
+  ): Promise<VerifySignatureResponse> {
+    const { data } = await openHands.post<VerifySignatureResponse>(
+      "/api/auth/signup",
+      {
+        signature,
+        publicAddress,
+      },
+    );
+    return data;
+  }
+
+  /**
+   * Get the address for the given network
+   * @param network The network to get the address for
+   * @returns The address for the given network
+   */
+  static async getAddressByNetwork(network: string | number): Promise<string> {
+    try {
+      const { data } = await openHands.get<string>(
+        `/api/auth/address-by-network/${network}`,
+      );
+      return data;
+    } catch (error) {
+      console.error("getAddressByNetwork", error);
+      return "";
+    }
   }
 }
 

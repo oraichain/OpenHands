@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Callable
 from urllib.parse import urlparse
 
+import jwt
 from fastapi import Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,8 +12,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from starlette.types import ASGIApp
 
+from openhands.core.logger import openhands_logger as logger
 from openhands.server import shared
 from openhands.server.auth import get_user_id
+from openhands.server.routes.auth import JWT_SECRET
 from openhands.server.types import SessionMiddlewareInterface
 
 
@@ -76,6 +79,8 @@ class InMemoryRateLimiter:
         self.history[key] = [ts for ts in self.history[key] if ts > cutoff]
 
     async def __call__(self, request: Request) -> bool:
+        if request.client is None:
+            return True
         key = request.client.host
         now = datetime.now()
 
@@ -207,3 +212,51 @@ class GitHubTokenMiddleware(SessionMiddlewareInterface):
                 request.state.provider_tokens = None
 
         return await call_next(request)
+
+
+class JWTAuthMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp):
+        super().__init__(app)
+        # TODO: update this to include all public paths "/api/settings",
+        self.public_paths = [
+            '/api/auth/signup',
+            '/alive',
+            '/server_info',
+            '/api/options/config',
+            '/api/options/models',
+            '/api/options/agents',
+            '/api/options/security-analyzers',
+        ]
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in self.public_paths:
+            return await call_next(request)
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={'detail': 'Missing or invalid authorization header'},
+            )
+
+        token = auth_header.split(' ')[1]
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            request.state.user_id = payload['sub']
+            return await call_next(request)
+        except jwt.ExpiredSignatureError:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={'detail': 'Token has expired'},
+            )
+        except jwt.InvalidTokenError:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={'detail': 'Invalid token'},
+            )
+        except Exception as e:
+            logger.error(f'Error processing JWT token: {str(e)}')
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={'detail': 'Internal server error'},
+            )

@@ -7,6 +7,7 @@ from openhands.server.middleware import (
     CacheControlMiddleware,
     GitHubTokenMiddleware,
     InMemoryRateLimiter,
+    JWTAuthMiddleware,
     LocalhostCORSMiddleware,
     RateLimitMiddleware,
 )
@@ -15,6 +16,9 @@ from openhands.server.static import SPAStaticFiles
 base_app.mount(
     '/', SPAStaticFiles(directory='./frontend/build', html=True), name='dist'
 )
+
+# Add middleware to the base app - need to be added before the other middlewares
+base_app.add_middleware(JWTAuthMiddleware)
 
 base_app.add_middleware(
     LocalhostCORSMiddleware,

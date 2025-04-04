@@ -1,13 +1,3 @@
-import React from "react";
-import {
-  Modal,
-  Tabs,
-  Tab,
-  ModalContent,
-  ModalBody,
-  ModalHeader,
-  ModalFooter,
-} from "@heroui/react";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { HelpLink } from "#/components/features/settings/help-link";
 import { KeyStatusIcon } from "#/components/features/settings/key-status-icon";
@@ -22,15 +12,17 @@ import { useConfig } from "#/hooks/query/use-config";
 import { useSettings } from "#/hooks/query/use-settings";
 import { AvailableLanguages } from "#/i18n";
 import { DEFAULT_SETTINGS } from "#/services/settings";
+import {
+  displayErrorToast,
+  displaySuccessToast,
+} from "#/utils/custom-toast-handlers";
 import { handleCaptureConsent } from "#/utils/handle-capture-consent";
 import { hasAdvancedSettingsSet } from "#/utils/has-advanced-settings-set";
 import { isCustomModel } from "#/utils/is-custom-model";
 import { organizeModelsAndProviders } from "#/utils/organize-models-and-providers";
 import { retrieveAxiosErrorMessage } from "#/utils/retrieve-axios-error-message";
-import {
-  displayErrorToast,
-  displaySuccessToast,
-} from "#/utils/custom-toast-handlers";
+import { Modal, ModalBody, ModalContent, Tab, Tabs } from "@heroui/react";
+import React from "react";
 import { useNavigate } from "react-router";
 
 const REMOTE_RUNTIME_OPTIONS = [
@@ -46,6 +38,7 @@ const AccountSettings = () => {
     isFetched,
     isSuccess: isSuccessfulSettings,
   } = useSettings();
+
   const { data: config } = useConfig();
   const {
     data: resources,
@@ -55,6 +48,7 @@ const AccountSettings = () => {
   const { mutate: saveSettings } = useSaveSettings();
 
   const isFetching = isFetchingSettings || isFetchingResources;
+  console.log("isFetching", isFetching);
   const isSuccess = isSuccessfulSettings && isSuccessfulResources;
   const isSaas = config?.APP_MODE === "saas";
   const shouldHandleSpecialSaasCase =
@@ -64,11 +58,14 @@ const AccountSettings = () => {
     if (shouldHandleSpecialSaasCase) return true;
     if (isSuccess) {
       return (
-        isCustomModel(resources.models, settings.LLM_MODEL) ||
+        isCustomModel(resources.models, settings?.LLM_MODEL || "") ||
         hasAdvancedSettingsSet({
           ...settings,
-          PROVIDER_TOKENS: settings.PROVIDER_TOKENS || {},
-        })
+          PROVIDER_TOKENS: settings?.PROVIDER_TOKENS || {
+            github: "",
+            gitlab: "",
+          },
+        } as any)
       );
     }
     return false;
@@ -358,7 +355,7 @@ const AccountSettings = () => {
                 key: language.value,
                 label: language.label,
               }))}
-              defaultSelectedKey={settings.LANGUAGE}
+              defaultSelectedKey={settings?.LANGUAGE}
               isClearable={false}
             />
             <div className="flex flex-col md:flex-row md:items-center gap-8">

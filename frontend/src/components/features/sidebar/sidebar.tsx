@@ -1,31 +1,33 @@
-import React from "react";
-import { useDispatch } from "react-redux";
-import posthog from "posthog-js";
-import { NavLink, useLocation } from "react-router";
-import { useGitHubUser } from "#/hooks/query/use-github-user";
-import { UserActions } from "./user-actions";
+import DepositModal from "#/components/features/modalDeposit/DepositModal";
 import { AllHandsLogoButton } from "#/components/shared/buttons/all-hands-logo-button";
-import { DocsButton } from "#/components/shared/buttons/docs-button";
 import { ExitProjectButton } from "#/components/shared/buttons/exit-project-button";
 import { SettingsButton } from "#/components/shared/buttons/settings-button";
-import { SettingsModal } from "#/components/shared/modals/settings/settings-modal";
-import { useSettings } from "#/hooks/query/use-settings";
-import { ConversationPanel } from "../conversation-panel/conversation-panel";
-import { useEndSession } from "#/hooks/use-end-session";
-import { setCurrentAgentState } from "#/state/agent-slice";
-import { AgentState } from "#/types/agent-state";
 import { TooltipButton } from "#/components/shared/buttons/tooltip-button";
-import { ConversationPanelWrapper } from "../conversation-panel/conversation-panel-wrapper";
+import { SettingsModal } from "#/components/shared/modals/settings/settings-modal";
 import { useLogout } from "#/hooks/mutation/use-logout";
 import { useConfig } from "#/hooks/query/use-config";
-import { cn } from "#/utils/utils";
-import { displayErrorToast } from "#/utils/custom-toast-handlers";
+import { useSettings } from "#/hooks/query/use-settings";
+import { useEndSession } from "#/hooks/use-end-session";
 import ChatIcon from "#/icons/chat-icon.svg?react";
+import { setCurrentAgentState } from "#/state/agent-slice";
+import { AgentState } from "#/types/agent-state";
+import { displayErrorToast } from "#/utils/custom-toast-handlers";
+import { cn } from "#/utils/utils";
+import posthog from "posthog-js";
+import React from "react";
+import { MdAccountBalanceWallet } from "react-icons/md";
+import { useDispatch } from "react-redux";
+import { NavLink, useLocation } from "react-router";
+import { useAccount } from "wagmi";
+import { ConversationPanel } from "../conversation-panel/conversation-panel";
+import { ConversationPanelWrapper } from "../conversation-panel/conversation-panel-wrapper";
+import { UserActions } from "./user-actions";
+
 export function Sidebar() {
   const location = useLocation();
   const dispatch = useDispatch();
   const endSession = useEndSession();
-  const user = useGitHubUser();
+  // const user = useGitHubUser();
   const { data: config } = useConfig();
   const {
     data: settings,
@@ -36,7 +38,7 @@ export function Sidebar() {
   const { mutateAsync: logout } = useLogout();
 
   const [settingsModalIsOpen, setSettingsModalIsOpen] = React.useState(false);
-
+  const [depositModalIsOpen, setDepositModalIsOpen] = React.useState(false);
   const [conversationPanelIsOpen, setConversationPanelIsOpen] =
     React.useState(false);
 
@@ -78,6 +80,7 @@ export function Sidebar() {
     await logout();
     posthog.reset();
   };
+  const account = useAccount();
 
   return (
     <>
@@ -87,46 +90,48 @@ export function Sidebar() {
             <div className="flex items-center justify-center">
               <AllHandsLogoButton onClick={handleEndSession} />
             </div>
-            <ExitProjectButton
-              onClick={handleEndSession}
-              isActive={location.pathname === "/" && !conversationPanelIsOpen}
-            />
-            <TooltipButton
-              testId="toggle-conversation-panel"
-              tooltip="Conversations"
-              className={cn(
-                "w-10 h-10 rounded-lg p-2 flex items-center justify-center",
-                conversationPanelIsOpen && "bg-[#262525]",
-              )}
-              ariaLabel="Conversations"
-              onClick={() => setConversationPanelIsOpen((prev) => !prev)}
-            >
-              <ChatIcon
-                className={cn(
-                  "opacity-50 transition-colors",
-                  conversationPanelIsOpen && "opacity-100",
-                )}
-              />
-            </TooltipButton>
+            <ExitProjectButton onClick={handleEndSession} />
+            {account?.address && (
+              <TooltipButton
+                testId="toggle-conversation-panel"
+                tooltip="Conversations"
+                ariaLabel="Conversations"
+                onClick={() => setConversationPanelIsOpen((prev) => !prev)}
+              >
+                <ChatIcon
+                  className={cn(
+                    "opacity-50 transition-colors",
+                    conversationPanelIsOpen && "opacity-100",
+                  )}
+                />
+              </TooltipButton>
+            )}
           </div>
 
-          <div className="flex flex-row md:flex-col items-center gap-[26px] max-md:gap-3 md:mb-4">
-            <DocsButton />
-            <UserActions
-              user={
-                user.data ? { avatar_url: user.data.avatar_url } : undefined
-              }
-              onLogout={handleLogout}
-              isLoading={user.isFetching}
-            />
+          <div className="flex flex-row md:flex-col md:items-center gap-[26px] md:mb-4">
+            {/* <DocsButton /> */}
+            {account?.address && (
+              <TooltipButton
+                testId="toggle-deposit-modal"
+                tooltip="Deposit"
+                ariaLabel="Deposit"
+                onClick={() => setDepositModalIsOpen(true)}
+              >
+                <MdAccountBalanceWallet
+                  size={22}
+                  className="text-[#9099AC] hover:text-white transition-colors"
+                />
+              </TooltipButton>
+            )}
             <NavLink
               to="/settings"
               className={({ isActive }) =>
-                isActive ? "text-[#EFEFEF] h-6" : "text-[#595B57] h-6"
+                `${isActive ? "text-white" : "text-[#9099AC]"} mt-0.5 md:mt-0`
               }
             >
               <SettingsButton />
             </NavLink>
+            <UserActions onLogout={handleLogout} isLoading={false} />
           </div>
         </nav>
 
@@ -145,6 +150,11 @@ export function Sidebar() {
           onClose={() => setSettingsModalIsOpen(false)}
         />
       )}
+
+      <DepositModal
+        isOpen={depositModalIsOpen}
+        onClose={() => setDepositModalIsOpen(false)}
+      />
     </>
   );
 }
