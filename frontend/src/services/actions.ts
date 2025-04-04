@@ -91,7 +91,11 @@ const messageActions = {
 };
 
 export function handleActionMessage(message: ActionMessage) {
-  if (message.args?.hidden || !message.args?.displayable) {
+  if (
+    message.args?.hidden ||
+    (typeof message.args?.displayable === "boolean" &&
+      message.args?.displayable === false)
+  ) {
     return;
   }
 
@@ -120,7 +124,6 @@ export function handleActionMessage(message: ActionMessage) {
     store.dispatch(appendSecurityAnalyzerInput(message));
   }
 
-
   if (message.source === "agent") {
     if (message.args && message.args.thought) {
       store.dispatch(addAssistantMessage(message.args.thought));
@@ -131,6 +134,7 @@ export function handleActionMessage(message: ActionMessage) {
   }
 
   if (message.action in messageActions) {
+    console.log("1111111-2222222222🚀 ~ action message:", message.action);
     const actionFn =
       messageActions[message.action as keyof typeof messageActions];
     actionFn(message);
