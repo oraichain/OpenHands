@@ -2,6 +2,7 @@ import json
 
 from litellm import ModelResponse
 
+from openhands.controller.state.plan import Plan
 from openhands.core.config.agent_config import AgentConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import ImageContent, Message, TextContent
@@ -203,7 +204,6 @@ class ConversationMemory:
                 BrowseInteractiveAction,
                 BrowseURLAction,
                 McpAction,
-                CreatePlanAction,
             ),
         ) or (isinstance(action, CmdRunAction) and action.source == 'agent'):
             tool_metadata = action.tool_call_metadata
@@ -257,7 +257,7 @@ class ConversationMemory:
             return [
                 Message(
                     role=role,  # type: ignore[arg-type]
-                    content=[TextContent(text=action.thought)],
+                    content=[TextContent(text=action.final_thought)],
                 )
             ]
         elif isinstance(action, MessageAction):
@@ -265,8 +265,12 @@ class ConversationMemory:
             content = [TextContent(text=action.content or '')]
             if vision_is_active and action.image_urls:
                 content.append(ImageContent(image_urls=action.image_urls))
+            elif all(isinstance(c, TextContent) and not c.text for c in content):
+                return []
+
             if role not in ('user', 'system', 'assistant', 'tool'):
                 raise ValueError(f'Invalid role: {role}')
+
             return [
                 Message(
                     role=role,  # type: ignore[arg-type]
@@ -285,6 +289,37 @@ class ConversationMemory:
             ]
         elif isinstance(action, AssignTaskAction):
             return [Message(role='user', content=[TextContent(text=action.message)])]
+
+        elif isinstance(action, CreatePlanAction):
+            tool_metadata = action.tool_call_metadata
+            assert tool_metadata is not None, (
+                'Tool call metadata should NOT be None when function calling is enabled. Action: '
+                + str(action)
+            )
+
+            model_response: ModelResponse = tool_metadata.model_response
+            assistant_msg = getattr(model_response.choices[0], 'message')
+            content = assistant_msg.content or ''
+
+            args = eval(assistant_msg.tool_calls[0].function.arguments)
+            if 'command' in args:
+                del args['command']
+
+            plan = Plan(**args)
+
+            return [
+                Message(
+                    role='assistant',  # type: ignore[arg-type]
+                    content=[
+                        TextContent(
+                            text=(
+                                content + '\n' + json.dumps(plan.to_dict(), indent=2)
+                            ).strip()
+                        )
+                    ],
+                )
+            ]
+
         return []
 
     def _process_observation(

@@ -50,7 +50,12 @@ class PlannerAgent(Agent):
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
-        built_in_tools = planning_function_calling.get_tools(llm=self.llm)
+        built_in_tools = planning_function_calling.get_tools(
+            codeact_enable_browsing=self.config.codeact_enable_browsing,
+            codeact_enable_jupyter=self.config.codeact_enable_jupyter,
+            codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
+            llm=self.llm,
+        )
 
         self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
 
@@ -106,7 +111,11 @@ class PlannerAgent(Agent):
 
         # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
-        response = self.llm.completion(**params)
+        try:
+            response = self.llm.completion(**params)
+        except Exception:
+            logger.warning(f"Error in LLM completion: {params['messages']}")
+
         logger.debug(f'Response from LLM: {response}')
         actions = planning_function_calling.response_to_actions(response)
         logger.debug(f'Actions after response_to_actions: {actions}')

@@ -82,9 +82,7 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
 
             # logs all tool names
             logger.warning(
-                f"""========================= PLANNER AGENT =========================
-                Tool name in function_calling.py: {tool_call.function.name}
-                """
+                f'==== PLANNER AGENT : Tool name in function_calling.py: {tool_call.function.name} ========================='
             )
 
             # ================================================
@@ -110,7 +108,16 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                     )
                 action = IPythonRunCellAction(code=arguments['code'])
 
-                # ================================================
+            # ================================================
+            # AgentFinishAction
+            # ================================================
+            elif tool_call.function.name == FinishTool['function']['name']:
+                action = AgentFinishAction(
+                    final_thought=arguments.get('message', ''),
+                    task_completed=arguments.get('task_completed', None),
+                )
+
+            # ================================================
             # LLMBasedFileEditTool (LLM-based file editor, deprecated)
             # ================================================
             elif tool_call.function.name == LLMBasedFileEditTool['function']['name']:
@@ -162,26 +169,6 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                         impl_source=FileEditSource.OH_ACI,
                         **other_kwargs,
                     )
-
-            # ================================================
-            # CreatePlanAction
-            # ================================================
-            if tool_call.function.name == PlanningTool['function']['name']:
-                action = CreatePlanAction(
-                    plan_id=arguments.get('plan_id', ''),
-                    title=arguments.get('title', ''),
-                    tasks=arguments.get('tasks', []),
-                )
-
-            # ================================================
-            # AgentFinishAction
-            # ================================================
-            elif tool_call.function.name == FinishTool['function']['name']:
-                action = AgentFinishAction(
-                    final_thought=arguments.get('message', ''),
-                    task_completed=arguments.get('task_completed', None),
-                )
-
             # ================================================
             # AgentThinkAction
             # ================================================
@@ -207,6 +194,16 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                         f'Missing required argument "url" in tool call {tool_call.function.name}'
                     )
                 action = BrowseURLAction(url=arguments['url'])
+
+            # ================================================
+            # CreatePlanAction
+            # ================================================
+            elif tool_call.function.name == PlanningTool['function']['name']:
+                action = CreatePlanAction(
+                    plan_id=arguments.get('plan_id', ''),
+                    title=arguments.get('title', ''),
+                    tasks=arguments.get('tasks', []),
+                )
 
             # ================================================
             # Other cases -> McpTool (MCP)
@@ -246,6 +243,9 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
 
 
 def get_tools(
+    codeact_enable_browsing: bool = False,
+    codeact_enable_llm_editor: bool = False,
+    codeact_enable_jupyter: bool = False,
     llm: LLM | None = None,
 ) -> list[ChatCompletionToolParam]:
     SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
@@ -258,20 +258,22 @@ def get_tools(
         )
 
     tools = [
+        PlanningTool,
         create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
         ThinkTool,
         FinishTool,
-        PlanningTool,
     ]
-
-    # tools.append(IPythonTool)
-
-    # if codeact_enable_llm_editor:
-    #     tools.append(LLMBasedFileEditTool)
-    # else:
-    tools.append(
-        create_str_replace_editor_tool(
-            use_simplified_description=use_simplified_tool_desc
+    # if codeact_enable_browsing:
+    #     tools.append(WebReadTool)
+    #     tools.append(BrowserTool)
+    if codeact_enable_jupyter:
+        tools.append(IPythonTool)
+    if codeact_enable_llm_editor:
+        tools.append(LLMBasedFileEditTool)
+    else:
+        tools.append(
+            create_str_replace_editor_tool(
+                use_simplified_description=use_simplified_tool_desc
+            )
         )
-    )
     return tools

@@ -20,9 +20,9 @@ class DebugMixin:
         )
 
         if debug_message:
-            llm_prompt_logger.warning('#' * 20 + ' BEGINNING PROMPT ' + '#' * 20)
-            llm_prompt_logger.warning(debug_message)
-            llm_prompt_logger.warning('#' * 20 + ' END PROMPT ' + '#' * 20)
+            llm_prompt_logger.debug('#' * 20 + ' BEGINNING PROMPT ' + '#' * 20)
+            llm_prompt_logger.debug(debug_message)
+            llm_prompt_logger.debug('#' * 20 + ' END PROMPT ' + '#' * 20)
         else:
             logger.warning('No completion messages!')
 
@@ -33,8 +33,10 @@ class DebugMixin:
     def _format_message_content(self, message: dict[str, Any]):
         content = message['content']
         if isinstance(content, list):
-            return '\n'.join(
-                self._format_content_element(element) for element in content
+            return (
+                f"========================={message['role'].upper()}========================\n"
+                '\n'.join(self._format_content_element(element) for element in content)
+                + '\n=========================================================='
             )
         return (
             f"========================={message['role'].upper()}========================\n"

@@ -98,10 +98,13 @@ class PlanController:
         AgentStateChangedObservation,
         PlanStatusObservation,
         MarkTaskAction,
-        AssignTaskAction,
     )
     # pass type of events that should be passed to the agent when delegate agents are resolving tasks
-    pass_type: ClassVar[tuple[type[Event], ...]] = (AgentFinishAction,)
+    pass_type: ClassVar[tuple[type[Event], ...]] = (
+        AgentFinishAction,
+        CreatePlanAction,
+        AssignTaskAction,
+    )
     _cached_first_user_message: MessageAction | None = None
 
     # task_controllers
@@ -469,14 +472,12 @@ class PlanController:
         # Give others a little chance
         await asyncio.sleep(0.01)
 
-        # if the event is not filtered out and tasks are not resolved by delegate agent, add it to the history
+        # if the event is not filtered out, add it to the history based on conditions
         if not any(isinstance(event, filter_type) for filter_type in self.filter_out):
-            if not self._is_awaiting_for_task_resolving():
+            if (not self._is_awaiting_for_task_resolving()) or (
+                any(isinstance(event, pass_type) for pass_type in self.pass_type)
+            ):
                 self.state.history.append(event)
-            elif any(isinstance(event, pass_type) for pass_type in self.pass_type):
-                self.state.history.append(event)
-            else:
-                pass
 
         if isinstance(event, Action):
             await self._handle_action(event)
@@ -538,6 +539,10 @@ class PlanController:
 
                 # delete the controller corresponding to the task
                 if self.state.active_plan_id in self.task_controllers:
+                    await self.task_controllers[self.state.active_plan_id][
+                        self.state.current_task_index
+                    ].close(set_stop_state=False)
+
                     del self.task_controllers[self.state.active_plan_id][
                         self.state.current_task_index
                     ]
@@ -1246,9 +1251,9 @@ class PlanController:
 
         YOUR CURRENT TASK:
         You are now working on task {action.task_index}: "{assign_plan.tasks[action.task_index].content}".
-        Please make it done as less steps as possible (preferably in max 5 steps).
+        Please make it done as less steps as possible. You only need to focus on this task and ignore the rest of the plan.
         Know that current time is {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.
-        """
+        """.strip()
 
         self.event_stream.add_event(
             MessageAction(content=assign_task_prompt, displayable=False),

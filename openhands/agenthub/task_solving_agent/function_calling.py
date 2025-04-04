@@ -81,9 +81,7 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
 
             # logs all tool names
             logger.warning(
-                f"""========================= TASK SOLVING AGENT =========================
-                Tool name in function_calling.py: {tool_call.function.name}
-                """
+                f'==== PLANNER AGENT : Tool name in function_calling.py: {tool_call.function.name} ========================='
             )
 
             # ================================================

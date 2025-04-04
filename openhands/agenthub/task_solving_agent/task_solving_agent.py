@@ -107,7 +107,11 @@ class TaskSolvingAgent(Agent):
         params['tools'] = self.tools
         # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
-        response = self.llm.completion(**params)
+        try:
+            response = self.llm.completion(**params)
+        except Exception:
+            logger.warning(f"Error in LLM completion: {params['messages']}")
+
         logger.debug(f'Response from LLM: {response}')
         actions = task_solving_function_calling.response_to_actions(response)
         logger.debug(f'Actions after response_to_actions: {actions}')

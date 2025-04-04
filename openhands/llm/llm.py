@@ -123,11 +123,11 @@ class LLM(RetryMixin, DebugMixin):
             warnings.simplefilter('ignore')
             self.init_model_info()
         if self.vision_is_active():
-            logger.debug('LLM: model has vision enabled')
+            logger.warning('LLM: model has vision enabled')
         if self.is_caching_prompt_active():
-            logger.debug('LLM: caching prompt enabled')
+            logger.warning('LLM: caching prompt enabled')
         if self.is_function_calling_active():
-            logger.debug('LLM: model supports function calling')
+            logger.warning('LLM: model supports function calling')
 
         # if using a custom tokenizer, make sure it's loaded and accessible in the format expected by litellm
         if self.config.custom_tokenizer is not None:
