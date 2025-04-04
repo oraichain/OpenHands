@@ -5,6 +5,11 @@ from uuid import UUID
 import docker
 import httpx
 import tenacity
+import os
+import random
+import json
+from urllib3.exceptions import MaxRetryError
+from requests.exceptions import ConnectionError, RequestException
 from docker.models.containers import Container
 
 from openhands.core.config import AppConfig
@@ -185,11 +190,6 @@ class DockerRuntime(ActionExecutionClient):
     @staticmethod
     def _init_docker_client() -> docker.DockerClient:
         try:
-            import os
-            import random
-            import json
-            from urllib3.exceptions import MaxRetryError
-            from requests.exceptions import ConnectionError, RequestException
             
             remote_docker_urls = os.getenv('API_REMOTE_DOCKER', '')
             try:

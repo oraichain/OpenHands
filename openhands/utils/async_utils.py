@@ -1,4 +1,5 @@
 import asyncio
+import os
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Coroutine, Iterable, List
@@ -70,7 +71,6 @@ async def wait_all(
     If multiple tasks raised exceptions, an AsyncException is raised containing all exceptions.
     """
     # Ensure base directory exists before starting tasks
-    import os
     base_dir = '/.openhands-state/sessions'
     os.makedirs(base_dir, exist_ok=True)
     
