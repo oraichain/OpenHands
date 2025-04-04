@@ -10,12 +10,11 @@ from litellm import (
     ModelResponse,
 )
 
-from openhands.agenthub.planner_agent.tools import (
+from openhands.agenthub.codeact_agent.tools import (
     BrowserTool,
     FinishTool,
     IPythonTool,
     LLMBasedFileEditTool,
-    PlanningTool,
     ThinkTool,
     WebReadTool,
     create_cmd_run_tool,
@@ -27,18 +26,18 @@ from openhands.core.exceptions import (
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import (
     Action,
+    AgentDelegateAction,
     AgentFinishAction,
     AgentThinkAction,
     BrowseInteractiveAction,
     BrowseURLAction,
     CmdRunAction,
-    CreatePlanAction,
     FileEditAction,
     FileReadAction,
     IPythonRunCellAction,
-    McpAction,
     MessageAction,
 )
+from openhands.events.action.mcp import McpAction
 from openhands.events.event import FileEditSource, FileReadSource
 from openhands.events.tool import ToolCallMetadata
 from openhands.llm import LLM
@@ -102,8 +101,22 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                         f'Missing required argument "code" in tool call {tool_call.function.name}'
                     )
                 action = IPythonRunCellAction(code=arguments['code'])
+            elif tool_call.function.name == 'delegate_to_browsing_agent':
+                action = AgentDelegateAction(
+                    agent='BrowsingAgent',
+                    inputs=arguments,
+                )
 
-                # ================================================
+            # ================================================
+            # AgentFinishAction
+            # ================================================
+            elif tool_call.function.name == FinishTool['function']['name']:
+                action = AgentFinishAction(
+                    final_thought=arguments.get('message', ''),
+                    task_completed=arguments.get('task_completed', None),
+                )
+
+            # ================================================
             # LLMBasedFileEditTool (LLM-based file editor, deprecated)
             # ================================================
             elif tool_call.function.name == LLMBasedFileEditTool['function']['name']:
@@ -155,26 +168,6 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                         impl_source=FileEditSource.OH_ACI,
                         **other_kwargs,
                     )
-
-            # ================================================
-            # CreatePlanAction
-            # ================================================
-            if tool_call.function.name == PlanningTool['function']['name']:
-                action = CreatePlanAction(
-                    plan_id=arguments.get('plan_id', ''),
-                    title=arguments.get('title', ''),
-                    tasks=arguments.get('tasks', []),
-                )
-
-            # ================================================
-            # AgentFinishAction
-            # ================================================
-            elif tool_call.function.name == FinishTool['function']['name']:
-                action = AgentFinishAction(
-                    final_thought=arguments.get('message', ''),
-                    task_completed=arguments.get('task_completed', None),
-                )
-
             # ================================================
             # AgentThinkAction
             # ================================================
@@ -239,6 +232,9 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
 
 
 def get_tools(
+    codeact_enable_browsing: bool = False,
+    codeact_enable_llm_editor: bool = False,
+    codeact_enable_jupyter: bool = False,
     llm: LLM | None = None,
 ) -> list[ChatCompletionToolParam]:
     SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
@@ -254,17 +250,18 @@ def get_tools(
         create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
         ThinkTool,
         FinishTool,
-        PlanningTool,
     ]
-
-    # tools.append(IPythonTool)
-
-    # if codeact_enable_llm_editor:
-    #     tools.append(LLMBasedFileEditTool)
-    # else:
-    tools.append(
-        create_str_replace_editor_tool(
-            use_simplified_description=use_simplified_tool_desc
+    # if codeact_enable_browsing:
+    #     tools.append(WebReadTool)
+    #     tools.append(BrowserTool)
+    # if codeact_enable_jupyter:
+    #     tools.append(IPythonTool)
+    if codeact_enable_llm_editor:
+        tools.append(LLMBasedFileEditTool)
+    else:
+        tools.append(
+            create_str_replace_editor_tool(
+                use_simplified_description=use_simplified_tool_desc
+            )
         )
-    )
     return tools

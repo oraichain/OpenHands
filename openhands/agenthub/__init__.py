@@ -10,6 +10,7 @@ from openhands.agenthub import (  # noqa: E402
     planner_agent,
     # visualbrowsing_agent,
     react_agent,
+    task_solving_agent,
 )
 
 # visualbrowsing_agent,
@@ -23,4 +24,5 @@ __all__ = [
     # 'visualbrowsing_agent',
     'react_agent',
     'planner_agent',
+    'task_solving_agent',
 ]

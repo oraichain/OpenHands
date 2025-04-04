@@ -1,7 +1,7 @@
 import os
 from collections import deque
 
-import openhands.agenthub.react_agent.function_calling as react_function_calling
+import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
@@ -22,23 +22,22 @@ from openhands.runtime.plugins import (
 from openhands.utils.prompt import PromptManager
 
 
-class ReActAgent(Agent):
+class TaskSolvingAgent(Agent):
     VERSION = '2.2'
     """
-    The ReAct Agent is a minimalist agent.
+    The Code Act Agent is a minimalist agent.
     The agent works by passing the model a list of action-observation pairs and prompting the model to take the next step.
 
     ### Overview
 
-    This agent implements the ReAct framework (Reasoning and Acting) that enables LLM agents to solve tasks through interleaved **reasoning** steps and **act**ions in a systematic manner for enhanced problem-solving capabilities.
+    This agent implements the CodeAct idea ([paper](https://arxiv.org/abs/2402.01030), [tweet](https://twitter.com/xingyaow_/status/1754556835703751087)) that consolidates LLM agents' **act**ions into a unified **code** action space for both *simplicity* and *performance* (see paper for more details).
 
     The conceptual idea is illustrated below. At each turn, the agent can:
 
     1. **Converse**: Communicate with humans in natural language to ask for clarification, confirmation, etc.
-    2. **ReAct**: Choose to perform the task through reasoning and acting
-    - Thought: Internal reasoning about the current state and planning next steps
-    - Action: Execute one of several available actions to gather information
-    - Observation: Process the results of actions to inform future reasoning
+    2. **CodeAct**: Choose to perform the task by executing code
+    - Execute any valid Linux `bash` command
+    - Execute any valid `Python` code with [an interactive Python interpreter](https://ipython.org/). This is simulated through `bash` command, see plugin system below for more details.
 
     ![image](https://github.com/All-Hands-AI/OpenHands/assets/38853559/92b622e3-72ad-4a61-8f41-8c040b6d5fb3)
 
@@ -55,7 +54,7 @@ class ReActAgent(Agent):
     def __init__(
         self, llm: LLM, config: AgentConfig, mcp_tools: list[dict] | None = None
     ) -> None:
-        """Initializes a new instance of the ReActAgent class.
+        """Initializes a new instance of the CodeActAgent class.
 
         Parameters:
         - llm (LLM): The llm to be used by this agent
@@ -66,14 +65,19 @@ class ReActAgent(Agent):
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
-        built_in_tools = react_function_calling.get_tools()
+        built_in_tools = codeact_function_calling.get_tools(
+            codeact_enable_browsing=self.config.codeact_enable_browsing,
+            codeact_enable_jupyter=self.config.codeact_enable_jupyter,
+            codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
+            llm=self.llm,
+        )
 
-        # self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
-        self.tools = built_in_tools
+        self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
+        # self.tools = built_in_tools
 
         # Retrieve the enabled tools
         logger.info(
-            f"TOOLS loaded for ReActAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
+            f"TOOLS loaded for CodeActAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
         )
         self.prompt_manager = PromptManager(
             prompt_dir=os.path.join(os.path.dirname(__file__), 'prompts'),
@@ -98,6 +102,8 @@ class ReActAgent(Agent):
         - state (State): used to get updated info
 
         Returns:
+        - CmdRunAction(command) - bash command to run
+        - IPythonRunCellAction(code) - IPython code to run
         - AgentDelegateAction(agent, inputs) - delegate action for (sub)task
         - MessageAction(content) - Message action to run (e.g. ask for clarification)
         - AgentFinishAction() - end the interaction
@@ -121,7 +127,7 @@ class ReActAgent(Agent):
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         response = self.llm.completion(**params)
         logger.debug(f'Response from LLM: {response}')
-        actions = react_function_calling.response_to_actions(response)
+        actions = codeact_function_calling.response_to_actions(response)
         logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
             self.pending_actions.append(action)

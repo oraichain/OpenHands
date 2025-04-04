@@ -50,7 +50,7 @@ class PlannerAgent(Agent):
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
-        built_in_tools = planning_function_calling.get_tools()
+        built_in_tools = planning_function_calling.get_tools(llm=self.llm)
 
         self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
 
