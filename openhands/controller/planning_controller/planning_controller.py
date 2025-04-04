@@ -561,6 +561,7 @@ class PlanController:
                     self.event_stream.add_event(
                         MessageAction(
                             content='All tasks are completed. Please accomplish the plan and send it to the user.',
+                            displayable=False,
                         ),
                         EventSource.USER,
                     )

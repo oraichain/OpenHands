@@ -59,7 +59,7 @@ class TaskSolvingAgent(Agent):
 
         # Retrieve the enabled tools
         logger.info(
-            f"TOOLS loaded for CodeActAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
+            f"TOOLS loaded for TaskSolvingAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
         )
         self.prompt_manager = PromptManager(
             prompt_dir=os.path.join(os.path.dirname(__file__), 'prompts'),

@@ -72,7 +72,7 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
         # Process each tool call to OpenHands action
         for i, tool_call in enumerate(assistant_msg.tool_calls):
             action: Action
-            logger.warning(f'Tool call in function_calling.py: {tool_call}')
+
             try:
                 arguments = json.loads(tool_call.function.arguments)
             except json.decoder.JSONDecodeError as e:
@@ -84,13 +84,6 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
             logger.warning(
                 f"""========================= PLANNER AGENT =========================
                 Tool name in function_calling.py: {tool_call.function.name}
-                create_cmd_run_tool()['function']['name']: {create_cmd_run_tool()['function']['name']}
-                IPythonTool['function']['name']: {IPythonTool['function']['name']}
-                LLMBasedFileEditTool['function']['name']: {LLMBasedFileEditTool['function']['name']}
-                FinishTool['function']['name']: {FinishTool['function']['name']}
-                WebReadTool['function']['name']: {WebReadTool['function']['name']}
-                LLMBasedFileEditTool['function']['name']: {LLMBasedFileEditTool['function']['name']}
-                create_str_replace_editor_tool()['function']['name']: {create_str_replace_editor_tool()['function']['name']}
                 """
             )
 
