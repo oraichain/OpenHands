@@ -3,7 +3,7 @@ from typing import Callable
 from uuid import UUID
 
 import docker
-import requests
+import httpx
 import tenacity
 from docker.models.containers import Container
 
@@ -35,6 +35,16 @@ EXECUTION_SERVER_PORT_RANGE = (30000, 39999)
 VSCODE_PORT_RANGE = (40000, 49999)
 APP_PORT_RANGE_1 = (50000, 54999)
 APP_PORT_RANGE_2 = (55000, 59999)
+
+
+def _is_retryable_wait_until_alive_error(exception):
+    if isinstance(exception, tenacity.RetryError):
+        cause = exception.last_attempt.exception()
+        return _is_retryable_wait_until_alive_error(cause)
+
+    return isinstance(
+        exception, (ConnectionError, httpx.NetworkError, httpx.RemoteProtocolError)
+    )
 
 
 class DockerRuntime(ActionExecutionClient):
@@ -171,16 +181,80 @@ class DockerRuntime(ActionExecutionClient):
             self.send_status_message(' ')
         self._runtime_initialized = True
 
+
     @staticmethod
-    @lru_cache(maxsize=1)
     def _init_docker_client() -> docker.DockerClient:
         try:
+            import os
+            import random
+            import json
+            from urllib3.exceptions import MaxRetryError
+            from requests.exceptions import ConnectionError, RequestException
+            
+            remote_docker_urls = os.getenv('API_REMOTE_DOCKER', '')
+            try:
+                docker_hosts = json.loads(remote_docker_urls)
+            except Exception:
+                docker_hosts = [url.strip() for url in remote_docker_urls.split(',') if url.strip()]
+                
+            if not docker_hosts:
+                return docker.from_env()
+                
+            # Try each host in random order
+            all_hosts = list(docker_hosts)
+            random.shuffle(all_hosts)
+            last_error = None
+            
+            for host in all_hosts:
+                try:
+                    client = docker.DockerClient(base_url=host, timeout=5)
+                    # Try to ping and get version to ensure connection is working
+                    client.ping()
+                    client.version()
+                    client._selected_docker_host = host
+                    logger.info(f'Successfully connected to Docker host: {host}')
+                    return client
+                except (ConnectionError, MaxRetryError, RequestException) as e:
+                    logger.warning(f'Failed to connect to Docker host {host}: {str(e)}')
+                    last_error = e
+                    continue
+                except Exception as e:
+                    logger.warning(f'Unexpected error with Docker host {host}: {str(e)}')
+                    last_error = e
+                    continue
+            
+            if last_error:
+                logger.error(f'All Docker hosts failed. Last error: {str(last_error)}')
             return docker.from_env()
+            
         except Exception as ex:
             logger.error(
                 'Launch docker client failed. Please make sure you have installed docker and started docker desktop/daemon.',
             )
             raise ex
+
+    def _get_runtime_url(self) -> str:
+        """Get the appropriate runtime URL based on Docker connection"""
+        if hasattr(self.docker_client, '_selected_docker_host'):
+            host = self.docker_client._selected_docker_host
+            if host.startswith('tcp://'):
+                host = host[len('tcp://'):]
+            ip = host.split(':')[0]
+            return f'http://{ip}'
+        
+        if not hasattr(self.docker_client, 'api') or not hasattr(self.docker_client.api, 'base_url'):
+            return self.config.sandbox.local_runtime_url
+            
+        base_url = self.docker_client.api.base_url
+        if isinstance(base_url, bytes):
+            base_url = base_url.decode('utf-8')
+            
+        if base_url.startswith(('http://', 'tcp://')):
+            host = base_url.split('://', 1)[1].split(':', 1)[0]
+            return f'http://{host}'
+            
+        return self.config.sandbox.local_runtime_url
+
 
     def _init_container(self):
         self.log('debug', 'Preparing to start container...')
@@ -192,7 +266,8 @@ class DockerRuntime(ActionExecutionClient):
             self._find_available_port(APP_PORT_RANGE_1),
             self._find_available_port(APP_PORT_RANGE_2),
         ]
-        self.api_url = f'{self.config.sandbox.local_runtime_url}:{self._container_port}'
+        # self.api_url = f'{self.config.sandbox.local_runtime_url}:{self._container_port}'
+        self.api_url = f'{self._get_runtime_url()}:{self._container_port}'
 
         use_host_network = self.config.sandbox.use_host_network
         network_mode: str | None = 'host' if use_host_network else None
@@ -268,7 +343,6 @@ class DockerRuntime(ActionExecutionClient):
             server_port=self._container_port,
             plugins=self.plugins,
             app_config=self.config,
-            runtime_mode='docker',
         )
 
         try:
@@ -340,7 +414,8 @@ class DockerRuntime(ActionExecutionClient):
                 ):
                     self._app_ports.append(exposed_port)
 
-        self.api_url = f'{self.config.sandbox.local_runtime_url}:{self._container_port}'
+        # self.api_url = f'{self.config.sandbox.local_runtime_url}:{self._container_port}'
+        self.api_url = f'{self._get_runtime_url()}:{self._container_port}'
         self.log(
             'debug',
             f'attached to container: {self.container_name} {self._container_port} {self.api_url}',
@@ -348,9 +423,7 @@ class DockerRuntime(ActionExecutionClient):
 
     @tenacity.retry(
         stop=tenacity.stop_after_delay(120) | stop_if_should_exit(),
-        retry=tenacity.retry_if_exception_type(
-            (ConnectionError, requests.exceptions.ConnectionError)
-        ),
+        retry=tenacity.retry_if_exception(_is_retryable_wait_until_alive_error),
         reraise=True,
         wait=tenacity.wait_fixed(2),
     )
@@ -365,8 +438,12 @@ class DockerRuntime(ActionExecutionClient):
             raise AgentRuntimeNotFoundError(
                 f'Container {self.container_name} not found.'
             )
+        except Exception as e:
+            self.docker_client = self._init_docker_client()
+            raise e
 
         self.check_if_alive()
+
 
     def close(self, rm_all_containers: bool | None = None):
         """Closes the DockerRuntime and associated objects
