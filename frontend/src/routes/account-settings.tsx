@@ -199,7 +199,7 @@ const AccountSettings = () => {
         className="flex flex-col grow overflow-auto p-3 md:p-6"
       >
         <div className="max-w-[680px]">
-          {!shouldHandleSpecialSaasCase && (
+          {/* {!shouldHandleSpecialSaasCase && (
             <section className="flex flex-col gap-6">
               <h3 className="text-[18px] font-semibold text-[#EFEFEF]">
                 LLM Settings
@@ -342,7 +342,7 @@ const AccountSettings = () => {
               </div>
             </section>
           )}
-          <div className="my-7 h-[1px] w-full bg-[#1B1C1A]" />
+          <div className="my-7 h-[1px] w-full bg-[#1B1C1A]" /> */}
           <section className="flex flex-col gap-6">
             <h3 className="text-[18px] font-semibold text-[#EFEFEF]">
               Additional Settings
