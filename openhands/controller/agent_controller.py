@@ -375,19 +375,19 @@ class AgentController:
             await self._handle_message_action(action)
         elif isinstance(action, AgentDelegateAction):
             logger.info(f'Starting delegate {action.agent}')
-            if self.delegate is None:
-                self.delegate = await self.start_delegate(action)
-                assert self.delegate is not None
+            # if self.delegate is None:
+            await self.start_delegate(action)
+            assert self.delegate is not None
 
-                # Post a MessageAction with the task for the delegate
-                if 'task' in action.inputs:
-                    self.event_stream.add_event(
-                        MessageAction(
-                            content='TASK: ' + action.inputs['task'], displayable=False
-                        ),
-                        EventSource.USER,
-                    )
-                    await self.delegate.set_agent_state_to(AgentState.RUNNING)
+            # Post a MessageAction with the task for the delegate
+            if 'task' in action.inputs:
+                self.event_stream.add_event(
+                    MessageAction(
+                        content='TASK: ' + action.inputs['task'], displayable=False
+                    ),
+                    EventSource.USER,
+                )
+                await self.delegate.set_agent_state_to(AgentState.RUNNING)
             return
 
         elif isinstance(action, AgentFinishAction):
@@ -588,7 +588,7 @@ class AgentController:
         """
         return self.state.agent_state
 
-    async def start_delegate(self, action: AgentDelegateAction) -> 'AgentController':
+    async def start_delegate(self, action: AgentDelegateAction) -> None:
         """Start a delegate agent to handle a subtask.
 
         OpenHands is a multi-agentic system. A `task` is a conversation between
@@ -627,7 +627,7 @@ class AgentController:
         )
 
         # Create the delegate with is_delegate=True so it does NOT subscribe directly
-        return AgentController(
+        self.delegate = AgentController(
             sid=self.id + '-delegate',
             agent=delegate_agent,
             event_stream=self.event_stream,

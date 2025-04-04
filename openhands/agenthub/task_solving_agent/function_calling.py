@@ -79,6 +79,20 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                     f'Failed to parse tool call arguments: {tool_call.function.arguments}'
                 ) from e
 
+            # logs all tool names
+            logger.warning(
+                f"""========================= TASK SOLVING AGENT =========================
+                Tool name in function_calling.py: {tool_call.function.name}
+                create_cmd_run_tool()['function']['name']: {create_cmd_run_tool()['function']['name']}
+                IPythonTool['function']['name']: {IPythonTool['function']['name']}
+                LLMBasedFileEditTool['function']['name']: {LLMBasedFileEditTool['function']['name']}
+                FinishTool['function']['name']: {FinishTool['function']['name']}
+                WebReadTool['function']['name']: {WebReadTool['function']['name']}
+                LLMBasedFileEditTool['function']['name']: {LLMBasedFileEditTool['function']['name']}
+                create_str_replace_editor_tool()['function']['name']: {create_str_replace_editor_tool()['function']['name']}
+                """
+            )
+
             # ================================================
             # CmdRunTool (Bash)
             # ================================================
@@ -254,8 +268,8 @@ def get_tools(
     # if codeact_enable_browsing:
     #     tools.append(WebReadTool)
     #     tools.append(BrowserTool)
-    # if codeact_enable_jupyter:
-    #     tools.append(IPythonTool)
+    if codeact_enable_jupyter:
+        tools.append(IPythonTool)
     if codeact_enable_llm_editor:
         tools.append(LLMBasedFileEditTool)
     else:

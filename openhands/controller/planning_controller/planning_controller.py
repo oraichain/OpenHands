@@ -98,9 +98,10 @@ class PlanController:
         AgentStateChangedObservation,
         PlanStatusObservation,
         MarkTaskAction,
+        AssignTaskAction,
     )
     # pass type of events that should be passed to the agent when delegate agents are resolving tasks
-    pass_type: ClassVar[tuple[type[Event], ...]] = (AgentFinishAction, AssignTaskAction)
+    pass_type: ClassVar[tuple[type[Event], ...]] = (AgentFinishAction,)
     _cached_first_user_message: MessageAction | None = None
 
     # task_controllers
@@ -341,6 +342,7 @@ class PlanController:
             action = self._replay_manager.step()
         else:
             try:
+                logger.warning('Panner is stepping')
                 action = self.planning_agent.step(self.state)
                 if action is None:
                     raise LLMNoActionError('No action was returned')
@@ -415,6 +417,8 @@ class PlanController:
         # it might be the delegate's day in the sun
         # if self.delegate is not None:
         #     return False
+        if self._is_awaiting_for_task_resolving():
+            return False
 
         if isinstance(event, Action):
             if isinstance(event, CreatePlanAction) or isinstance(event, MarkTaskAction):
@@ -1251,6 +1255,9 @@ class PlanController:
         )
 
     def _is_awaiting_for_task_resolving(self) -> bool:
+        if self.state.plans:
+            return not self._is_all_task_resolved()
+
         for plan_id, task_controllers in self.task_controllers.items():
             for task_index, controller in task_controllers.items():
                 if controller.get_agent_state() == AgentState.RUNNING:

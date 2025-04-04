@@ -1,7 +1,7 @@
 import os
 from collections import deque
 
-import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
+import openhands.agenthub.task_solving_agent.function_calling as task_solving_function_calling
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
@@ -24,24 +24,6 @@ from openhands.utils.prompt import PromptManager
 
 class TaskSolvingAgent(Agent):
     VERSION = '2.2'
-    """
-    The Code Act Agent is a minimalist agent.
-    The agent works by passing the model a list of action-observation pairs and prompting the model to take the next step.
-
-    ### Overview
-
-    This agent implements the CodeAct idea ([paper](https://arxiv.org/abs/2402.01030), [tweet](https://twitter.com/xingyaow_/status/1754556835703751087)) that consolidates LLM agents' **act**ions into a unified **code** action space for both *simplicity* and *performance* (see paper for more details).
-
-    The conceptual idea is illustrated below. At each turn, the agent can:
-
-    1. **Converse**: Communicate with humans in natural language to ask for clarification, confirmation, etc.
-    2. **CodeAct**: Choose to perform the task by executing code
-    - Execute any valid Linux `bash` command
-    - Execute any valid `Python` code with [an interactive Python interpreter](https://ipython.org/). This is simulated through `bash` command, see plugin system below for more details.
-
-    ![image](https://github.com/All-Hands-AI/OpenHands/assets/38853559/92b622e3-72ad-4a61-8f41-8c040b6d5fb3)
-
-    """
 
     sandbox_plugins: list[PluginRequirement] = [
         # NOTE: AgentSkillsRequirement need to go before JupyterRequirement, since
@@ -65,7 +47,7 @@ class TaskSolvingAgent(Agent):
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
-        built_in_tools = codeact_function_calling.get_tools(
+        built_in_tools = task_solving_function_calling.get_tools(
             codeact_enable_browsing=self.config.codeact_enable_browsing,
             codeact_enable_jupyter=self.config.codeact_enable_jupyter,
             codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
@@ -127,7 +109,7 @@ class TaskSolvingAgent(Agent):
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         response = self.llm.completion(**params)
         logger.debug(f'Response from LLM: {response}')
-        actions = codeact_function_calling.response_to_actions(response)
+        actions = task_solving_function_calling.response_to_actions(response)
         logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
             self.pending_actions.append(action)
