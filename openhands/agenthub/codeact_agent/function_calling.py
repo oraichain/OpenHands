@@ -57,8 +57,7 @@ def combine_thought(action: Action, thought: str) -> Action:
     return action
 
 
-
-def response_to_actions(response: ModelResponse, thought_manager: Optional[ThoughtManager] = None, sid: Optional[str]) -> list[Action]:
+def response_to_actions(response: ModelResponse, thought_manager: Optional[ThoughtManager] = None, sid: Optional[str] = None) -> list[Action]:
     actions: list[Action] = []
     assert len(response.choices) == 1, 'Only one choice is supported for now'
     choice = response.choices[0]

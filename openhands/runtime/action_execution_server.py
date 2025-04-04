@@ -595,13 +595,37 @@ class ActionExecutor:
             "url": "https://www.google.com"
         }
         """
-        screenshot_content: ExtendedImageContent = response.output
+        screenshot_content = response.output
         logger.debug(f'Screenshot content: {screenshot_content}')
+
+        # Handle the case where screenshot_content is a string
+        if isinstance(screenshot_content, str):
+            # Try to parse the string as JSON to extract url and data
+            try:
+                screenshot_data = json.loads(screenshot_content)
+                url = screenshot_data.get('url', '')
+                data = screenshot_data.get('data', '')
+                return PlaywrightMcpBrowserScreenshotObservation(
+                    content=f'{response}',
+                    url=url,
+                    trigger_by_action=action.name,
+                    screenshot=f'data:image/png;base64,{data}',
+                )
+            except json.JSONDecodeError:
+                # If we can't parse as JSON, just provide empty values
+                return PlaywrightMcpBrowserScreenshotObservation(
+                    content=f'{response}',
+                    url='',
+                    trigger_by_action=action.name,
+                    screenshot='',
+                )
+
+        # Normal case where screenshot_content is an ExtendedImageContent object
         return PlaywrightMcpBrowserScreenshotObservation(
             content=f'{response}',
-            url=screenshot_content.url if screenshot_content.url is not None else '',
+            url=screenshot_content.url if hasattr(screenshot_content, 'url') else '',
             trigger_by_action=action.name,
-            screenshot=f'data:image/png;base64,{screenshot_content.data}',
+            screenshot=f'data:image/png;base64,{screenshot_content.data if hasattr(screenshot_content, "data") else ""}',
         )
 
     def close(self):
