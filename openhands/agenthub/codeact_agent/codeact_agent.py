@@ -219,9 +219,17 @@ class CodeActAgent(Agent):
         # Condense the events from the state.
         events = self.condenser.condensed_history(state)
 
-        logger.debug(
-            f'Processing {len(events)} events from a total of {len(state.history)} events'
-        )
+        # Check if events is a Condensation object (has no len method) or a View object (has len method)
+        if hasattr(events, 'action'):  # It's a Condensation object
+            logger.debug(
+                f'Received condensation action from condenser with {len(state.history)} total events'
+            )
+            # Early return with initial messages since we've got a condensation action
+            return messages
+        else:  # It's a View object
+            logger.debug(
+                f'Processing {len(events)} events from a total of {len(state.history)} events'
+            )
 
         # Use ConversationMemory to process events
         messages = self.conversation_memory.process_events(
