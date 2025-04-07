@@ -2,6 +2,7 @@ from urllib.parse import parse_qs
 
 import jwt
 from socketio.exceptions import ConnectionRefusedError
+from sqlalchemy import select
 
 # from sqlalchemy import select
 from openhands.core.logger import openhands_logger as logger
@@ -18,6 +19,8 @@ from openhands.events.observation.agent import (
 )
 from openhands.events.serialization import event_to_dict
 from openhands.events.stream import AsyncEventStreamWrapper
+from openhands.server.db import database
+from openhands.server.models import User
 from openhands.server.routes.auth import JWT_ALGORITHM, JWT_SECRET
 from openhands.server.shared import (
     conversation_manager,
@@ -26,9 +29,6 @@ from openhands.server.shared import (
 from openhands.storage.conversation.conversation_validator import (
     create_conversation_validator,
 )
-
-# from openhands.server.db import database
-# from openhands.server.models import User
 from openhands.utils.get_user_setting import get_user_setting
 
 
@@ -60,15 +60,14 @@ async def connect(connection_id: str, environ):
         logger.info(f'user_id: {user_id}')
 
         # Fetch user record from database
-        # query = select(User).where(User.c.public_key == user_id.lower())
-        # user = await database.fetch_one(query)
-        # if not user:
-        #     logger.error(f'User not found in database: {user_id}')
-        #     raise ConnectionRefusedError('User not found')
+        query = select(User).where(User.c.public_key == user_id.lower())
+        user = await database.fetch_one(query)
+        if not user:
+            logger.error(f'User not found in database: {user_id}')
+            raise ConnectionRefusedError('User not found')
 
-        # logger.info(f'Found user record: {user["public_key"]}')
-        # mnemonic = user['mnemonic']
-        mnemonic = ''
+        logger.info(f'Found user record: {user["public_key"]}')
+        mnemonic = user['mnemonic']
     except jwt.ExpiredSignatureError:
         logger.error('JWT token has expired')
         raise ConnectionRefusedError('Token has expired')

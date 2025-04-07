@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import AsyncExitStack
 from typing import Dict, List, Optional
 
@@ -73,10 +74,18 @@ class MCPClients(ToolCollection):
         self,
         server_url: str,
         sid: Optional[str] = None,
-        user_id: Optional[str] = None,
         mnemonic: Optional[str] = None,
+        timeout: float = 5,
     ) -> None:
-        """Connect to an MCP server using SSE transport."""
+        """Connect to an MCP server using SSE transport.
+
+        Args:
+            server_url: The URL of the MCP server
+            sid: Optional session ID
+            user_id: Optional user ID
+            mnemonic: Optional mnemonic
+            timeout: Connection timeout in seconds (default: 5.0)
+        """
         if not server_url:
             raise ValueError('Server URL is required.')
         if self.session:
@@ -87,40 +96,66 @@ class MCPClients(ToolCollection):
         #     raise ValueError('User ID is required.')
 
         headers = {
-            k: v for k, v in {'sid': sid, 'mnemonic': None}.items() if v is not None
+            k: v for k, v in {'sid': sid, 'mnemonic': mnemonic}.items() if v is not None
         }
         logger.info(f'sid: {sid}')
         logger.info('Connecting to MCP server')
-        streams_context = sse_client(
-            url=server_url, timeout=60, sse_read_timeout=60 * 10, headers=headers
-        )
-        logger.info('Connected to MCP server')
-        streams = await self.exit_stack.enter_async_context(streams_context)
-        self.session = await self.exit_stack.enter_async_context(
-            ClientSession(*streams)
-        )
 
-        logger.info('Connected to MCP server with client session')
+        try:
+            streams_context = sse_client(
+                url=server_url, timeout=timeout, sse_read_timeout=15, headers=headers
+            )
+            logger.info('Connected to MCP server')
 
-        await self._initialize_and_list_tools()
+            async def connect_with_timeout():
+                streams = await self.exit_stack.enter_async_context(streams_context)
+                self.session = await self.exit_stack.enter_async_context(
+                    ClientSession(*streams)
+                )
+                logger.info('Connected to MCP server with client session')
+                await self._initialize_and_list_tools()
 
-    async def connect_stdio(self, command: str, args: List[str]) -> None:
-        """Connect to an MCP server using stdio transport."""
+            await asyncio.wait_for(connect_with_timeout(), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.error(f'Connection to MCP server timed out after {timeout} seconds')
+        except Exception as e:
+            logger.error(f'Error connecting to MCP server: {str(e)}')
+
+    async def connect_stdio(
+        self, command: str, args: List[str], timeout: float = 5.0
+    ) -> None:
+        """Connect to an MCP server using stdio transport.
+
+        Args:
+            command: The command to execute
+            args: List of arguments for the command
+            timeout: Connection timeout in seconds (default: 5.0)
+        """
         if not command:
             raise ValueError('Server command is required.')
         if self.session:
             await self.disconnect()
 
-        server_params = StdioServerParameters(command=command, args=args)
-        stdio_transport = await self.exit_stack.enter_async_context(
-            stdio_client(server_params)
-        )
-        read, write = stdio_transport
-        self.session = await self.exit_stack.enter_async_context(
-            ClientSession(read, write)
-        )
+        try:
+            server_params = StdioServerParameters(command=command, args=args)
 
-        await self._initialize_and_list_tools()
+            async def connect_with_timeout():
+                stdio_transport = await self.exit_stack.enter_async_context(
+                    stdio_client(server_params)
+                )
+                read, write = stdio_transport
+                self.session = await self.exit_stack.enter_async_context(
+                    ClientSession(read, write)
+                )
+                await self._initialize_and_list_tools()
+
+            await asyncio.wait_for(connect_with_timeout(), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.error(
+                f'Connection to MCP server via stdio timed out after {timeout} seconds'
+            )
+        except Exception as e:
+            logger.error(f'Error connecting to MCP server via stdio: {str(e)}')
 
     async def _initialize_and_list_tools(self) -> None:
         """Initialize session and populate tool map."""
