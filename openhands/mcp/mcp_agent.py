@@ -126,7 +126,9 @@ class MCPAgent(BaseModel):
             logger.info('MCP connection closed')
 
 
-def convert_mcp_agents_to_tools(mcp_agents: list[MCPAgent] | None) -> list[dict]:
+def convert_mcp_agents_to_tools(
+    mcp_agents: list[MCPAgent] | None,
+) -> dict[str, list[dict]]:
     """
     Converts a list of MCPAgent instances to ChatCompletionToolParam format
     that can be used by CodeActAgent.
@@ -139,16 +141,21 @@ def convert_mcp_agents_to_tools(mcp_agents: list[MCPAgent] | None) -> list[dict]
     """
     if mcp_agents is None:
         logger.warning('mcp_agents is None, returning empty list')
-        return []
+        return {}
 
-    all_mcp_tools = []
+    all_mcp_tools: dict[str, list] = {}
     try:
         for agent in mcp_agents:
             # Each MCPAgent has an mcp_clients property that is a ToolCollection
             # The ToolCollection has a to_params method that converts tools to ChatCompletionToolParam format
             mcp_tools = agent.mcp_clients.to_params()
-            all_mcp_tools.extend(mcp_tools)
+            if agent.name not in all_mcp_tools:
+                all_mcp_tools[agent.name] = mcp_tools
+            else:
+                # Merge tools if the agent name already exists
+                all_mcp_tools[agent.name].extend(mcp_tools)
+
     except Exception as e:
         logger.error(f'Error in convert_mcp_agents_to_tools: {e}')
-        return []
+        return {}
     return all_mcp_tools

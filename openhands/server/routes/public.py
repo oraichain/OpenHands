@@ -84,7 +84,12 @@ async def get_agents() -> list[str]:
     Returns:
         list[str]: A sorted list of agent names.
     """
-    return sorted(Agent.list_agents())
+    return sorted(
+        set(
+            Agent.list_agents()
+            + [key for key in config.get_agent_configs().keys() if key != 'agent']
+        )
+    )
 
 
 @app.get('/security-analyzers', response_model=list[str])

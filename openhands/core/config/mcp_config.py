@@ -11,24 +11,27 @@ class MCPSSEConfig(BaseModel):
         mcp_servers: List of MCP server URLs.
     """
 
-    mcp_servers: List[str] = Field(default_factory=list)
+    url: str = Field()
+
+    mcp_agent_name: str = Field(default='mcp-agent')
+
+    description: str = Field(default='MCP agent')
 
     model_config = {'extra': 'forbid'}
 
     def validate_servers(self) -> None:
         """Validate that server URLs are valid and unique."""
         # Check for duplicate server URLs
-        if len(set(self.mcp_servers)) != len(self.mcp_servers):
-            raise ValueError('Duplicate MCP server URLs are not allowed')
+        # if len(set(self.mcp_servers)) != len(self.mcp_servers):
+        #     raise ValueError('Duplicate MCP server URLs are not allowed')
 
         # Validate URLs
-        for url in self.mcp_servers:
-            try:
-                result = urlparse(url)
-                if not all([result.scheme, result.netloc]):
-                    raise ValueError(f'Invalid URL format: {url}')
-            except Exception as e:
-                raise ValueError(f'Invalid URL {url}: {str(e)}')
+        try:
+            result = urlparse(self.url)
+            if not all([result.scheme, result.netloc]):
+                raise ValueError(f'Invalid URL format: {self.url}')
+        except Exception as e:
+            raise ValueError(f'Invalid URL {self.url}: {str(e)}')
 
 
 class MCPStdioConfig(BaseModel):
@@ -39,20 +42,13 @@ class MCPStdioConfig(BaseModel):
         args: List of arguments for each command.
     """
 
-    commands: List[str] = Field(default_factory=list)
-    args: List[List[str]] = Field(default_factory=list)
+    command: str = Field()
+    args: list[str] = Field(default_factory=list)
+
+    mcp_agent_name: str = Field(default='mcp-agent')
+    description: str = Field(default='MCP agent')
 
     model_config = {'extra': 'forbid'}
-
-    def validate_stdio(self) -> None:
-        """Validate that commands and args are properly configured."""
-
-        # Check if number of commands matches number of args lists
-        if len(self.commands) != len(self.args):
-            raise ValueError(
-                f'Number of commands ({len(self.commands)}) does not match '
-                f'number of args lists ({len(self.args)})'
-            )
 
 
 class MCPConfig(BaseModel):
@@ -63,8 +59,8 @@ class MCPConfig(BaseModel):
         stdio: stdio-specific configuration.
     """
 
-    sse: MCPSSEConfig = Field(default_factory=MCPSSEConfig)
-    stdio: MCPStdioConfig = Field(default_factory=MCPStdioConfig)
+    sse: List[MCPSSEConfig] = Field(default_factory=list)
+    stdio: List[MCPStdioConfig] = Field(default_factory=list)
 
     model_config = {'extra': 'forbid'}
 
@@ -83,15 +79,19 @@ class MCPConfig(BaseModel):
 
         try:
             # Create SSE config if present
-            sse_config = MCPSSEConfig(**data.get('mcp-sse', {}))
-            sse_config.validate_servers()
+            mcp_servers = data.get('mcp-sse', {}).get('mcp_servers', [])
+            sse_configs = []
+            for server in mcp_servers:
+                sse_config = MCPSSEConfig(**server)
+                sse_config.validate_servers()
+                sse_configs.append(sse_config)
 
             # Create stdio config if present
-            stdio_config = MCPStdioConfig(**data.get('mcp-stdio', {}))
-            stdio_config.validate_stdio()
+            mcp_stdios = data.get('mcp-stdio', {}).get('mcp_stdios', [])
+            stdio_configs = [MCPStdioConfig(**stdio) for stdio in mcp_stdios]
 
             # Create the main MCP config
-            mcp_mapping['mcp'] = cls(sse=sse_config, stdio=stdio_config)
+            mcp_mapping['mcp'] = cls(sse=sse_configs, stdio=stdio_configs)
         except ValidationError as e:
             raise ValueError(f'Invalid MCP configuration: {e}')
 

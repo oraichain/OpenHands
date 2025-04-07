@@ -240,6 +240,29 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
             # We only use the base mcp config for now
             if 'mcp' in mcp_mapping:
                 cfg.mcp = mcp_mapping['mcp']
+
+                # add mcp config to every agent config, especially the react agent for creating delegate tool
+                for agent_name in cfg.agents.keys():
+                    cfg.agents[agent_name].mcp_config = cfg.mcp
+
+                # set agent configs for mcp agents
+                for mcp_server in cfg.mcp.sse + cfg.mcp.stdio:
+                    if mcp_server.mcp_agent_name in cfg.agents:
+                        raise ValueError(
+                            f'MCP agent name {mcp_server.mcp_agent_name} conflicts with existing agent name.'
+                        )
+                    if mcp_server.mcp_agent_name == 'mcp_agent':
+                        logger.openhands_logger.warning(
+                            "Found default mcp agent name 'mcp_agent'."
+                        )
+                        continue
+
+                    agent_config = AgentConfig(
+                        agent_name=mcp_server.mcp_agent_name,
+                        description=mcp_server.description,
+                        mcp_config=cfg.mcp,
+                    )
+                    cfg.set_agent_config(agent_config, mcp_server.mcp_agent_name)
         except (TypeError, KeyError, ValidationError) as e:
             logger.openhands_logger.warning(
                 f'Cannot parse MCP config from toml, values have not been applied.\nError: {e}'

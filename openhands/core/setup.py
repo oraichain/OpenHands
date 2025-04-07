@@ -12,12 +12,13 @@ from openhands.controller.state.state import State
 from openhands.core.config import (
     AppConfig,
 )
+from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
 from openhands.events.event import Event
 from openhands.integrations.provider import ProviderToken, ProviderType, SecretStore
 from openhands.llm.llm import LLM
-from openhands.mcp.mcp_agent import MCPAgent, convert_mcp_agents_to_tools
+from openhands.mcp.mcp_agent import MCPAgent
 from openhands.memory.memory import Memory
 from openhands.microagent.microagent import BaseMicroAgent
 from openhands.runtime import get_runtime_cls
@@ -173,52 +174,62 @@ async def create_agent(config: AppConfig) -> Agent:
     agent_cls: Type[Agent] = Agent.get_cls(config.default_agent)
     agent_config = config.get_agent_config(config.default_agent)
     llm_config = config.get_llm_config_from_agent(config.default_agent)
-    mcp_agents = await create_mcp_agents(
-        config.mcp.sse.mcp_servers, config.mcp.stdio.commands, config.mcp.stdio.args
-    )
-    mcp_tools = convert_mcp_agents_to_tools(mcp_agents)
+    # mcp_agents = await create_mcp_agents(config.mcp)
+    # mcp_tools = convert_mcp_agents_to_tools(mcp_agents)
     agent = agent_cls(
         llm=LLM(config=llm_config),
         config=agent_config,
-        mcp_tools=mcp_tools,
+        # mcp_tools=mcp_tools,
     )
 
     # We only need to get the tools from the MCP agents, so we can safely close them after that
     # the actual calls will be done in a sandbox environment, not here
-    for mcp_agent in mcp_agents:
-        await mcp_agent.cleanup()
+    # for mcp_agent in mcp_agents:
+    #     await mcp_agent.cleanup()
 
     return agent
 
 
 async def create_mcp_agents(
-    sse_mcp_server: List[str], commands: List[str], args: List[List[str]]
+    mcp_config: MCPConfig,
 ) -> List[MCPAgent]:
     mcp_agents: List[MCPAgent] = []
     # Initialize SSE connections
-    if sse_mcp_server:
-        for server_url in sse_mcp_server:
+    sse_mcp_servers = mcp_config.sse
+    if sse_mcp_servers:
+        for sse_mcp_server in sse_mcp_servers:
             logger.info(
-                f'Initializing MCP agent for {server_url} with SSE connection...'
+                f'Initializing MCP agent for {sse_mcp_server.url} with SSE connection...'
             )
 
-            agent = MCPAgent()
+            agent = MCPAgent(
+                name=sse_mcp_server.mcp_agent_name,
+                description=sse_mcp_server.description,
+            )
             try:
-                await agent.initialize(connection_type='sse', server_url=server_url)
+                await agent.initialize(
+                    connection_type='sse', server_url=sse_mcp_server.url
+                )
                 mcp_agents.append(agent)
-                logger.info(f'Connected to MCP server {server_url} via SSE')
+                logger.info(f'Connected to MCP server {sse_mcp_server.url} via SSE')
             except Exception as e:
-                logger.error(f'Failed to connect to {server_url}: {str(e)}')
+                logger.error(f'Failed to connect to {sse_mcp_server.url}: {str(e)}')
                 raise
 
     # Initialize stdio connections
-    if commands:
-        for command, command_args in zip(commands, args):
+    stdio_mcp_servers = mcp_config.stdio
+    if stdio_mcp_servers:
+        for stdio_mcp_server in stdio_mcp_servers:
+            command = stdio_mcp_server.command
+            command_args = stdio_mcp_server.args
             logger.info(
                 f'Initializing MCP agent for {command} with stdio connection...'
             )
 
-            agent = MCPAgent()
+            agent = MCPAgent(
+                name=stdio_mcp_server.mcp_agent_name,
+                description=stdio_mcp_server.description,
+            )
             try:
                 await agent.initialize(
                     connection_type='stdio', command=command, args=command_args

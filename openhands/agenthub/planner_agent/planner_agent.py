@@ -35,18 +35,16 @@ class PlannerAgent(Agent):
         AgentSkillsRequirement(),
         # JupyterRequirement(),
     ]
+    enable_mcp_tools: bool = True
 
-    def __init__(
-        self, llm: LLM, config: AgentConfig, mcp_tools: list[dict] | None = None
-    ) -> None:
+    def __init__(self, llm: LLM, config: AgentConfig) -> None:
         """Initializes a new instance of the Planner class.
 
         Parameters:
         - llm (LLM): The llm to be used by this agent
         - config (AgentConfig): The configuration for this agent
-        - mcp_tools (list[dict] | None, optional): List of MCP tools to be used by this agent. Defaults to None.
         """
-        super().__init__(llm, config, mcp_tools)
+        super().__init__(llm, config)
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
@@ -57,7 +55,9 @@ class PlannerAgent(Agent):
             llm=self.llm,
         )
 
-        self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
+        self.tools = built_in_tools + (
+            config.mcp_tools if config.mcp_tools is not None else []
+        )
 
         # Retrieve the enabled tools
         logger.info(
@@ -86,7 +86,6 @@ class PlannerAgent(Agent):
         - state (State): used to get updated info
 
         Returns:
-        - AgentDelegateAction(agent, inputs) - delegate action for (sub)task
         - MessageAction(content) - Message action to run (e.g. ask for clarification)
         - AgentFinishAction() - end the interaction
         ...
@@ -113,8 +112,9 @@ class PlannerAgent(Agent):
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         try:
             response = self.llm.completion(**params)
-        except Exception:
-            logger.warning(f"Error in LLM completion: {params['messages']}")
+        except Exception as e:
+            logger.warning(f'Error in LLM completion with messages: {messages}')
+            raise e
 
         logger.debug(f'Response from LLM: {response}')
         actions = planning_function_calling.response_to_actions(response)

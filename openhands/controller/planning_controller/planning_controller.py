@@ -345,7 +345,6 @@ class PlanController:
             action = self._replay_manager.step()
         else:
             try:
-                logger.warning('Panner is stepping')
                 action = self.planning_agent.step(self.state)
                 if action is None:
                     raise LLMNoActionError('No action was returned')
@@ -908,9 +907,6 @@ class PlanController:
         The history is a list of events that:
         - Excludes events of types listed in self.filter_out
         - Excludes events with hidden=True attribute
-        - For delegate events (between AgentDelegateAction and AgentDelegateObservation):
-            - Excludes all events between the action and observation
-            - Includes the delegate action and observation themselves
 
         The history is loaded in two parts if truncation_id is set:
         1. First user message from start_id onwards

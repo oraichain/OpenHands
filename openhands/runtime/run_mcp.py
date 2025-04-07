@@ -31,29 +31,35 @@ class MCPRunner:
         mcp_config = self.config.mcp
 
         # Initialize SSE connections
-        if mcp_config.sse.mcp_servers:
-            for server_url in mcp_config.sse.mcp_servers:
+        if mcp_config.sse:
+            for server in mcp_config.sse:
                 logger.info(
-                    f'Initializing MCP agent for {server_url} with SSE connection...'
+                    f'Initializing MCP agent for {server.url} with SSE connection...'
                 )
 
-                agent = MCPAgent()
+                agent = MCPAgent(
+                    name=server.mcp_agent_name, description=server.description
+                )
                 try:
-                    await agent.initialize(connection_type='sse', server_url=server_url)
+                    await agent.initialize(connection_type='sse', server_url=server.url)
                     self.mcp_agents.append(agent)
-                    logger.info(f'Connected to MCP server {server_url} via SSE')
+                    logger.info(f'Connected to MCP server {server.url} via SSE')
                 except Exception as e:
-                    logger.error(f'Failed to connect to {server_url}: {str(e)}')
+                    logger.error(f'Failed to connect to {server.url}: {str(e)}')
                     raise
 
         # Initialize stdio connections
-        if mcp_config.stdio.commands:
-            for command, args in zip(mcp_config.stdio.commands, mcp_config.stdio.args):
+        if mcp_config.stdio:
+            for server in mcp_config.stdio:
+                command = server.command
+                args = server.args or []
                 logger.info(
                     f'Initializing MCP agent for {command} with stdio connection...'
                 )
 
-                agent = MCPAgent()
+                agent = MCPAgent(
+                    name=server.mcp_agent_name, description=server.description
+                )
                 try:
                     await agent.initialize(
                         connection_type='stdio', command=command, args=args

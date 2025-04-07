@@ -4,24 +4,19 @@ This is similar to the functionality of `CodeActResponseParser`.
 """
 
 import json
-from typing import Optional
 
 from litellm import (
     ChatCompletionToolParam,
-    ChatCompletionToolParamFunctionChunk,
     ModelResponse,
 )
 
-from openhands.agenthub.react_agent.tools import (
-    DelegateCodeActTool,
+from openhands.agenthub.delegatable_mcp_agent.tools import (
     FinishTool,
     ThinkTool,
 )
-from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import (
     Action,
-    AgentDelegateAction,
     AgentFinishAction,
     AgentThinkAction,
     MessageAction,
@@ -66,24 +61,15 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                     f'Failed to parse tool call arguments: {tool_call.function.arguments}'
                 ) from e
 
-            # ================================================
-            # AgentDelegateAction
-            # ================================================
-            if tool_call.function.name == DelegateCodeActTool['function']['name']:
-                action = AgentDelegateAction(
-                    agent='CodeActAgent',
-                    inputs=arguments,
-                )
-            elif tool_call.function.name.startswith('delegate_to_'):
-                action = AgentDelegateAction(
-                    agent=tool_call.function.name.replace('delegate_to_', ''),
-                    inputs=arguments,
-                )
+            # logs all tool names
+            logger.warning(
+                f'==== PLANNER AGENT : Tool name in function_calling.py: {tool_call.function.name} ========================='
+            )
 
             # ================================================
             # AgentFinishAction
             # ================================================
-            elif tool_call.function.name == FinishTool['function']['name']:
+            if tool_call.function.name == FinishTool['function']['name']:
                 action = AgentFinishAction(
                     final_thought=arguments.get('message', ''),
                     task_completed=arguments.get('task_completed', None),
@@ -99,6 +85,10 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
             # Other cases -> McpTool (MCP)
             # ================================================
             else:
+                # if 'mcp_actions' not in arguments:
+                #     raise FunctionCallNotExistsError(
+                #     f'Tool {tool_call.function.name} is not registered. (arguments: {arguments}). Please check the tool name and retry with an existing tool.'
+                # )
                 action = McpAction(
                     name=tool_call.function.name, arguments=tool_call.function.arguments
                 )
@@ -124,54 +114,14 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
             )
         )
 
-    # assert len(actions) >= 1
-    if len(actions) >= 1:
-        actions = actions[:1]
+    assert len(actions) >= 1
     return actions
 
 
-def get_tools(
-    mcp_config: Optional[MCPConfig] = None,
-) -> list[ChatCompletionToolParam]:
-    tools = [ThinkTool, FinishTool, DelegateCodeActTool]
-
-    # Add delegatable MCP tools
-    delegatable_mcp_tools = []
-    if mcp_config:
-        for mcp_server in mcp_config.sse + mcp_config.stdio:
-            if (
-                not mcp_server.mcp_agent_name
-                or mcp_server.mcp_agent_name == 'mcp-agent'
-            ):
-                logger.warning(
-                    f'MCP agent name is not set or is default. Skipping tool creation for {mcp_server.url}'
-                )
-                continue
-            delegatable_mcp_tools.append(
-                ChatCompletionToolParam(
-                    type='function',
-                    function=ChatCompletionToolParamFunctionChunk(
-                        name=f'delegate_to_{mcp_server.mcp_agent_name}',
-                        description=mcp_server.description,
-                        parameters={
-                            'type': 'object',
-                            'properties': {
-                                'task': {
-                                    'type': 'string',
-                                    'description': f'The task to be performed by the {mcp_server.mcp_agent_name} agent',
-                                },
-                            },
-                            'required': ['task'],
-                        },
-                    ),
-                )
-            )
-
-    # log
-    logger.info(
-        f'Available delegate MCP agents: {[tool['function']['name'] for tool in delegatable_mcp_tools]}'
-    )
-
-    tools.extend(delegatable_mcp_tools)
+def get_tools() -> list[ChatCompletionToolParam]:
+    tools = [
+        ThinkTool,
+        FinishTool,
+    ]
 
     return tools

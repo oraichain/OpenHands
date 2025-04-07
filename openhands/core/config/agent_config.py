@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, ValidationError
 
 from openhands.core.config.condenser_config import CondenserConfig, NoOpCondenserConfig
+from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.logger import openhands_logger as logger
 
 
@@ -22,6 +23,10 @@ class AgentConfig(BaseModel):
         enable_som_visual_browsing: Whether to enable SoM (Set of Marks) visual browsing. Default is False.
     """
 
+    agent_name: str | None = Field(default=None)
+    description: str | None = Field(default=None)
+    mcp_tools: list[dict] = Field(default_factory=list)
+    mcp_config: MCPConfig | None = Field(default=None)
     llm_config: str | None = Field(default=None)
     codeact_enable_browsing: bool = Field(default=True)
     codeact_enable_llm_editor: bool = Field(default=False)

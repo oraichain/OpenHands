@@ -271,14 +271,9 @@ class ActionExecutionClient(Runtime):
                     'action': event_to_dict(action),
                     'caller_platform': platform.system(),
                 }
-                if self.config.mcp.sse.mcp_servers:
+                if self.config.mcp:
                     execution_action_body['sse_mcp_config'] = (
-                        self.config.mcp.sse.mcp_servers
-                    )
-                if self.config.mcp.stdio.commands:
-                    execution_action_body['stdio_mcp_config'] = (
-                        self.config.mcp.stdio.commands,
-                        self.config.mcp.stdio.args,
+                        self.config.mcp.model_dump()
                     )
 
                 with self._send_action_server_request(

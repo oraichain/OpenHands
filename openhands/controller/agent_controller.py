@@ -379,7 +379,9 @@ class AgentController:
             # Post a MessageAction with the task for the delegate
             if 'task' in action.inputs:
                 self.event_stream.add_event(
-                    MessageAction(content='TASK: ' + action.inputs['task']),
+                    MessageAction(
+                        content='TASK: ' + action.inputs['task'], displayable=True
+                    ),
                     EventSource.USER,
                 )
                 await self.delegate.set_agent_state_to(AgentState.RUNNING)
@@ -609,7 +611,12 @@ class AgentController:
         Args:
             action (AgentDelegateAction): The action containing information about the delegate agent to start.
         """
-        agent_cls: Type[Agent] = Agent.get_cls(action.agent)
+        # fallback to the DelegatableMCPAgent if the agent is not registered
+        agent_cls: Type[Agent] = (
+            Agent.get_cls(action.agent)
+            if action.agent in Agent.list_agents()
+            else Agent.get_cls('DelegatableMCPAgent')
+        )
         agent_config = self.agent_configs.get(action.agent, self.agent.config)
         llm_config = self.agent_to_llm_config.get(action.agent, self.agent.llm.config)
         llm = LLM(config=llm_config, retry_listener=self._notify_on_llm_retry)
@@ -627,7 +634,7 @@ class AgentController:
             start_id=self.event_stream.get_latest_event_id() + 1,
         )
         self.log(
-            'debug',
+            'warning',
             f'start delegate, creating agent {delegate_agent.name} using LLM {llm}',
         )
 

@@ -14,6 +14,7 @@ from openhands.core.config.condenser_config import (
 from openhands.core.const.guide_url import TROUBLESHOOTING_URL
 from openhands.core.logger import OpenHandsLoggerAdapter
 from openhands.core.schema import AgentState
+from openhands.core.setup import create_mcp_agents
 from openhands.events.action import MessageAction, NullAction
 from openhands.events.event import Event, EventSource
 from openhands.events.observation import (
@@ -25,6 +26,7 @@ from openhands.events.observation.error import ErrorObservation
 from openhands.events.serialization import event_from_dict, event_to_dict
 from openhands.events.stream import EventStreamSubscriber
 from openhands.llm.llm import LLM
+from openhands.mcp.mcp_agent import convert_mcp_agents_to_tools
 from openhands.server.session.agent_session import AgentSession
 from openhands.server.session.conversation_init_data import ConversationInitData
 from openhands.server.session.plan_session import PlanSession
@@ -101,6 +103,19 @@ class Session:
             AgentStateChangedObservation('', AgentState.LOADING),
             EventSource.ENVIRONMENT,
         )
+
+        # load MCP tools
+        agent_mcp_tools = await self.get_agent_mcp_tools()
+        for agent_name, tools in agent_mcp_tools.items():
+            if agent_name not in self.config.agents:
+                raise ValueError(f"Agent '{agent_name}' not found in AppConfig.agents ")
+
+            self.config.agents[agent_name].mcp_tools = tools
+
+            self.logger.info(
+                f"Agent '{agent_name}' initialized with MCP tools: {[tool.get('function', {}).get('name', '<unnamed>') for tool in tools]}"
+            )
+
         if isinstance(self.agent_session, AgentSession):
             agent_cls = settings.agent or self.config.default_agent
         elif isinstance(self.agent_session, PlanSession):
@@ -109,6 +124,10 @@ class Session:
             )
             planning_agent_cls = (
                 settings.planning_agent or self.config.default_planning_agent
+            )
+            self.logger.info(
+                f'Using task solving agent {agent_cls} for planning agent session\n'
+                f'Using planning agent {planning_agent_cls} for planning agent session'
             )
         else:
             raise ValueError(
@@ -328,3 +347,55 @@ class Session:
         asyncio.run_coroutine_threadsafe(
             self._send_status_message(msg_type, id, message), self.loop
         )
+
+    async def get_agent_mcp_tools(self) -> dict[str, list[dict]]:
+        """Get the MCP tools for the agent session."""
+        # Initialize MCP agents first before creating runtime and controller
+        agent_mcp_tools: dict[str, list[dict]] = {}
+        try:
+            mcp_config = self.config.mcp
+            # Log MCP configuration to help with debugging
+            self.logger.info(f'MCP SSE servers: {mcp_config.sse}')
+            self.logger.info(f'MCP stdios: {mcp_config.stdio}')
+
+            # Check if MCP servers are available
+            if not mcp_config.sse and not mcp_config.stdio:
+                self.logger.warning(
+                    'No MCP servers or commands configured. MCP integration will not work.'
+                )
+            else:
+                self.logger.info('Initializing MCP agents for server mode...')
+                mcp_agents = await create_mcp_agents(mcp_config=mcp_config)
+
+                # Give some time for MCP connections to stabilize
+                await asyncio.sleep(1)
+
+                # For CodeActAgent and similar agents that use the tools attribute
+                try:
+                    # Convert MCP agents to tools format for CodeActAgent
+                    agent_mcp_tools = convert_mcp_agents_to_tools(mcp_agents)
+
+                except Exception as e:
+                    self.logger.error(
+                        f'Error converting MCP agents to tools: {str(e)}',
+                        exc_info=True,
+                    )
+
+                # Log MCP agents status
+                for idx, mcp_agent in enumerate(mcp_agents):
+                    self.logger.info(
+                        f'MCP Agent {idx} connection type: {mcp_agent.connection_type}'
+                    )
+                    self.logger.info(
+                        f"MCP Agent {idx} available tools: {list(mcp_agent.mcp_clients.tool_map.keys()) if hasattr(mcp_agent, 'mcp_clients') and hasattr(mcp_agent.mcp_clients, 'tool_map') else 'No tools available'}"
+                    )
+                    await mcp_agent.cleanup()
+
+                self.logger.info(
+                    f'Successfully initialized {len(mcp_agents)} MCP agents'
+                )
+
+        except Exception as e:
+            self.logger.error(f'Error initializing MCP agents: {e}', exc_info=True)
+
+        return agent_mcp_tools

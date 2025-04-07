@@ -26,7 +26,6 @@ from openhands.core.exceptions import (
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import (
     Action,
-    AgentDelegateAction,
     AgentFinishAction,
     AgentThinkAction,
     BrowseInteractiveAction,
@@ -106,11 +105,6 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                         f'Missing required argument "code" in tool call {tool_call.function.name}'
                     )
                 action = IPythonRunCellAction(code=arguments['code'])
-            elif tool_call.function.name == 'delegate_to_browsing_agent':
-                action = AgentDelegateAction(
-                    agent='BrowsingAgent',
-                    inputs=arguments,
-                )
 
             # ================================================
             # AgentFinishAction
@@ -211,7 +205,7 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                     name=tool_call.function.name, arguments=tool_call.function.arguments
                 )
                 action.set_hard_timeout(120)
-                logger.warning(f'MCP action in function_calling.py: {action}')
+                logger.debug(f'MCP action in function_calling.py: {action}')
 
             # We only add thought to the first action
             if i == 0:

@@ -27,18 +27,17 @@ class Agent(ABC):
 
     _registry: dict[str, Type['Agent']] = {}
     sandbox_plugins: list[PluginRequirement] = []
+    enable_mcp_tools: bool = False
+    agent_name: str | None = None
+    _description: str | None = None
 
-    def __init__(
-        self,
-        llm: LLM,
-        config: 'AgentConfig',
-        mcp_tools: list[dict] | None = None,
-    ):
+    def __init__(self, llm: LLM, config: 'AgentConfig'):
         self.llm = llm
         self.config = config
+        self.agent_name = config.agent_name
+        self._description = config.description
         self._complete = False
         self.prompt_manager: 'PromptManager' | None = None
-        self.mcp_tools = mcp_tools
 
     @property
     def complete(self) -> bool:
@@ -69,7 +68,11 @@ class Agent(ABC):
 
     @property
     def name(self):
-        return self.__class__.__name__
+        return self.agent_name or self.__class__.__name__
+
+    @property
+    def description(self):
+        return self._description or self.__doc__
 
     @classmethod
     def register(cls, name: str, agent_cls: Type['Agent']):

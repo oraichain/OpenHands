@@ -1,7 +1,7 @@
 import os
 from collections import deque
 
-import openhands.agenthub.react_agent.function_calling as react_function_calling
+import openhands.agenthub.delegatable_mcp_agent.function_calling as delegatable_mcp_function_calling
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
@@ -22,27 +22,8 @@ from openhands.runtime.plugins import (
 from openhands.utils.prompt import PromptManager
 
 
-class ReActAgent(Agent):
+class DelegatableMCPAgent(Agent):
     VERSION = '2.2'
-    """
-    The ReAct Agent is a minimalist agent.
-    The agent works by passing the model a list of action-observation pairs and prompting the model to take the next step.
-
-    ### Overview
-
-    This agent implements the ReAct framework (Reasoning and Acting) that enables LLM agents to solve tasks through interleaved **reasoning** steps and **act**ions in a systematic manner for enhanced problem-solving capabilities.
-
-    The conceptual idea is illustrated below. At each turn, the agent can:
-
-    1. **Converse**: Communicate with humans in natural language to ask for clarification, confirmation, etc.
-    2. **ReAct**: Choose to perform the task through reasoning and acting
-    - Thought: Internal reasoning about the current state and planning next steps
-    - Action: Execute one of several available actions to gather information
-    - Observation: Process the results of actions to inform future reasoning
-
-    ![image](https://github.com/All-Hands-AI/OpenHands/assets/38853559/92b622e3-72ad-4a61-8f41-8c040b6d5fb3)
-
-    """
 
     sandbox_plugins: list[PluginRequirement] = [
         # NOTE: AgentSkillsRequirement need to go before JupyterRequirement, since
@@ -51,10 +32,9 @@ class ReActAgent(Agent):
         AgentSkillsRequirement(),
         JupyterRequirement(),
     ]
-    enable_mcp_tools: bool = False
 
     def __init__(self, llm: LLM, config: AgentConfig) -> None:
-        """Initializes a new instance of the ReActAgent class.
+        """Initializes a new instance of the CodeActAgent class.
 
         Parameters:
         - llm (LLM): The llm to be used by this agent
@@ -64,15 +44,13 @@ class ReActAgent(Agent):
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
-        built_in_tools = react_function_calling.get_tools(mcp_config=config.mcp_config)
-
-        self.tools = built_in_tools + (
+        self.tools = delegatable_mcp_function_calling.get_tools() + (
             config.mcp_tools if config.mcp_tools is not None else []
         )
 
         # Retrieve the enabled tools
         logger.info(
-            f"TOOLS loaded for ReActAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
+            f"TOOLS loaded for DelegatableMCPAgent {self.name}: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
         )
         self.prompt_manager = PromptManager(
             prompt_dir=os.path.join(os.path.dirname(__file__), 'prompts'),
@@ -97,7 +75,8 @@ class ReActAgent(Agent):
         - state (State): used to get updated info
 
         Returns:
-        - AgentDelegateAction(agent, inputs) - delegate action for (sub)task
+        - CmdRunAction(command) - bash command to run
+        - IPythonRunCellAction(code) - IPython code to run
         - MessageAction(content) - Message action to run (e.g. ask for clarification)
         - AgentFinishAction() - end the interaction
         """
@@ -118,11 +97,15 @@ class ReActAgent(Agent):
         params['tools'] = self.tools
         # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
-        response = self.llm.completion(**params)
-        logger.debug(f'Response from LLM: {response}')
-        actions = react_function_calling.response_to_actions(response)
-        logger.debug(f'Actions after response_to_actions: {actions}')
+        try:
+            response = self.llm.completion(**params)
+        except Exception as e:
+            logger.warning(f'Error in LLM completion with messages: {messages}')
+            raise e
 
+        logger.debug(f'Response from LLM: {response}')
+        actions = delegatable_mcp_function_calling.response_to_actions(response)
+        logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
             self.pending_actions.append(action)
         return self.pending_actions.popleft()

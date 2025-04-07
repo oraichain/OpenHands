@@ -6,14 +6,13 @@ load_dotenv()
 from openhands.agenthub import (  # noqa: E402
     browsing_agent,
     codeact_agent,
+    delegatable_mcp_agent,
     dummy_agent,
     planner_agent,
     # visualbrowsing_agent,
     react_agent,
     task_solving_agent,
 )
-
-# visualbrowsing_agent,
 from openhands.controller.agent import Agent  # noqa: E402
 
 __all__ = [
@@ -25,4 +24,5 @@ __all__ = [
     'react_agent',
     'planner_agent',
     'task_solving_agent',
+    'delegatable_mcp_agent',
 ]

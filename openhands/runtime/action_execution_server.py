@@ -16,6 +16,7 @@ import tempfile
 import time
 import traceback
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from pathlib import Path
 from typing import Optional
 from zipfile import ZipFile
@@ -34,6 +35,7 @@ from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from uvicorn import run
 
+from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.exceptions import BrowserUnavailableException
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.setup import create_mcp_agents
@@ -77,8 +79,7 @@ from openhands.utils.async_utils import call_sync_from_async, wait_all
 
 class ActionRequest(BaseModel):
     action: dict
-    sse_mcp_config: Optional[list[str]] = None
-    stdio_mcp_config: Optional[tuple[list[str], list[list[str]]]] = None
+    mcp_config: Optional[MCPConfig] = MCPConfig()
     caller_platform: str = 'Linux'
 
 
@@ -202,9 +203,8 @@ class ActionExecutor:
         return self._initial_cwd
 
     def process_request(self, action_request: ActionRequest):
-        # update the sse_mcp_servers and stdio_mcp_config to prepare for MCP action if needed
-        self.sse_mcp_servers = action_request.sse_mcp_config
-        self.stdio_mcp_config = action_request.stdio_mcp_config
+        # update the mcp_config to prepare for MCP action if needed
+        self.mcp_config = action_request.mcp_config
         self.caller_platform = action_request.caller_platform
 
     async def _init_browser_async(self):
@@ -526,14 +526,16 @@ class ActionExecutor:
         return await browse(action, self.browser)
 
     async def call_tool_mcp(self, action: McpAction) -> Observation:
-        mcp_server_urls = self.sse_mcp_servers or []
-        commands: list[str] = []
-        args: list[list[str]] = []
-        if self.stdio_mcp_config:
-            commands = self.stdio_mcp_config[0]
-            if len(self.stdio_mcp_config) > 1:
-                args = self.stdio_mcp_config[1]
-        if not mcp_server_urls and not commands:
+        # create copy of the mcp config to avoid modifying the original
+
+        if self.mcp_config is None:
+            raise ValueError('Could not call MCP tool, mcp_config is None')
+
+        mcp_config = deepcopy(self.mcp_config)
+
+        mcp_server_urls = [server.url for server in mcp_config.sse]
+
+        if not mcp_config.sse and not mcp_config.stdio:
             raise ValueError('No MCP servers or stdio MCP config found')
 
         if mcp_server_urls:
@@ -556,11 +558,13 @@ class ActionExecutor:
                     port = host_port.split(':')[1] if ':' in host_port else ''
                     docker_url = f'http://host.docker.internal:{port}/{path}'
                     mcp_server_urls[i] = docker_url
+                    mcp_config.sse[i].url = docker_url
                 else:
                     mcp_server_urls[i] = server
+                    mcp_config.sse[i].url = server
 
         logger.info(f'SSE MCP servers: {mcp_server_urls}')
-        mcp_agents = await create_mcp_agents(mcp_server_urls, commands, args)
+        mcp_agents = await create_mcp_agents(mcp_config)
         logger.info(f'MCP action received: {action}')
         # Find the MCP agent that has the matching tool name
         matching_agent = None

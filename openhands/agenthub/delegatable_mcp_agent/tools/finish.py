@@ -9,7 +9,7 @@ Use this tool when:
 The message should concise and include:
 - The path to the file where the final answer is saved
 
-The task_completed field should be set to True if you believe you have successfully completed the user's request, and False otherwise.
+The task_completed field should be set to True if you believe you have successfully completed the task, and False otherwise.
 """
 
 FinishTool = ChatCompletionToolParam(
@@ -27,10 +27,19 @@ FinishTool = ChatCompletionToolParam(
                 },
                 'task_completed': {
                     'type': 'boolean',
-                    'description': "Whether you believe you have successfully completed the user's request",
+                    'description': "Whether you believe you have successfully completed the user's task",
                 },
             },
             'additionalProperties': False,
         },
     ),
 )
+
+# def get_finish_tool() -> Dict[str, Any]:
+#     """
+#     Returns the Finish tool configuration that signals task completion.
+
+#     Returns:
+#         Dict[str, Any]: The tool configuration for the finish action
+#     """
+#     return FinishTool

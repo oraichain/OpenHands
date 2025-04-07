@@ -55,7 +55,7 @@ class AppConfig(BaseModel):
 
     enable_planning: bool = Field(default=False)
     llms: dict[str, LLMConfig] = Field(default_factory=dict)
-    agents: dict = Field(default_factory=dict)
+    agents: dict[str, AgentConfig] = Field(default_factory=dict)
     default_agent: str = Field(default=OH_DEFAULT_AGENT)
     default_planning_agent: str = Field(default=OH_DEFAULT_PLANNING_AGENT)
     default_task_solving_agent: str = Field(default=OH_DEFAULT_TASK_SOLVING_AGENT)
@@ -144,8 +144,3 @@ class AppConfig(BaseModel):
         super().model_post_init(__context)
         if not AppConfig.defaults_dict:  # Only set defaults_dict if it's empty
             AppConfig.defaults_dict = model_defaults_to_dict(self)
-        # Validate MCP configurations
-        if self.mcp.sse.mcp_servers:
-            self.mcp.sse.validate_servers()
-        if self.mcp.stdio.commands:
-            self.mcp.stdio.validate_stdio()
