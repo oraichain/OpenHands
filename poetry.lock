@@ -745,8 +745,8 @@ optional = false
 python-versions = ">=3.8"
 groups = ["evaluation"]
 files = [
-    {file = "boto3_stubs-1.37.26-py3-none-any.whl", hash = "sha256:afe78145bf137e82824505ef7ced239e815433db0bdaf49638fd367a1a335018"},
-    {file = "boto3_stubs-1.37.26.tar.gz", hash = "sha256:19d218bd6713b2f7316c86ae40083ac5548bed198503c60cf9886a4d018965e2"},
+    {file = "boto3_stubs-1.37.25-py3-none-any.whl", hash = "sha256:268cd34076f68d9e991f9e4a159d4d1696ae52d7d56f5f7beb92f9874eca0e34"},
+    {file = "boto3_stubs-1.37.25.tar.gz", hash = "sha256:6319e9106d9bd519a6a8878a814b317f54cae023c2e176c31f502d0034824d1f"},
 ]
 
 [package.dependencies]
@@ -802,7 +802,7 @@ bedrock-data-automation-runtime = ["mypy-boto3-bedrock-data-automation-runtime (
 bedrock-runtime = ["mypy-boto3-bedrock-runtime (>=1.37.0,<1.38.0)"]
 billing = ["mypy-boto3-billing (>=1.37.0,<1.38.0)"]
 billingconductor = ["mypy-boto3-billingconductor (>=1.37.0,<1.38.0)"]
-boto3 = ["boto3 (==1.37.26)"]
+boto3 = ["boto3 (==1.37.25)"]
 braket = ["mypy-boto3-braket (>=1.37.0,<1.38.0)"]
 budgets = ["mypy-boto3-budgets (>=1.37.0,<1.38.0)"]
 ce = ["mypy-boto3-ce (>=1.37.0,<1.38.0)"]
@@ -2887,7 +2887,7 @@ version = "7.2.0"
 description = "the modular source code checker: pep8 pyflakes and co"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "runtime", "test"]
+groups = ["main", "runtime"]
 files = [
     {file = "flake8-7.2.0-py2.py3-none-any.whl", hash = "sha256:93b92ba5bdb60754a6da14fa3b93a9361fd00a59632ada61fd7b130436c40343"},
     {file = "flake8-7.2.0.tar.gz", hash = "sha256:fa558ae3f6f7dbf2b4f22663e5343b6b6023620461f8d4ff2019ef4b5ee70426"},
@@ -3569,7 +3569,7 @@ google-auth = ">=2.14.1,<2.24.0 || >2.24.0,<2.25.0 || >2.25.0,<3.0.0"
 grpc-google-iam-v1 = ">=0.14.0,<1.0.0"
 proto-plus = [
     {version = ">=1.25.0,<2.0.0", markers = "python_version >= \"3.13\""},
-    {version = ">=1.22.3,<2.0.0", markers = "python_version < \"3.13\""},
+    {version = ">=1.22.3,<2.0.0"},
 ]
 protobuf = ">=3.20.2,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<7.0.0"
 
@@ -7152,7 +7152,7 @@ version = "2.13.0"
 description = "Python style guide checker"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "runtime", "test"]
+groups = ["main", "runtime"]
 files = [
     {file = "pycodestyle-2.13.0-py2.py3-none-any.whl", hash = "sha256:35863c5974a271c7a726ed228a14a4f6daf49df369d8c50cd9a6f58a5e143ba9"},
     {file = "pycodestyle-2.13.0.tar.gz", hash = "sha256:c8415bf09abe81d9c7f872502a6eee881fbe85d8763dd5b9924bb0a01d67efae"},
@@ -7408,7 +7408,7 @@ version = "3.3.2"
 description = "passive checker of Python programs"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "runtime", "test"]
+groups = ["main", "runtime"]
 files = [
     {file = "pyflakes-3.3.2-py2.py3-none-any.whl", hash = "sha256:5039c8339cbb1944045f4ee5466908906180f13cc99cc9949348d10f82a5c32a"},
     {file = "pyflakes-3.3.2.tar.gz", hash = "sha256:6dfd61d87b97fba5dcfaaf781171ac16be16453be6d816147989e7f6e6a9576b"},
@@ -11110,4 +11110,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "69879de0caad958f3b6ce97f8c5589db2ac617117c39b63fd7c61bbbb9e3bcd2"
+content-hash = "f3bd1558970b003b9cf108c13bb32668aa1426f5c12fbd1a5a9e2b297a1b0b07"

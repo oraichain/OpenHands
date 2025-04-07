@@ -87,7 +87,7 @@ export function GitRepositorySelector({
   const emptyContent = isLoading ? (
     <div className="flex items-center justify-center py-2">
       <Spinner size="sm" className="mr-2" />
-      <span>{t(I18nKey.GITHUB$LOADING_REPOSITORIES)}</span>
+      <span>{t(I18nKey.LOADING_PROJECT$LOADING)}</span>
     </div>
   ) : (
     t(I18nKey.GITHUB$NO_RESULTS)
@@ -98,7 +98,7 @@ export function GitRepositorySelector({
       data-testid="github-repo-selector"
       name="repo"
       aria-label="Git Repository"
-      placeholder={t(I18nKey.LANDING$SELECT_GIT_REPO)}
+      placeholder={t(I18nKey.LANDING$SELECT_REPO)}
       isVirtualized={false}
       selectedKey={selectedKey}
       inputProps={{
