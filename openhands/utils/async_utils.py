@@ -3,7 +3,9 @@ from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Coroutine, Iterable, List
 
+# Add constant definition at the top of the file
 GENERAL_TIMEOUT: int = 15
+
 EXECUTOR = ThreadPoolExecutor()
 
 
@@ -67,26 +69,56 @@ async def wait_all(
     Returns a list of results in the original order. If any single task raised an exception, this is raised.
     If multiple tasks raised exceptions, an AsyncException is raised containing all exceptions.
     """
+    # Ensure base directory exists before starting tasks
+    import os
+    base_dir = '/.openhands-state/sessions'
+    os.makedirs(base_dir, exist_ok=True)
+    
     tasks = [asyncio.create_task(c) for c in iterable]
     if not tasks:
         return []
-    _, pending = await asyncio.wait(tasks, timeout=timeout)
-    if pending:
-        for task in pending:
-            task.cancel()
-        raise asyncio.TimeoutError()
-    results = []
-    errors = []
-    for task in tasks:
-        try:
-            results.append(task.result())
-        except Exception as e:
-            errors.append(e)
-    if errors:
-        if len(errors) == 1:
-            raise errors[0]
-        raise AsyncException(errors)
-    return [task.result() for task in tasks]
+        
+    try:
+        _, pending = await asyncio.wait(tasks, timeout=timeout)
+        if pending:
+            for task in pending:
+                task.cancel()
+            raise asyncio.TimeoutError()
+            
+        results = []
+        errors = []
+        for task in tasks:
+            try:
+                results.append(task.result())
+            except FileNotFoundError as e:
+                # Extract directory path from error message
+                error_path = str(e).split("'")[1]
+                dir_path = os.path.dirname(error_path)
+                try:
+                    # Create missing directory and its parents
+                    os.makedirs(dir_path, exist_ok=True)
+                    # Still append error as the operation needs to be retried
+                    errors.append(e)
+                except PermissionError:
+                    # Handle permission issues
+                    logger.error(f"Permission denied creating directory: {dir_path}")
+                    errors.append(e)
+            except Exception as e:
+                errors.append(e)
+                
+        if errors:
+            if len(errors) == 1:
+                raise errors[0]
+            raise AsyncException(errors)
+            
+        return [task.result() for task in tasks]
+        
+    except Exception as e:
+        # Ensure all tasks are properly cleaned up
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        raise e
 
 
 class AsyncException(Exception):
