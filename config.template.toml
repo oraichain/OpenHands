@@ -413,5 +413,7 @@ api_key = ""
 [mcp.browser_mcp]
 url = "http://localhost:4000/sse"
 
+
+
 # [mcp.liquidity]
 # url = "http://148.113.35.59:4003/sse"

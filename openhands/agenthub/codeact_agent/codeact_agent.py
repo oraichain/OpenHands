@@ -166,6 +166,7 @@ class CodeActAgent(Agent):
 
         # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
+        logger.debug(f'llm.completion Params: {params}')
         response = self.llm.completion(**params)
         logger.debug(f'Response from LLM: {response}')
         actions = codeact_function_calling.response_to_actions(

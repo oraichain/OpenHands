@@ -36,7 +36,7 @@ from uvicorn import run
 from openhands.core.config.mcp_config import McpConfig
 from openhands.core.exceptions import BrowserUnavailableException
 from openhands.core.logger import openhands_logger as logger
-from openhands.core.message import ImageContent, TextContent
+from openhands.core.message import ImageContent
 from openhands.core.setup import create_mcp_agents
 from openhands.events.action import (
     Action,
@@ -565,11 +565,9 @@ class ActionExecutor:
         if matching_agent.name == 'browser_mcp':
             return self.browser_mcp_observation(action, response)
 
-        text_content = ', '.join(
-            item.text for item in response.output if isinstance(item, TextContent)
+        return MCPObservation(
+            content=f'MCP {action.name} result:{response.output[0].text}'
         )
-
-        return MCPObservation(content=f'MCP {action.name} result:{text_content}')
 
     def browser_mcp_observation(
         self, action: McpAction, response: MCPToolResult
