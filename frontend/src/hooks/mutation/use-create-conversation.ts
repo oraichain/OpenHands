@@ -26,7 +26,8 @@ export const useCreateConversation = () => {
         replayJson || undefined,
       );
     },
-    onSuccess: async ({ conversation_id: conversationId }, { q }) => {
+    onSuccess: async (data, { q }) => {
+      if (!data) return;
       posthog.capture("initial_query_submitted", {
         entry_point: "task_form",
         query_character_length: q?.length,
@@ -37,7 +38,8 @@ export const useCreateConversation = () => {
       await queryClient.invalidateQueries({
         queryKey: ["user", "conversations"],
       });
-      navigate(`/conversations/${conversationId}`);
+      data?.conversation_id &&
+        navigate(`/conversations/${data.conversation_id}`);
     },
   });
 };
