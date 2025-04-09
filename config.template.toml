@@ -409,16 +409,9 @@ api_key = ""
 #################################### MCP ####################################
 # Configuration for MCP (Model Context Protocol) settings
 ##############################################################################
-[mcp-sse]
-# List of MCP server URLs, separated by quotes
-# Example: mcp_servers = ["http://server1:8080/sse", "http://server2:8080/sse"]
-#mcp_servers = []
+[mcp]
+[mcp.browser_mcp]
+url = "http://localhost:4000/sse"
 
-#################################### MCP ####################################
-# Configuration for MCP (Model Context Protocol) settings
-##############################################################################
-[mcp-stdio]
-# List of MCP server URLs, separated by quotes
-# Example: commands = [""]
-#commands = []
-#args = []
+# [mcp.liquidity]
+# url = "http://148.113.35.59:4003/sse"
