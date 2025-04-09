@@ -60,6 +60,7 @@ class CodeActAgent(Agent):
         mcp_tools: list[dict] | None = None,
         model_routing_config: ModelRoutingConfig | None = None,
         routing_llms: dict[str, LLM] | None = None,
+        workspace_mount_path_in_sandbox_store_in_session: bool = True,
     ) -> None:
         """Initializes a new instance of the CodeActAgent class.
 
@@ -69,8 +70,11 @@ class CodeActAgent(Agent):
         - mcp_tools (list[dict] | None, optional): List of MCP tools to be used by this agent. Defaults to None.
         - model_routing_config (ModelRoutingConfig | None, optional): Configuration for model routing. Defaults to None.
         - routing_llms (dict[str, LLM] | None, optional): The llms to be selected for routing. Defaults to None.
+        - workspace_mount_path_in_sandbox_store_in_session (bool, optional): Whether to store the workspace mount path in session. Defaults to True.
         """
-        super().__init__(llm, config, mcp_tools)
+        super().__init__(
+            llm, config, mcp_tools, workspace_mount_path_in_sandbox_store_in_session
+        )
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
@@ -81,8 +85,7 @@ class CodeActAgent(Agent):
             llm=self.llm,
         )
 
-        self.tools = built_in_tools + \
-            (mcp_tools if mcp_tools is not None else [])
+        self.tools = built_in_tools + (mcp_tools if mcp_tools is not None else [])
 
         # Retrieve the enabled tools
         logger.info(
@@ -93,8 +96,7 @@ class CodeActAgent(Agent):
         )
 
         # Create a ConversationMemory instance
-        self.conversation_memory = ConversationMemory(
-            self.config, self.prompt_manager)
+        self.conversation_memory = ConversationMemory(self.config, self.prompt_manager)
 
         self.condenser = Condenser.from_config(self.config.condenser)
         logger.debug(f'Using condenser: {type(self.condenser)}')
@@ -163,12 +165,14 @@ class CodeActAgent(Agent):
         params['messages'] = self.active_llm.format_messages_for_llm(messages)
 
         # log to litellm proxy if possible
-        params['extra_body'] = {
-            'metadata': state.to_llm_metadata(agent_name=self.name)}
-
-        response = self.active_llm.completion(**params)
-
-        actions = codeact_function_calling.response_to_actions(response)
+        params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
+        response = self.llm.completion(**params)
+        logger.debug(f'Response from LLM: {response}')
+        actions = codeact_function_calling.response_to_actions(
+            response=response,
+            sid=state.session_id,
+            workspace_mount_path_in_sandbox_store_in_session=self.workspace_mount_path_in_sandbox_store_in_session,
+        )
         logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
             self.pending_actions.append(action)

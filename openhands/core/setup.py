@@ -220,6 +220,7 @@ async def create_agent(config: AppConfig) -> Agent:
         if config.enable_plan_routing
         else None,
         routing_llms=routing_llms if routing_llms else None,
+        workspace_mount_path_in_sandbox_store_in_session=config.workspace_mount_path_in_sandbox_store_in_session,
     )
 
     # We only need to get the tools from the MCP agents, so we can safely close them after that

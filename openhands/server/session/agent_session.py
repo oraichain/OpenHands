@@ -293,6 +293,7 @@ class AgentSession:
         itself does not call LLM or cost money.
         """
         assert initial_message is None
+        print(f'Replaying trajectory from {replay_json}')
         replay_events = ReplayManager.get_replay_events(json.loads(replay_json))
         self.controller = self._create_controller(
             agent,

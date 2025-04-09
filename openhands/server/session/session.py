@@ -147,6 +147,7 @@ class Session:
             config=agent_config,
             model_routing_config=self.config.model_routing,
             routing_llms=routing_llms,
+            workspace_mount_path_in_sandbox_store_in_session=self.config.workspace_mount_path_in_sandbox_store_in_session,
         )
 
         git_provider_tokens = None
