@@ -24,7 +24,6 @@ from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import APIKeyHeader
-from mcp.types import ImageContent
 from openhands_aci.editor.editor import OHEditor
 from openhands_aci.editor.exceptions import ToolError
 from openhands_aci.editor.results import ToolResult
@@ -34,8 +33,10 @@ from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from uvicorn import run
 
+from openhands.core.config.mcp_config import McpConfig
 from openhands.core.exceptions import BrowserUnavailableException
 from openhands.core.logger import openhands_logger as logger
+from openhands.core.message import ImageContent, TextContent
 from openhands.core.setup import create_mcp_agents
 from openhands.events.action import (
     Action,
@@ -58,18 +59,18 @@ from openhands.events.observation import (
     IPythonRunCellObservation,
     Observation,
 )
-from openhands.events.observation.mcp import MCPObservation
-from openhands.events.observation.playwright_mcp import (
-    PlaywrightMcpBrowserScreenshotObservation,
+from openhands.events.observation.browser_mcp import (
+    BrowserMcpObservation,
 )
+from openhands.events.observation.mcp import MCPObservation
 from openhands.events.serialization import event_from_dict, event_to_dict
 from openhands.mcp.mcp_agent import MCPAgent
-from openhands.mcp.mcp_base import ExtendedImageContent
 from openhands.mcp.mcp_base import ToolResult as MCPToolResult
 from openhands.runtime.browser import browse
 from openhands.runtime.browser.browser_env import BrowserEnv
 from openhands.runtime.plugins import ALL_PLUGINS, JupyterPlugin, Plugin, VSCodePlugin
 from openhands.runtime.utils.bash import BashSession
+from openhands.runtime.utils.browser import extract_page_url
 from openhands.runtime.utils.file_viewer import generate_file_viewer_html
 from openhands.runtime.utils.files import insert_lines, read_lines
 from openhands.runtime.utils.memory_monitor import MemoryMonitor
@@ -80,8 +81,7 @@ from openhands.utils.async_utils import call_sync_from_async, wait_all
 
 class ActionRequest(BaseModel):
     action: dict
-    sse_mcp_config: Optional[list[str]] = None
-    stdio_mcp_config: Optional[tuple[list[str], list[list[str]]]] = None
+    dict_mcp_config: Optional[dict[str, McpConfig]] = None
 
 
 ROOT_GID = 0
@@ -206,10 +206,8 @@ class ActionExecutor:
 
     def process_request(self, action_request: ActionRequest):
         # update the sse_mcp_servers and stdio_mcp_config to prepare for MCP action if needed
-        if action_request.sse_mcp_config:
-            self.sse_mcp_servers = action_request.sse_mcp_config
-        if action_request.stdio_mcp_config:
-            self.stdio_mcp_config = action_request.stdio_mcp_config
+        if action_request.dict_mcp_config:
+            self.dict_mcp_config = action_request.dict_mcp_config
 
     async def _init_browser_async(self):
         """Initialize the browser asynchronously."""
@@ -533,27 +531,17 @@ class ActionExecutor:
         return await browse(action, self.browser)
 
     async def call_tool_mcp(self, action: McpAction) -> Observation:
-        mcp_server_urls = self.sse_mcp_servers or []
-        commands: list[str] = []
-        args: list[list[str]] = []
-        if self.stdio_mcp_config:
-            commands = self.stdio_mcp_config[0]
-            if len(self.stdio_mcp_config) > 1:
-                args = self.stdio_mcp_config[1]
-        if not mcp_server_urls and not commands:
+        logger.debug(f'dict_mcp_config: {self.dict_mcp_config}')
+        if self.dict_mcp_config is None:
             raise ValueError('No MCP servers or stdio MCP config found')
 
-        logger.debug(f'SSE MCP servers: {mcp_server_urls}')
         if self.mcp_agents is None:
             self.mcp_agents = await create_mcp_agents(
-                mcp_server_urls, commands, args, sid=action.sid
+                dict_mcp_config=self.dict_mcp_config, sid=action.sid
             )
         mcp_agents = self.mcp_agents
-        logger.debug(f'MCP action received: {action}')
-        # Find the MCP agent that has the matching tool name
         matching_agent = None
         logger.debug(f'MCP agents: {mcp_agents}')
-        logger.debug(f'MCP action name: {action.name}')
         for agent in mcp_agents:
             agent.mcp_clients.tools
             if action.name in [tool.name for tool in agent.mcp_clients.tools]:
@@ -564,72 +552,56 @@ class ActionExecutor:
             raise ValueError(
                 f'No matching MCP agent found for tool name: {action.name}'
             )
-        logger.debug(f'Matching agent: {matching_agent}')
+        logger.debug(f'Matching agent: {matching_agent.name}')
         args_dict = json.loads(action.arguments)
-        response = await matching_agent.run_tool(action.name, args_dict)
-        logger.debug(f'MCP response: {response}')
-        # # close agent connections
-        # for agent in mcp_agents:
-        #     await agent.cleanup()
-        # special case for browser screenshot of playwright_mcp
-        if action.name == 'browser_screenshot' and isinstance(
-            response.output, (ImageContent, ExtendedImageContent)
-        ):
-            return self.playwright_mcp_browser_screenshot(action, response)
+        try:
+            response = await matching_agent.run_tool(action.name, args_dict)
+            logger.debug(f'MCP response: {str(response)}')
+        except Exception as e:
+            logger.error(f'Error running MCP tool: {e}')
+            raise e
 
-        return MCPObservation(content=f'MCP result:{response}')
+        # special handle for browser_mcp to stream out the screenshot and event stream
+        if matching_agent.name == 'browser_mcp':
+            return self.browser_mcp_observation(action, response)
 
-    def playwright_mcp_browser_screenshot(
-        self, action: McpAction, response: MCPToolResult
-    ) -> Observation:
-        # example response:
-        """
-        {
-            "type": "image",
-            "data": "image/jpeg;base64,/9j/4AA...",
-            "mimeType": "image/jpeg",
-            "url": "https://www.google.com"
-        }
-        """
-        screenshot_content = response.output
-        logger.debug(f'Screenshot content: {screenshot_content}')
-
-        # Handle the case where screenshot_content is a string
-        if isinstance(screenshot_content, str):
-            # Try to parse the string as JSON to extract url and data
-            try:
-                screenshot_data = json.loads(screenshot_content)
-                url = screenshot_data.get('url', '')
-                data = screenshot_data.get('data', '')
-                return PlaywrightMcpBrowserScreenshotObservation(
-                    content=f'{response}',
-                    url=url,
-                    trigger_by_action=action.name,
-                    screenshot=f'data:image/png;base64,{data}',
-                )
-            except json.JSONDecodeError:
-                # If we can't parse as JSON, just provide empty values
-                return PlaywrightMcpBrowserScreenshotObservation(
-                    content=f'{response}',
-                    url='',
-                    trigger_by_action=action.name,
-                    screenshot='',
-                )
-
-        # Normal case where screenshot_content is an ExtendedImageContent object
-        return PlaywrightMcpBrowserScreenshotObservation(
-            content=f'{response}',
-            url=screenshot_content.url if hasattr(screenshot_content, 'url') else '',
-            trigger_by_action=action.name,
-            screenshot=f'data:image/png;base64,{screenshot_content.data if hasattr(screenshot_content, "data") else ""}',
+        text_content = ', '.join(
+            item.text for item in response.output if isinstance(item, TextContent)
         )
 
-    def close(self):
+        return MCPObservation(content=f'MCP {action.name} result:{text_content}')
+
+    def browser_mcp_observation(
+        self, action: McpAction, response: MCPToolResult
+    ) -> Observation:
+        browser_content = response.output
+        text_content = browser_content[0]
+        image_content: ImageContent | None = None
+        if len(browser_content) > 1:
+            image_content = browser_content[1]
+
+        logger.debug(f'image_content: {image_content}')
+        logger.debug(f'text_content: {text_content}')
+        url = extract_page_url(text_content.text)
+
+        return BrowserMcpObservation(
+            content=f'{text_content.text}',
+            url=url if url is not None else '',
+            trigger_by_action=action.name,
+            screenshot=f'data:{image_content.mimeType};base64,{image_content.data}'
+            if image_content is not None
+            else '',
+        )
+
+    async def close(self):
         self.memory_monitor.stop_monitoring()
         if self.bash_session is not None:
             self.bash_session.close()
         if self.browser is not None:
             self.browser.close()
+        if self.mcp_agents is not None:
+            for agent in self.mcp_agents:
+                await agent.cleanup()
 
 
 if __name__ == '__main__':
@@ -696,7 +668,7 @@ if __name__ == '__main__':
         await client.ainit()
         yield
         # Clean up & release the resources
-        client.close()
+        await client.close()
 
     app = FastAPI(lifespan=lifespan)
 
@@ -765,6 +737,9 @@ if __name__ == '__main__':
             observation = await client.run_action(action)
             return event_to_dict(observation)
         except Exception as e:
+            # Debugging: Print type and repr of the exception before logging str(e)
+            print(f'Caught exception type: {type(e)}')
+            print(f'Caught exception repr: {repr(e)}')
             logger.error(f'Error while running /execute_action: {str(e)}')
             raise HTTPException(
                 status_code=500,

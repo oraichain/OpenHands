@@ -14,6 +14,7 @@ from openhands.core.config import AppConfig
 from openhands.core.exceptions import (
     AgentRuntimeTimeoutError,
 )
+from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
 from openhands.events.action import (
     ActionConfirmationStatus,
@@ -282,16 +283,13 @@ class ActionExecutionClient(Runtime):
                 execution_action_body: dict[str, Any] = {
                     'action': event_to_dict(action),
                 }
-                if self.config.mcp.sse.mcp_servers:
-                    execution_action_body['sse_mcp_config'] = (  # type: ignore[assignment]
-                        self.config.mcp.sse.mcp_servers
-                    )
-                if self.config.mcp.stdio.commands:
-                    execution_action_body['stdio_mcp_config'] = (  # type: ignore[assignment]
-                        self.config.mcp.stdio.commands,
-                        self.config.mcp.stdio.args,
-                    )
-
+                # Convert McpConfig objects to dictionaries before adding to the payload
+                serializable_mcp_config = (
+                    {k: v.model_dump() for k, v in self.config.dict_mcp_config.items()}
+                    if self.config.dict_mcp_config
+                    else None
+                )
+                execution_action_body['dict_mcp_config'] = serializable_mcp_config
                 response = self._send_action_server_request(
                     'POST',
                     f'{self._get_action_execution_server_host()}/execute_action',
@@ -301,7 +299,9 @@ class ActionExecutionClient(Runtime):
                 )
                 assert response.is_closed
                 output = response.json()
+                logger.debug(f'output: {output}')
                 obs = observation_from_dict(output)
+                logger.debug(f'obs: {obs}')
                 obs._cause = action.id  # type: ignore[attr-defined]
             except httpx.TimeoutException:
                 raise AgentRuntimeTimeoutError(

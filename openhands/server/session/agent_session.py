@@ -123,21 +123,16 @@ class AgentSession:
             # Initialize MCP agents first before creating runtime and controller
             try:
                 # Log MCP configuration to help with debugging
-                self.logger.info(f'MCP SSE servers: {config.mcp.sse.mcp_servers}')
-                self.logger.info(f'MCP stdio commands: {config.mcp.stdio.commands}')
-                self.logger.info(f'MCP stdio args: {config.mcp.stdio.args}')
-
+                self.logger.info(f'MCP dict_mcp_config: {config.dict_mcp_config}')
                 # Check if MCP servers are available
-                if not config.mcp.sse.mcp_servers and not config.mcp.stdio.commands:
+                if not config.dict_mcp_config:
                     self.logger.warning(
                         'No MCP servers or commands configured. MCP integration will not work.'
                     )
                 else:
                     self.logger.info('Initializing MCP agents for server mode...')
                     mcp_agents = await create_mcp_agents(
-                        config.mcp.sse.mcp_servers,
-                        config.mcp.stdio.commands,
-                        config.mcp.stdio.args,
+                        config.dict_mcp_config,
                         sid=self.sid,
                         user_id=self.user_id,
                         mnemonic=self.mnemonic,

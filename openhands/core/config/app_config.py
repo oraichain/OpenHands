@@ -1,7 +1,3 @@
-from openhands.core.config.security_config import SecurityConfig
-from openhands.core.config.sandbox_config import SandboxConfig
-from openhands.core.config.model_routing_config import ModelRoutingConfig
-from openhands.core.config.mcp_config import MCPConfig
 from typing import ClassVar
 
 from pydantic import BaseModel, Field, SecretStr
@@ -15,6 +11,10 @@ from openhands.core.config.config_utils import (
 )
 from openhands.core.config.extended_config import ExtendedConfig
 from openhands.core.config.llm_config import LLMConfig
+from openhands.core.config.mcp_config import McpConfig
+from openhands.core.config.model_routing_config import ModelRoutingConfig
+from openhands.core.config.sandbox_config import SandboxConfig
+from openhands.core.config.security_config import SecurityConfig
 
 
 class AppConfig(BaseModel):
@@ -59,10 +59,8 @@ class AppConfig(BaseModel):
     default_agent: str = Field(default=OH_DEFAULT_AGENT)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
-    extended: ExtendedConfig = Field(
-        default_factory=lambda: ExtendedConfig({}))
-    model_routing: ModelRoutingConfig = Field(
-        default_factory=ModelRoutingConfig)
+    extended: ExtendedConfig = Field(default_factory=lambda: ExtendedConfig({}))
+    model_routing: ModelRoutingConfig = Field(default_factory=ModelRoutingConfig)
     runtime: str = Field(default='docker')
     file_store: str = Field(default='local')
     file_store_path: str = Field(default='/tmp/openhands_file_store')
@@ -85,20 +83,18 @@ class AppConfig(BaseModel):
     debug: bool = Field(default=False)
     file_uploads_max_file_size_mb: int = Field(default=0)
     file_uploads_restrict_file_types: bool = Field(default=False)
-    file_uploads_allowed_extensions: list[str] = Field(
-        default_factory=lambda: ['.*'])
+    file_uploads_allowed_extensions: list[str] = Field(default_factory=lambda: ['.*'])
     runloop_api_key: SecretStr | None = Field(default=None)
     daytona_api_key: SecretStr | None = Field(default=None)
     daytona_api_url: str = Field(default='https://app.daytona.io/api')
     daytona_target: str = Field(default='eu')
     cli_multiline_input: bool = Field(default=False)
-    conversation_max_age_seconds: int = Field(
-        default=864000)  # 10 days in seconds
+    conversation_max_age_seconds: int = Field(default=864000)  # 10 days in seconds
     enable_default_condenser: bool = Field(default=True)
     max_concurrent_conversations: int = Field(
         default=3
     )  # Maximum number of concurrent agent loops allowed per user
-    mcp: MCPConfig = Field(default_factory=MCPConfig)
+    dict_mcp_config: dict[str, McpConfig] = Field(default_factory=dict)
 
     defaults_dict: ClassVar[dict] = {}
 
@@ -150,8 +146,6 @@ class AppConfig(BaseModel):
         super().model_post_init(__context)
         if not AppConfig.defaults_dict:  # Only set defaults_dict if it's empty
             AppConfig.defaults_dict = model_defaults_to_dict(self)
-        # Validate MCP configurations
-        if self.mcp.sse.mcp_servers:
-            self.mcp.sse.validate_servers()
-        if self.mcp.stdio.commands:
-            self.mcp.stdio.validate_stdio()
+        # # Validate MCP configurations
+        # if self.dict_mcp_config:
+        #     for mcp_config in self.dict_mcp_config.values():

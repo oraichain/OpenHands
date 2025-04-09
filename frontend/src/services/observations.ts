@@ -10,6 +10,7 @@ import {
   addAssistantMessage,
   addAssistantObservation,
 } from "#/state/chat-slice";
+import { base64ToBlob } from "#/utils/base64-to-blob";
 
 export function handleObservationMessage(message: ObservationMessage) {
   switch (message.observation) {
@@ -31,7 +32,7 @@ export function handleObservationMessage(message: ObservationMessage) {
       break;
     case ObservationType.BROWSE:
     case ObservationType.BROWSE_INTERACTIVE:
-    case ObservationType.PLAYWRIGHT_MCP_BROWSER_SCREENSHOT:
+    case ObservationType.BROWSER_MCP:
       if (message.extras?.screenshot) {
         store.dispatch(setScreenshotSrc(message.extras?.screenshot));
       }
@@ -221,11 +222,11 @@ export function handleObservationMessage(message: ObservationMessage) {
           }),
         );
         break;
-      case ObservationType.PLAYWRIGHT_MCP_BROWSER_SCREENSHOT:
+      case ObservationType.BROWSER_MCP:
         store.dispatch(
           addAssistantObservation({
             ...baseObservation,
-            observation: ObservationType.PLAYWRIGHT_MCP_BROWSER_SCREENSHOT,
+            observation: ObservationType.BROWSER_MCP,
             extras: {
               url: String(message.extras.url || ""),
               screenshot: String(message.extras.screenshot || ""),
@@ -244,7 +245,7 @@ export function handleObservationMessage(message: ObservationMessage) {
             },
           }),
         );
-        break
+        break;
       case "error":
         store.dispatch(
           addAssistantObservation({

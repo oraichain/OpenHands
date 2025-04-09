@@ -1,4 +1,3 @@
-import json
 from typing import Generator
 
 from litellm import ModelResponse
@@ -37,12 +36,12 @@ from openhands.events.observation.agent import (
     MicroagentKnowledge,
     RecallObservation,
 )
+from openhands.events.observation.browser_mcp import (
+    BrowserMcpObservation,
+)
 from openhands.events.observation.error import ErrorObservation
 from openhands.events.observation.mcp import MCPObservation
 from openhands.events.observation.observation import Observation
-from openhands.events.observation.playwright_mcp import (
-    PlaywrightMcpBrowserScreenshotObservation,
-)
 from openhands.events.serialization.event import truncate_content
 from openhands.utils.prompt import PromptManager, RepositoryInfo, RuntimeInfo
 
@@ -346,20 +345,17 @@ class ConversationMemory:
         elif isinstance(obs, MCPObservation):
             # logger.warning(f'MCPObservation: {obs}')
             message = Message(role='user', content=[TextContent(text=obs.content)])
-        elif isinstance(obs, PlaywrightMcpBrowserScreenshotObservation):
-            text = 'Image: Current webpage screenshot\n'
-            screenshot_content = json.loads(obs.content)
-            logger.debug(
-                f'screenshot_content in conversation_memory: {screenshot_content}'
-            )
-            if 'url' in screenshot_content:
-                text += f'URL: {screenshot_content["url"]}\n'
-
+        elif isinstance(obs, BrowserMcpObservation):
+            logger.debug(f'obs: {obs}')
+            # screenshot_content = json.loads(obs.screenshot)
+            # logger.debug(
+            #     f'screenshot_content in conversation_memory: {screenshot_content}'
+            # )
             # We don't actually need to screenshot fed into the LLM. We can use snapshots. Meanwhile, the screenshot will be streamed to the user.
             message = Message(
                 role='assistant',
                 content=[
-                    TextContent(text=text),
+                    TextContent(text=obs.content),
                 ],
             )
         elif isinstance(obs, IPythonRunCellObservation):

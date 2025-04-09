@@ -35,6 +35,7 @@ class MCPAgent(BaseModel):
         sid: Optional[str] = None,
         user_id: Optional[str] = None,
         mnemonic: Optional[str] = None,
+        name: Optional[str] = None,
     ) -> None:
         """Initialize the MCP connection.
         It persists the MCP connection with sid and user_id if connection_type is sse.
@@ -47,7 +48,11 @@ class MCPAgent(BaseModel):
             sid: Session ID
             user_id: User ID
             mnemonic: Mnemonic
+            name: Name of the agent
         """
+        if name:
+            self.name = name
+
         if connection_type:
             self.connection_type = connection_type
 

@@ -24,7 +24,7 @@ const HANDLED_ACTIONS: OpenHandsEventType[] = [
   "edit",
   "mcp",
   "call_tool_mcp",
-  "playwright_mcp_browser_screenshot",
+  "browser_mcp",
 ];
 
 function getRiskText(risk: ActionSecurityRisk) {

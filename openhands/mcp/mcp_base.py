@@ -72,28 +72,30 @@ class ToolResult(BaseModel):
     def __str__(self):
         if self.error:
             return f'Error: {self.error}'
-        elif isinstance(self.output, ExtendedImageContent):
-            return json.dumps(
-                {
-                    'type': 'image',
-                    'image_url': f'data:image/png;base64,{self.output.data}',
-                    'mimeType': self.output.mimeType,
-                    'url': self.output.url,
-                }
-            )
-        elif isinstance(self.output, ImageContent):
-            return json.dumps(
-                {
-                    'type': 'image',
-                    'image_url': f'data:image/png;base64,{self.output.data}',
-                    'mimeType': self.output.mimeType,
-                }
-            )
+        # Handle the case where output is a list
+        if isinstance(self.output, list):
+            str_parts = []
+            for item in self.output:
+                if isinstance(item, ImageContent):
+                    str_parts.append(
+                        json.dumps(
+                            {
+                                'type': 'image',
+                                'data': f'data:image/png;base64,{item.data}',
+                                'mimeType': item.mimeType,
+                            }
+                        )
+                    )
+                else:
+                    # Assume it's text or convert other types to string
+                    str_parts.append(str(item))
+            # Join the parts with a newline for readability
+            return '\n'.join(str_parts)
         else:
-            return self.output
+            return str(self.output)
 
     def replace(self, **kwargs):
-        """Returns a new ToolResult with the given fields replaced."""
+        """Return a new ToolResult with the specified fields replaced."""
         # return self.copy(update=kwargs)
         return type(self)(**{**self.dict(), **kwargs})
 
