@@ -59,6 +59,7 @@ from openhands.events.observation import (
     Observation,
 )
 from openhands.events.observation.mcp import MCPObservation
+from openhands.events.observation.planner_mcp import PlanObservation
 from openhands.events.observation.playwright_mcp import (
     PlaywrightMcpBrowserScreenshotObservation,
 )
@@ -573,7 +574,30 @@ class ActionExecutor:
         ):
             return self.playwright_mcp_browser_screenshot(action, response)
 
+        if action.name in ['create_plan', 'update_plan', 'get_plan']:
+            return self.planner_mcp_plan(action, response)
+
         return MCPObservation(content=f'MCP result:{response}')
+
+    def planner_mcp_plan(self, action, response) -> Observation:
+        logger.info(f'Planner MCP response: {response.output}')
+        resonpse_dict = json.loads(response.output)
+        observation = PlanObservation(
+            plan_id=resonpse_dict['plan_id'],
+            tasks=[
+                {
+                    'content': task['content'],
+                    'status': task['status'],
+                    'result': task['result'],
+                }
+                for task in resonpse_dict['tasks']
+            ],
+            title=resonpse_dict['title'],
+            content=resonpse_dict['title'],
+        )
+
+        logger.info(f'Planner MCP observation: {observation}')
+        return observation
 
     def playwright_mcp_browser_screenshot(
         self, action: McpAction, response: MCPToolResult

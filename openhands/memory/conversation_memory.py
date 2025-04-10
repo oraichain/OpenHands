@@ -30,6 +30,7 @@ from openhands.events.observation import (
     FileEditObservation,
     FileReadObservation,
     IPythonRunCellObservation,
+    PlanObservation,
     UserRejectObservation,
 )
 from openhands.events.observation.agent import (
@@ -336,6 +337,18 @@ class ConversationMemory:
         elif isinstance(obs, MCPObservation):
             # logger.warning(f'MCPObservation: {obs}')
             message = Message(role='user', content=[TextContent(text=obs.content)])
+
+        elif isinstance(obs, PlanObservation):
+            text = 'Plan: ' + obs.title
+            logger.info(f'Plan: {obs}')
+            for i in obs.tasks:
+                text += f'\n\n- Content: {i.get('content')} \n   - Status: {i['status']}\n   - Result: {i['result']}'
+            message = Message(
+                role='assistant',
+                content=[
+                    TextContent(text=text),
+                ],
+            )
         elif isinstance(obs, PlaywrightMcpBrowserScreenshotObservation):
             text = 'Image: Current webpage screenshot\n'
             screenshot_content = json.loads(obs.content)
