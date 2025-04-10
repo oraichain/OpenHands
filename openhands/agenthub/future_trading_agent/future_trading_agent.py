@@ -49,7 +49,7 @@ class FutureTradingAgent(Agent):
         - workspace_mount_path_in_sandbox_store_in_session (bool, optional): Whether to store the workspace mount path in session. Defaults to True.
         """
         super().__init__(
-            llm, config, mcp_tools, workspace_mount_path_in_sandbox_store_in_session
+            llm, config, workspace_mount_path_in_sandbox_store_in_session
         )
         self.pending_actions: deque[Action] = deque()
         self.reset()

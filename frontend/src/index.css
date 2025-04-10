@@ -87,3 +87,9 @@ code {
   scroll-behavior: smooth;
   scroll-timeline: 100ms;
 }
+
+/* Fast smooth scrolling for chat interface */
+.custom-block-chat > pre > pre {
+  color: black;
+  background: white;
+}
