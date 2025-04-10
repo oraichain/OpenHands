@@ -1,4 +1,7 @@
-import { useWsClient, WsClientProviderStatus } from "#/context/ws-client-provider";
+import {
+  useWsClient,
+  WsClientProviderStatus,
+} from "#/context/ws-client-provider";
 import { useScrollToBottom } from "#/hooks/use-scroll-to-bottom";
 import { generateAgentStateChangeEvent } from "#/services/agent-state-service";
 import { useTranslation } from "react-i18next";
@@ -188,17 +191,13 @@ export function ChatInterface() {
             onChange={setMessageToSend}
             className="flex-grow w-full pr-1" // Ensure chat box takes full width minus space for the button
           />
-          <button
-            onClick={handleDisconnect}
-            disabled={status === WsClientProviderStatus.DISCONNECTED}
-            className={`px-3 py-2 rounded-lg font-medium transition-colors ${
-              status === WsClientProviderStatus.CONNECTED
-                ? "bg-red-500 text-white hover:bg-red-600"
-                : "bg-gray-300 text-gray-500 cursor-not-allowed"
-            }`}
-          >
-            {t(status === WsClientProviderStatus.CONNECTED ? "Disconnect" : "Connect")}
-          </button>
+          <DisconnectButton
+            handleDisconnect={handleDisconnect}
+            isDisabled={
+              !isWaitingForUserInput &&
+              status !== WsClientProviderStatus.DISCONNECTED
+            }
+          />
         </div>
       </div>
 
@@ -208,5 +207,31 @@ export function ChatInterface() {
         polarity={feedbackPolarity}
       />
     </div>
+  );
+}
+
+interface DisconnectButtonProps {
+  handleDisconnect: () => void;
+  isDisabled: boolean;
+}
+
+export function DisconnectButton({
+  handleDisconnect,
+  isDisabled,
+}: DisconnectButtonProps) {
+  const { t } = useTranslation();
+
+  return (
+    <button
+      onClick={handleDisconnect}
+      disabled={isDisabled}
+      className={`px-3 py-2 rounded-lg font-medium transition-colors ${
+        isDisabled
+          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+          : "bg-red-500 text-white hover:bg-red-600"
+      }`}
+    >
+      {t(isDisabled ? "Connect" : "Disconnect")}
+    </button>
   );
 }
