@@ -1,11 +1,11 @@
-import { OpenHandsEventType } from "#/types/core/base"
-import React from "react"
+import { OpenHandsEventType } from "#/types/core/base";
+import React from "react";
 import {
   getDiffPath,
   getCommand,
   getCatFilePath,
   getUrlBrowser,
-} from "./helpers"
+} from "./helpers";
 import {
   FaEdit,
   FaTerminal,
@@ -13,27 +13,29 @@ import {
   FaGlobe,
   FaPencilAlt,
   // FaTools,
-} from "react-icons/fa"
-import Markdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import { code } from "../markdown/code"
-import { ol, ul } from "../markdown/list"
-import store from "#/store"
-import { setEventID } from "#/state/computer-slice"
+} from "react-icons/fa";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { code } from "../markdown/code";
+import { ol, ul } from "../markdown/list";
+import store from "#/store";
+import { setEventID } from "#/state/computer-slice";
+import { setCurrentPathViewed } from "#/state/file-state-slice";
 
 const actionWrapClassName =
-  "inline-flex max-w-full items-center gap-2 rounded-[15px] border border-neutral-1000 bg-[#37352f10] px-[10px] py-[3px] text-neutral-600 hover:opacity-70 dark:border-neutral-300 cursor-pointer"
+  "inline-flex max-w-full items-center gap-2 rounded-[15px] border border-neutral-1000 bg-[#37352f10] px-[10px] py-[3px] text-neutral-600 hover:opacity-70 dark:border-neutral-300 cursor-pointer";
 
 const MessageActionDisplay: React.FC<{
-  messageActionID: string | undefined
-  content: string
-  eventID?: number
+  messageActionID: string | undefined;
+  content: string;
+  eventID?: number;
 }> = ({ messageActionID, content, eventID }) => {
   const openComputertByEventID = (eventID) => {
     if (typeof eventID === "number") {
-      store.dispatch(setEventID(eventID))
+      store.dispatch(setCurrentPathViewed(""));
+      store.dispatch(setEventID(eventID));
     }
-  }
+  };
 
   const renderContent = () => {
     switch (messageActionID as OpenHandsEventType) {
@@ -50,7 +52,7 @@ const MessageActionDisplay: React.FC<{
               Editing file: {getDiffPath(content)}
             </div>
           </div>
-        )
+        );
 
       case "run":
       case "run_ipython":
@@ -66,7 +68,7 @@ const MessageActionDisplay: React.FC<{
               Executing command: {getCommand(content)}
             </div>
           </div>
-        )
+        );
 
       case "read":
         return (
@@ -81,7 +83,7 @@ const MessageActionDisplay: React.FC<{
               Reading file: {getCatFilePath(content)}
             </div>
           </div>
-        )
+        );
 
       case "browse":
       case "browse_interactive":
@@ -97,7 +99,7 @@ const MessageActionDisplay: React.FC<{
               Browsing: {getUrlBrowser(content)}
             </div>
           </div>
-        )
+        );
 
       case "write":
         return (
@@ -112,7 +114,7 @@ const MessageActionDisplay: React.FC<{
               Writing file: {getDiffPath(content)}
             </div>
           </div>
-        )
+        );
 
       // case "mcp":
       // case "call_tool_mcp":
@@ -140,11 +142,11 @@ const MessageActionDisplay: React.FC<{
           >
             {content}
           </Markdown>
-        )
+        );
     }
-  }
+  };
 
-  return <div className="mt-2 max-w-[500px]">{renderContent()}</div>
-}
+  return <div className="mt-2 max-w-[500px]">{renderContent()}</div>;
+};
 
-export default MessageActionDisplay
+export default MessageActionDisplay;

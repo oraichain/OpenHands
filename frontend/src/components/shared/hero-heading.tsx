@@ -1,6 +1,6 @@
-import RocketImage from "#/assets/images/rocket-image"
+import RocketImage from "#/assets/images/rocket-image";
 // import { I18nKey } from "#/i18n/declaration"
-import { useTranslation } from "react-i18next"
+import { useTranslation } from "react-i18next";
 
 export function HeroHeading() {
   // const { t } = useTranslation()
@@ -8,7 +8,7 @@ export function HeroHeading() {
   return (
     <div className="flex w-full max-w-[560px] flex-col items-center gap-4 text-center">
       <RocketImage />
-      <h1 className="text-[38px] font-medium leading-[32px] -tracking-[0.02em] text-neutral-100 dark:text-white">
+      <h1 className="text-[38px] font-semibold leading-[32px] -tracking-[0.02em] text-neutral-100 dark:text-white">
         From curiosity to clarity!
       </h1>
       {/* <p className="mx-4 text-sm flex flex-col gap-2">
@@ -25,5 +25,5 @@ export function HeroHeading() {
         </span>
       </p> */}
     </div>
-  )
+  );
 }
