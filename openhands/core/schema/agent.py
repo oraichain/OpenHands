@@ -53,3 +53,7 @@ class AgentState(str, Enum):
     AWAITING_TASK_RESOLVING = 'awaiting_task_resolving'
     """The agent is awaiting task resolving.
     """
+
+    AWAITING_PLAN_CREATION = 'awaiting_plan_creation'
+    """The agent is awaiting plan creation.
+    """

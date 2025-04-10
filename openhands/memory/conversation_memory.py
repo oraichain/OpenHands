@@ -196,7 +196,6 @@ class ConversationMemory:
         if isinstance(
             action,
             (
-                AgentDelegateAction,
                 AgentThinkAction,
                 IPythonRunCellAction,
                 FileEditAction,
@@ -317,6 +316,19 @@ class ConversationMemory:
                             ).strip()
                         )
                     ],
+                )
+            ]
+        elif isinstance(action, AgentDelegateAction):
+            thought = action.thought.strip() + '\n\n'
+            content = (
+                thought
+                + f"Delegate to {action.agent} with task:\n{action.inputs.get('task', None)}"
+            )
+
+            return [
+                Message(
+                    role='assistant',  # type: ignore[arg-type]
+                    content=[TextContent(text=content.strip())],
                 )
             ]
 
@@ -440,7 +452,8 @@ class ConversationMemory:
                 obs.outputs['content'] if 'content' in obs.outputs else '',
                 max_message_chars,
             )
-            message = Message(role='user', content=[TextContent(text=text)])
+            role = obs.source.value if obs.source else 'assistant'
+            message = Message(role=role, content=[TextContent(text=text)])
         elif isinstance(obs, AgentThinkObservation):
             text = truncate_content(obs.content, max_message_chars)
             message = Message(role='user', content=[TextContent(text=text)])

@@ -64,6 +64,7 @@ from openhands.events.action.agent import RecallAction
 from openhands.events.event import Event
 from openhands.events.observation import (
     AgentCondensationObservation,
+    AgentDelegateObservation,
     AgentStateChangedObservation,
     ErrorObservation,
     NullObservation,
@@ -101,9 +102,9 @@ class PlanController:
     )
     # pass type of events that should be passed to the agent when delegate agents are resolving tasks
     pass_type: ClassVar[tuple[type[Event], ...]] = (
-        AgentFinishAction,
         CreatePlanAction,
         AssignTaskAction,
+        AgentDelegateObservation,
     )
     _cached_first_user_message: MessageAction | None = None
 
@@ -420,6 +421,7 @@ class PlanController:
         # if self.delegate is not None:
         #     return False
         if self._is_awaiting_for_task_resolving():
+            logger.info('Waiting for task resolving => planner no need to step')
             return False
 
         if isinstance(event, Action):
@@ -512,11 +514,70 @@ class PlanController:
         elif isinstance(action, AgentFinishAction):
             # AgentFinishAction from current planning agent
             if self._is_all_task_resolved():
+                logger.info('AgentFinishAction from current planning agent')
                 self.state.outputs = action.outputs
                 self.state.metrics.merge(self.state.local_metrics)
                 await self.set_agent_state_to(AgentState.FINISHED)
             # AgentFinishAction from delegate agent
-            else:
+        elif isinstance(action, AgentStateChangedObservation) and action.agent_state:
+            # if all tasks are not finished, we need to check if the task is completed
+            current_task_state = self.get_current_task_state()
+            logger.warning(f'current_task_state: {current_task_state}')
+            if current_task_state in (
+                AgentState.FINISHED,
+                AgentState.ERROR,
+                AgentState.REJECTED,
+            ):
+                delegate_outputs = {}
+
+                if self.state.active_plan_id in self.task_controllers:
+                    current_task_controller = self.task_controllers[
+                        self.state.active_plan_id
+                    ][self.state.current_task_index]
+
+                    # delete the controller corresponding to the task
+                    await current_task_controller.close(set_stop_state=False)
+
+                    if current_task_state in (AgentState.FINISHED, AgentState.REJECTED):
+                        # retrieve delegate result
+                        delegate_outputs = (
+                            current_task_controller.state.outputs
+                            if current_task_controller.state
+                            else {}
+                        )
+
+                        # prepare delegate result observation
+                        # TODO: replace this with AI-generated summary (#2395)
+                        formatted_output = ', '.join(
+                            f'{key}: {value}' for key, value in delegate_outputs.items()
+                        )
+                        content = f'{current_task_controller.agent.name} finishes task with {formatted_output}'
+
+                        # emit the delegate result observation
+                        obs = AgentDelegateObservation(
+                            outputs=delegate_outputs, content=content
+                        )
+                        self.event_stream.add_event(obs, EventSource.AGENT)
+                    else:
+                        # delegate state is ERROR
+                        # emit AgentDelegateObservation with error content
+                        delegate_outputs = (
+                            current_task_controller.state.outputs
+                            if current_task_controller.state
+                            else {}
+                        )
+                        content = f'{current_task_controller.agent.name} encountered an error during execution.'
+
+                        # emit the delegate result observation
+                        obs = AgentDelegateObservation(
+                            outputs=delegate_outputs, content=content
+                        )
+                        self.event_stream.add_event(obs, EventSource.AGENT)
+
+                    del self.task_controllers[self.state.active_plan_id][
+                        self.state.current_task_index
+                    ]
+
                 # mark the task as completed
                 active_plan_obj: Plan = self.state.plans[self.state.active_plan_id]
                 current_task = active_plan_obj.tasks[self.state.current_task_index]
@@ -534,17 +595,7 @@ class PlanController:
                 # update result to the active plan
                 active_plan_obj.tasks[
                     self.state.current_task_index
-                ].result = action.final_thought
-
-                # delete the controller corresponding to the task
-                if self.state.active_plan_id in self.task_controllers:
-                    await self.task_controllers[self.state.active_plan_id][
-                        self.state.current_task_index
-                    ].close(set_stop_state=False)
-
-                    del self.task_controllers[self.state.active_plan_id][
-                        self.state.current_task_index
-                    ]
+                ].result = delegate_outputs.get('content', '')
 
                 # move to the next task if plan is not finished
                 if self.state.current_task_index + 1 < len(active_plan_obj.tasks):
@@ -569,6 +620,9 @@ class PlanController:
                         ),
                         EventSource.USER,
                     )
+            else:
+                # FinishAction from a sub delegate agent
+                pass
 
         elif isinstance(action, AgentRejectAction):
             self.state.outputs = action.outputs
@@ -1242,13 +1296,13 @@ class PlanController:
         assign_plan: Plan = self.state.plans[action.plan_id]
 
         assign_task_prompt = f"""
-        CURRENT PLAN STATUS:
-        {assign_plan._format_plan(w_result=True)}
+CURRENT PLAN STATUS:
+{assign_plan._format_plan(w_result=True)}
 
-        YOUR CURRENT TASK:
-        You are now working on task {action.task_index}: "{assign_plan.tasks[action.task_index].content}".
-        Please make it done as less steps as possible. You only need to focus on this task and ignore the rest of the plan.
-        Know that current time is {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.
+YOUR CURRENT TASK:
+You are now working on task {action.task_index}: "{assign_plan.tasks[action.task_index].content}".
+Please make it done as less steps as possible. You only need to focus on this task and ignore the rest of the plan.
+Know that current time is {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.
         """.strip()
 
         self.event_stream.add_event(
@@ -1280,3 +1334,15 @@ class PlanController:
                 return False
 
         return True
+
+    def get_current_task_state(self) -> AgentState:
+        # if not plan created
+        if not self.state.plans:
+            return AgentState.AWAITING_PLAN_CREATION
+
+        current_plan_controller = self.task_controllers[self.state.active_plan_id]
+        if self.state.current_task_index not in current_plan_controller:
+            return AgentState.FINISHED
+
+        current_task_controller = current_plan_controller[self.state.current_task_index]
+        return current_task_controller.get_agent_state()

@@ -272,9 +272,7 @@ class ActionExecutionClient(Runtime):
                     'caller_platform': platform.system(),
                 }
                 if self.config.mcp:
-                    execution_action_body['sse_mcp_config'] = (
-                        self.config.mcp.model_dump()
-                    )
+                    execution_action_body['mcp_config'] = self.config.mcp.model_dump()
 
                 with self._send_action_server_request(
                     'POST',

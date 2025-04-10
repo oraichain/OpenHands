@@ -106,7 +106,9 @@ class PlannerAgent(Agent):
         }
         params['tools'] = self.tools
 
-        # logger.info("Available tools:\n" + json.dumps(self.tools, indent=2))
+        import json
+
+        logger.warning(f'ReAct messages: \n{json.dumps(params["messages"], indent=2)}')
 
         # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}

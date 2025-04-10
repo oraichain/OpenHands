@@ -23,7 +23,7 @@ FinishTool = ChatCompletionToolParam(
             'properties': {
                 'message': {
                     'type': 'string',
-                    'description': 'Final comprehensive message to send to the user that addresses the initial request',
+                    'description': 'The final message to the user, including the path to the file where the final answer is saved',
                 },
                 'task_completed': {
                     'type': 'boolean',

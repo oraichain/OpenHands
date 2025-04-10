@@ -114,6 +114,7 @@ def response_to_actions(response: ModelResponse) -> list[Action]:
                 action = AgentFinishAction(
                     final_thought=arguments.get('message', ''),
                     task_completed=arguments.get('task_completed', None),
+                    outputs={'content': arguments.get('message', '')},
                 )
 
             # ================================================

@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import os
+import time
 import traceback
 from typing import Callable, ClassVar, Type
 
@@ -307,6 +308,8 @@ class AgentController:
                 return True
             return False
         if isinstance(event, Observation):
+            # if isinstance(event, AgentDelegateObservation):
+            #     return False
             if (
                 isinstance(event, NullObservation)
                 and event.cause is not None
@@ -335,16 +338,19 @@ class AgentController:
                 AgentState.ERROR,
                 AgentState.REJECTED,
             ):
+                time.sleep(0.1)
                 # Forward the event to delegate and skip parent processing
                 asyncio.get_event_loop().run_until_complete(
                     self.delegate._on_event(event)
                 )
                 return
             else:
+                time.sleep(0.1)
                 # delegate is done or errored, so end it
                 self.end_delegate()
                 return
 
+        time.sleep(0.1)
         # continue parent processing only if there's no active delegate
         asyncio.get_event_loop().run_until_complete(self._on_event(event))
 
@@ -376,14 +382,21 @@ class AgentController:
         elif isinstance(action, AgentDelegateAction):
             await self.start_delegate(action)
             assert self.delegate is not None
+
             # Post a MessageAction with the task for the delegate
             if 'task' in action.inputs:
-                self.event_stream.add_event(
-                    MessageAction(
-                        content='TASK: ' + action.inputs['task'], displayable=True
-                    ),
-                    EventSource.USER,
+                trigger_message = MessageAction(
+                    content='TASK: ' + action.inputs['task'], displayable=True
                 )
+
+                self.event_stream.add_event(trigger_message, EventSource.USER)
+
+                # add this event to the history
+                # event_to_add = self.event_stream.produce_event(
+                #     event=
+                # )
+                # self.state.history.append(event)
+
                 await self.delegate.set_agent_state_to(AgentState.RUNNING)
             return
 
@@ -635,7 +648,7 @@ class AgentController:
         )
         self.log(
             'warning',
-            f'start delegate, creating agent {delegate_agent.name} using LLM {llm}',
+            f'start delegate, creating agent {delegate_agent.name} using LLM {llm} from {self.agent.name}',
         )
 
         # Create the delegate with is_delegate=True so it does NOT subscribe directly
@@ -683,9 +696,20 @@ class AgentController:
                 f'{self.delegate.agent.name} finishes task with {formatted_output}'
             )
 
+            if 'content' in delegate_outputs:
+                delegate_outputs['content'] = (
+                    f"Task result from {self.delegate.agent.name}:\n\"\"\"\n{delegate_outputs['content'].strip()}\n\"\"\""
+                )
+
             # emit the delegate result observation
             obs = AgentDelegateObservation(outputs=delegate_outputs, content=content)
-            self.event_stream.add_event(obs, EventSource.AGENT)
+            self.event_stream.add_event(obs, EventSource.USER)
+
+            # add trigger message to stream
+            # self.event_stream.add_event(
+            #     MessageAction(content="\n\n", displayable=False),
+            #     EventSource.USER,
+            # )
         else:
             # delegate state is ERROR
             # emit AgentDelegateObservation with error content
@@ -696,9 +720,23 @@ class AgentController:
                 f'{self.delegate.agent.name} encountered an error during execution.'
             )
 
+            if 'content' in delegate_outputs:
+                delegate_outputs['content'] = (
+                    f"Task result from {self.delegate.agent.name}:\n\"\"\"\n{delegate_outputs['content'].strip()}\n\"\"\""
+                )
+
             # emit the delegate result observation
             obs = AgentDelegateObservation(outputs=delegate_outputs, content=content)
-            self.event_stream.add_event(obs, EventSource.AGENT)
+            self.event_stream.add_event(obs, EventSource.USER)
+
+            # add trigger message to stream
+            # self.event_stream.add_event(
+            #     MessageAction(
+            #         content="The agent encountered an error. Try another way to ask.",
+            #         displayable=False,
+            #     ),
+            #     EventSource.USER,
+            # )
 
         # unset delegate so parent can resume normal handling
         self.delegate = None

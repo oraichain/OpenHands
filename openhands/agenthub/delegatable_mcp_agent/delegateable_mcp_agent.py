@@ -95,6 +95,7 @@ class DelegatableMCPAgent(Agent):
             'messages': self.llm.format_messages_for_llm(messages),
         }
         params['tools'] = self.tools
+
         # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         try:
@@ -108,6 +109,7 @@ class DelegatableMCPAgent(Agent):
         logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
             self.pending_actions.append(action)
+
         return self.pending_actions.popleft()
 
     def _get_messages(self, state: State) -> list[Message]:

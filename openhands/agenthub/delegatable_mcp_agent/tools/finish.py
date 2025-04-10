@@ -3,11 +3,13 @@ from litellm import ChatCompletionToolParam, ChatCompletionToolParamFunctionChun
 _FINISH_DESCRIPTION = """Signals the completion of the current task or conversation.
 
 Use this tool when:
-- You have successfully completed the user's requested task and saved the final answer to file
+- You have successfully completed the user's requested task
 - You maynot proceed further due to technical limitations or missing information
 
-The message should concise and include:
-- The path to the file where the final answer is saved
+The message should include:
+- A clear summary of actions taken and their results
+- Any next steps for the user
+- Explanation if you're unable to complete the task
 
 The task_completed field should be set to True if you believe you have successfully completed the task, and False otherwise.
 """
@@ -23,7 +25,7 @@ FinishTool = ChatCompletionToolParam(
             'properties': {
                 'message': {
                     'type': 'string',
-                    'description': 'The final message to the user, including the path to the file where the final answer is saved',
+                    'description': 'Final message to send to the user',
                 },
                 'task_completed': {
                     'type': 'boolean',
