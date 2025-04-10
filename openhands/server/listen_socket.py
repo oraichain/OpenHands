@@ -92,6 +92,18 @@ async def connect(connection_id: str, environ):
     #     conversation_id, cookies_str
     # )
 
+    response_ids = await conversation_manager.get_running_agent_loops(user_id)
+    logger.info(f'response_ids: {len(response_ids)}')
+    if len(response_ids) >= conversation_manager.config.max_concurrent_conversations:
+                logger.info('too_many_sessions_for:{user_id}')
+                # Emit event to client about too many sessions
+                await sio.emit('error', {
+                    'message': f'Please close existing conversation before starting a new one.',
+                    'code': 'TOO_MANY_SESSIONS',
+                    'type': 'error'
+                }, to=connection_id)
+                return None
+
     settings = await get_user_setting(user_id)
 
     if not settings:

@@ -139,20 +139,9 @@ export function ExpandableMessage({
               type === "error" ? "text-danger" : "text-neutral-300",
             )}
           >
-            {/* {translationId && i18n.exists(translationId) ? (
-              <Trans
-                i18nKey={translationId + ` (${messageActionID})`}
-                values={translationParams}
-                components={{
-                  bold: <strong />,
-                  path: <PathComponent />,
-                  cmd: <MonoComponent />,
-                }}
-              />
-            ) : (
-              `${id} (${messageActionID})`
-            )} */}
-            {`${t(translationId as any)} (${messageActionID})`}
+            {translationId === "Too many sessions"
+              ? translationId
+              : `${t(translationId as any)} (${messageActionID})`}
             <button
               type="button"
               onClick={() => setShowDetails(!showDetails)}

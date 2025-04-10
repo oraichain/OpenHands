@@ -100,7 +100,10 @@ export function updateStatusWhenErrorMessagePresent(data: ErrorArg | unknown) {
       message: data.message,
       source: "websocket",
       metadata,
-      msgId,
+      msgId:
+        "code" in data && data.code === "TOO_MANY_SESSIONS"
+          ? "Too many sessions"
+          : msgId,
     });
   }
 }
@@ -201,6 +204,7 @@ export function WsClientProvider({
       sio.on("connect", handleConnect);
       sio.on("oh_event", handleMessage);
       sio.on("connect_error", handleError);
+      sio.on("error", handleError);
       sio.on("connect_failed", handleError);
       sio.on("disconnect", handleDisconnect);
 
@@ -221,7 +225,11 @@ export function WsClientProvider({
     [status, messageRateHandler.isUnderThreshold, events],
   );
 
-  return <WsClientContext.Provider value={value}>{children}</WsClientContext.Provider>;
+  return (
+    <WsClientContext.Provider value={value}>
+      {children}
+    </WsClientContext.Provider>
+  );
 }
 
 export function useWsClient() {
