@@ -1,15 +1,15 @@
-import { BrowserPanel } from "#/components/features/browser/browser"
-import { useSettings } from "#/hooks/query/use-settings"
-import TerminalPage from "#/routes/terminal-tab"
-import { RootState } from "#/store"
-import ObservationType from "#/types/observation-type"
-import { Slider, useDisclosure } from "@heroui/react"
-import { useEffect, useRef, useState } from "react"
-import { LuStepBack, LuStepForward } from "react-icons/lu"
-import { useSelector } from "react-redux"
-import CodeView from "./CodeView"
-import EditorContent from "./EditorContent"
-import TaskProgress from "./TaskProgress"
+import { BrowserPanel } from "#/components/features/browser/browser";
+import { useSettings } from "#/hooks/query/use-settings";
+import TerminalPage from "#/routes/terminal-tab";
+import { RootState } from "#/store";
+import ObservationType from "#/types/observation-type";
+import { Slider } from "@heroui/react";
+import { useEffect, useRef, useState } from "react";
+import { LuStepBack, LuStepForward } from "react-icons/lu";
+import { useSelector } from "react-redux";
+import CodeView from "./CodeView";
+import EditorContent from "./EditorContent";
+import TaskProgress from "./TaskProgress";
 
 const ThesisComputer = () => {
   const isViewDrawer = true;
@@ -24,12 +24,6 @@ const ThesisComputer = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const totalSteps = computerList.length;
   const [sliderValue, setSliderValue] = useState(0);
-
-  const {
-    isOpen: securityModalIsOpen,
-    onOpen: onSecurityModalOpen,
-    onOpenChange: onSecurityModalOpenChange,
-  } = useDisclosure();
 
   const handleNextStep = () => {
     if (currentStep < totalSteps - 1) {
@@ -54,15 +48,14 @@ const ThesisComputer = () => {
       const matchingIndex = computerList.findIndex(
         (item) => item.cause === eventID
       );
-
-      if (matchingIndex !== -1 && matchingIndex !== currentStep) {
+      if (matchingIndex !== -1) {
         setCurrentStep(matchingIndex);
         const newSliderValue =
           totalSteps > 1 ? (matchingIndex / (totalSteps - 1)) * 100 : 0;
         setSliderValue(newSliderValue);
       }
     }
-  }, [eventID, computerList, totalSteps, currentStep]);
+  }, [eventID, computerList, totalSteps]);
 
   // Add useEffect to handle auto progression
   useEffect(() => {
@@ -114,19 +107,19 @@ const ThesisComputer = () => {
             [ObservationType.EDIT]: "Editor",
             [ObservationType.BROWSE]: "Browser",
             [ObservationType.BROWSER_MCP]: "Browser",
-          }
+          };
 
           if (index !== currentStep) return null;
           return (
             <div className="mb-3 items-center rounded-lg">
-              <p className="font-medium text-[#666] text-[14px]">
+              <p className="text-[14px] font-medium text-[#666]">
                 Thesis is using{" "}
-                <span className="text-[#666] font-semibold">
+                <span className="font-semibold text-[#666]">
                   {mapObservationTypeToText[observation] || "Terminal"}
                 </span>
               </p>
-              <div className="bg-[#E6E6E6] max-w-fit px-3 rounded-full py-1 mt-1">
-                <span className=" text-[#0F0F0F] font-medium text-[12px]">
+              <div className="mt-1 max-w-fit rounded-full bg-[#E6E6E6] px-3 py-1">
+                <span className="text-[12px] font-medium text-[#0F0F0F]">
                   {computerItem?.message}
                 </span>
               </div>
@@ -152,7 +145,7 @@ const ThesisComputer = () => {
                 computerItem.observation === ObservationType.BROWSE ||
                 computerItem.observation === ObservationType.BROWSER_MCP
               ) {
-                return <BrowserPanel computerItem={computerItem} />
+                return <BrowserPanel computerItem={computerItem} />;
               }
 
               if ([ObservationType.RUN].includes(computerItem.observation)) {
