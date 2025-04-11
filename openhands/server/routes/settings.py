@@ -237,9 +237,6 @@ async def store_settings(
                 settings.remote_runtime_resource_factor
             )
             
-            
-            print('uuu',settings)
-
         settings = convert_to_settings(settings)
         await settings_store.store(settings)
         return JSONResponse(
