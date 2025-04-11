@@ -37,7 +37,7 @@ function Home() {
           ) : (
             <div className="flex w-full flex-col gap-2">
               <div className="text-center text-neutral-700 dark:text-tertiary-light">
-                Welcome to Thesis! We're currently in private beta.
+                Welcome to Thesis! We&rsquo;re currently in private beta.
                 <br /> To get started, Please enter connect your wallet.
               </div>
 
