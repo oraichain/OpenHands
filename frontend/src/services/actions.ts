@@ -156,6 +156,7 @@ export function handleStatusMessage(message: StatusMessage) {
 const listMsg: Record<string, unknown>[] = []
 
 export function handleAssistantMessage(message: Record<string, unknown>) {
+  console.log('1111111message222222',message)
   if (
     // TODO: check type browse_interactive of observation
     message.source === "agent" &&
