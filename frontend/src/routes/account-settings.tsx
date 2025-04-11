@@ -246,7 +246,7 @@ function AccountSettings() {
               )}
               {llmConfigMode === "advanced" && (
                 <>
-                  {/* <SettingsInput
+                  <SettingsInput
                     testId="llm-custom-model-input"
                     name="llm-custom-model-input"
                     label="Custom Model"
@@ -263,7 +263,7 @@ function AccountSettings() {
                     placeholder="https://api.openai.com"
                     type="text"
                     className="w-full"
-                  /> */}
+                  />
                   <SettingsDropdownInput
                     testId="agent-input"
                     name="agent-input"
