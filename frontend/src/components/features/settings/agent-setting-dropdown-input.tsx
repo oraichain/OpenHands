@@ -1,7 +1,8 @@
 import { Autocomplete, AutocompleteItem } from "@heroui/react"
 import { ReactNode, useEffect, useState } from "react"
-import { OptionalTag } from "./optional-tag"
 import { twMerge } from "tailwind-merge"
+import { useAccount } from "wagmi"
+import { OptionalTag } from "./optional-tag"
 import { useSettings } from "#/hooks/query/use-settings"
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings"
 import {
@@ -9,7 +10,11 @@ import {
   displaySuccessToast,
 } from "#/utils/custom-toast-handlers"
 import { retrieveAxiosErrorMessage } from "#/utils/retrieve-axios-error-message"
-import { useGetConversationState } from "#/zutand-stores/coin/selector"
+import {
+  useConversationActions,
+  useGetConversationState,
+} from "#/zutand-stores/coin/selector"
+import { useGetJwt } from "#/zutand-stores/persist-config/selector"
 
 interface AgentSettingsDropdownInputProps {
   testId: string
@@ -35,20 +40,31 @@ export function AgentSettingsDropdownInput({
   className = "",
 }: AgentSettingsDropdownInputProps) {
   const agent = useGetConversationState("agent")
+  const { handleSetAgent } = useConversationActions()
   const [agentValue, setAgentValue] = useState<string | null>(
     defaultSelectedKey,
   )
   const { data: settings } = useSettings()
   const { mutate: saveSettings } = useSaveSettings()
+  const { isConnected } = useAccount()
+  const jwt = useGetJwt()
+
+  const isLoginStatus = isConnected && jwt
 
   useEffect(() => {
     if (agent) {
       console.log("settings:AGENT", agent)
       setAgentValue(agent)
+      handleSetAgent(null)
     }
   }, [agent])
 
-  console.log("agentValue", agentValue)
+  useEffect(() => {
+    if (settings) {
+      setAgentValue(settings?.AGENT)
+    }
+  }, [settings, isLoginStatus])
+
   return (
     <label
       className={twMerge("mt-2 flex w-fit cursor-pointer gap-2", className)}

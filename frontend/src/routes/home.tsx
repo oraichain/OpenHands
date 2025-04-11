@@ -53,27 +53,29 @@ function Home() {
             </div>
           )}
         </div>
-        <div className="w-full">
-          {!settings ? (
-            <div className="mt-2 h-10 w-full max-w-[260px] animate-pulse rounded-lg bg-white" />
-          ) : (
-            <AgentSettingsDropdownInput
-              testId="agent-input-show"
-              name="agent-input"
-              label="Agent"
-              items={
-                resources?.agents.map((agent) => ({
-                  key: agent,
-                  label: agent,
-                })) || []
-              }
-              defaultSelectedKey={settings?.AGENT}
-              isClearable={false}
-              showOptionalTag={false}
-              className="flex-row"
-            />
-          )}
-        </div>
+        {isUserLoggedIn && (
+          <div className="w-full">
+            {!settings ? (
+              <div className="mt-2 h-10 w-full max-w-[260px] animate-pulse rounded-lg bg-white" />
+            ) : (
+              <AgentSettingsDropdownInput
+                testId="agent-input-show"
+                name="agent-input"
+                label="Agent"
+                items={
+                  resources?.agents.map((agent) => ({
+                    key: agent,
+                    label: agent,
+                  })) || []
+                }
+                defaultSelectedKey={settings?.AGENT}
+                isClearable={false}
+                showOptionalTag={false}
+                className="flex-row"
+              />
+            )}
+          </div>
+        )}
         <div className="mt-8 w-full text-left text-[16px] font-semibold text-neutral-700 dark:text-tertiary-light">
           Try our use case
         </div>
