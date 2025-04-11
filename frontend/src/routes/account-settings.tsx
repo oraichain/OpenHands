@@ -1,7 +1,11 @@
 import { BrandButton } from "#/components/features/settings/brand-button"
+import { HelpLink } from "#/components/features/settings/help-link"
+import { KeyStatusIcon } from "#/components/features/settings/key-status-icon"
 import { SettingsDropdownInput } from "#/components/features/settings/settings-dropdown-input"
+import { SettingsInput } from "#/components/features/settings/settings-input"
 import { SettingsSwitch } from "#/components/features/settings/settings-switch"
 import { LoadingSpinner } from "#/components/shared/loading-spinner"
+import { ModelSelector } from "#/components/shared/modals/settings/model-selector"
 import { useAuth } from "#/context/auth-context"
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings"
 import { useAIConfigOptions } from "#/hooks/query/use-ai-config-options"
@@ -21,7 +25,7 @@ import { hasAdvancedSettingsSet } from "#/utils/has-advanced-settings-set"
 import { isCustomModel } from "#/utils/is-custom-model"
 import { organizeModelsAndProviders } from "#/utils/organize-models-and-providers"
 import { retrieveAxiosErrorMessage } from "#/utils/retrieve-axios-error-message"
-import { Modal, ModalBody, ModalContent } from "@heroui/react"
+import { Modal, ModalBody, ModalContent, Tab, Tabs } from "@heroui/react"
 import React from "react"
 import { useTranslation } from "react-i18next"
 
@@ -58,7 +62,6 @@ function AccountSettings() {
     config?.FEATURE_FLAGS.HIDE_LLM_SETTINGS && isSaas
 
   const determineWhetherToToggleAdvancedSettings = () => {
-    return true
     if (shouldHandleSpecialSaasCase) return true
     if (isSuccess) {
       return (
@@ -89,9 +92,7 @@ function AccountSettings() {
   const modelsAndProviders = organizeModelsAndProviders(resources?.models || [])
 
   const [llmConfigMode, setLlmConfigMode] = React.useState(
-    // TODO: uncomment this when the advanced settings are ready
-    // isAdvancedSettingsSet ? "advanced" : "basic",
-    "basic",
+    isAdvancedSettingsSet ? "advanced" : "basic",
   )
   const [confirmationModeIsEnabled, setConfirmationModeIsEnabled] =
     React.useState(!!settings?.SECURITY_ANALYZER)
@@ -219,7 +220,7 @@ function AccountSettings() {
         className="flex grow flex-col overflow-auto p-3 md:p-6"
       >
         <div className="max-w-[680px]">
-          {/* {!shouldHandleSpecialSaasCase && (
+          {!shouldHandleSpecialSaasCase && (
             <section className="flex flex-col gap-6">
               <h3 className="text-[18px] font-semibold text-neutral-100 dark:text-[#EFEFEF]">
                 LLM Settings
@@ -237,7 +238,7 @@ function AccountSettings() {
               >
                 <Tab key="basic" title="Basic" />
                 <Tab key="advanced" title="Advanced" />
-              </Tabs> 
+              </Tabs>
               {llmConfigMode === "basic" && (
                 <ModelSelector
                   models={modelsAndProviders}
@@ -299,7 +300,7 @@ function AccountSettings() {
                       isClearable={false}
                     />
                   )}
-                  <div className="flex flex-col md:flex-row md:items-center gap-8">
+                  {/* <div className="flex flex-col gap-8 md:flex-row md:items-center">
                     <SettingsSwitch
                       testId="enable-confirmation-mode-switch"
                       onToggle={setConfirmationModeIsEnabled}
@@ -315,7 +316,7 @@ function AccountSettings() {
                     >
                       Enable memory condensation
                     </SettingsSwitch>
-                  </div>
+                  </div> */}
                   {confirmationModeIsEnabled && (
                     <SettingsDropdownInput
                       testId="security-analyzer-input"
@@ -335,7 +336,7 @@ function AccountSettings() {
                 </>
               )}
 
-              <div className="relative ">
+              <div className="relative">
                 <SettingsInput
                   testId="llm-api-key-input"
                   name="llm-api-key-input"
@@ -347,7 +348,7 @@ function AccountSettings() {
                   }
                   placeholder={isLLMKeySet ? "<hidden>" : "Enter"}
                 />
-                <div className="absolute top-0 right-0">
+                {/* <div className="absolute right-0 top-0">
                   <HelpLink
                     testId="llm-api-key-help-anchor"
                     // text="Don't know your API key?"
@@ -358,15 +359,15 @@ function AccountSettings() {
                       linkText: "text-[#FF6100]",
                     }}
                   />
-                </div>
+                </div> */}
               </div>
             </section>
           )}
-          <div className="my-7 h-[1px] w-full bg-neutral-1000 dark:bg-[#1B1C1A]" /> */}
+          <div className="my-7 h-[1px] w-full bg-neutral-1000 dark:bg-[#1B1C1A]" />
           <section className="flex flex-col gap-6">
-            {/* <h3 className="text-[18px] font-semibold text-neutral-100 dark:text-[#EFEFEF]">
+            <h3 className="text-[18px] font-semibold text-neutral-100 dark:text-[#EFEFEF]">
               Additional Settings
-            </h3> */}
+            </h3>
             <SettingsDropdownInput
               testId="language-input"
               name="language-input"

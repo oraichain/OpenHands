@@ -156,6 +156,8 @@ async def store_settings(
     request: Request,
     settings: POSTSettingsModel,
 ) -> JSONResponse:
+    
+    print('abc',settings)
     # Check provider tokens are valid
     if settings.provider_tokens:
         # Remove extraneous token types
@@ -234,6 +236,9 @@ async def store_settings(
             config.sandbox.remote_runtime_resource_factor = (
                 settings.remote_runtime_resource_factor
             )
+            
+            
+            print('uuu',settings)
 
         settings = convert_to_settings(settings)
         await settings_store.store(settings)
@@ -251,6 +256,7 @@ async def store_settings(
 
 def convert_to_settings(settings_with_token_data: POSTSettingsModel) -> Settings:
     settings_data = settings_with_token_data.model_dump()
+    print('xxx', settings_data)
 
     # Filter out additional fields from `SettingsWithTokenData`
     filtered_settings_data = {
@@ -261,6 +267,8 @@ def convert_to_settings(settings_with_token_data: POSTSettingsModel) -> Settings
 
     # Convert the `llm_api_key` to a `SecretStr` instance
     filtered_settings_data['llm_api_key'] = settings_with_token_data.llm_api_key
+
+    print('yyy', filtered_settings_data)
 
     # Create a new Settings instance with empty SecretStore
     settings = Settings(**filtered_settings_data)

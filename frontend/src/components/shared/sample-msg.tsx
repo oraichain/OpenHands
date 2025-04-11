@@ -15,13 +15,14 @@ export function SampleMsg() {
   const { data: settings } = useSettings()
   const { mutate: saveSettings } = useSaveSettings()
 
-  // if (!settings) {
-  //   return (
-  //     <div className="flex h-full w-full items-center justify-center">
-  //       Loading...
-  //     </div>
-  //   )
-  // }
+  if (!settings) {
+    return (
+      <div className="mt-3 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-2">
+        <div className="h-[200px] animate-pulse rounded-[12px] border-neutral-1000 bg-white"></div>
+        <div className="h-[200px] animate-pulse rounded-[12px] border-neutral-1000 bg-white"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="mt-3 grid w-full grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-2">
@@ -29,27 +30,27 @@ export function SampleMsg() {
         const agent = itemValue.agent
         return (
           <button
-            className="cursor-pointer rounded-[12px] border border-neutral-1000 bg-transparent bg-white p-5 transition-all duration-150 ease-in hover:scale-105 hover:shadow-md"
+            className="cursor-pointer rounded-[12px] border border-neutral-1000 bg-white p-5 transition-all duration-150 ease-in hover:scale-105 hover:shadow-md"
             key={key}
             onClick={() => {
               handleSetInitMsg(itemValue.prompt)
               handleSetAgent(agent)
-              // TODO: enable laster
-              // saveSettings(
-              //   {
-              //     ...settings,
-              //     AGENT: agent,
-              //   },
-              //   {
-              //     onSuccess: () => {
-              //       console.log("settings: update settings success")
-              //     },
-              //     onError: (error) => {
-              //       const errorMessage = retrieveAxiosErrorMessage(error)
-              //       displayErrorToast(errorMessage)
-              //     },
-              //   },
-              // )
+              // TODO: enable later
+              saveSettings(
+                {
+                  ...settings,
+                  AGENT: agent,
+                },
+                {
+                  onSuccess: () => {
+                    console.log("settings: update settings success")
+                  },
+                  onError: (error) => {
+                    const errorMessage = retrieveAxiosErrorMessage(error)
+                    displayErrorToast(errorMessage)
+                  },
+                },
+              )
             }}
           >
             <StarIcon className="mb-5" />
