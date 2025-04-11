@@ -1,5 +1,4 @@
 import { BrandButton } from "#/components/features/settings/brand-button"
-import { HelpLink } from "#/components/features/settings/help-link"
 import { KeyStatusIcon } from "#/components/features/settings/key-status-icon"
 import { SettingsDropdownInput } from "#/components/features/settings/settings-dropdown-input"
 import { SettingsInput } from "#/components/features/settings/settings-input"
@@ -247,7 +246,7 @@ function AccountSettings() {
               )}
               {llmConfigMode === "advanced" && (
                 <>
-                  <SettingsInput
+                  {/* <SettingsInput
                     testId="llm-custom-model-input"
                     name="llm-custom-model-input"
                     label="Custom Model"
@@ -264,7 +263,7 @@ function AccountSettings() {
                     placeholder="https://api.openai.com"
                     type="text"
                     className="w-full"
-                  />
+                  /> */}
                   <SettingsDropdownInput
                     testId="agent-input"
                     name="agent-input"

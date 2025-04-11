@@ -1,7 +1,3 @@
-import { useConnectModal } from "@rainbow-me/rainbowkit"
-import React from "react"
-import { useTranslation } from "react-i18next"
-import { useAccount } from "wagmi"
 import { AgentSettingsDropdownInput } from "#/components/features/settings/agent-setting-dropdown-input"
 import { BrandButton } from "#/components/features/settings/brand-button"
 import { HeroHeading } from "#/components/shared/hero-heading"
@@ -11,6 +7,10 @@ import { useAIConfigOptions } from "#/hooks/query/use-ai-config-options"
 import { useSettings } from "#/hooks/query/use-settings"
 import { I18nKey } from "#/i18n/declaration"
 import { useGetJwt } from "#/zutand-stores/persist-config/selector"
+import { useConnectModal } from "@rainbow-me/rainbowkit"
+import React from "react"
+import { useTranslation } from "react-i18next"
+import { useAccount } from "wagmi"
 
 function Home() {
   const { t } = useTranslation()

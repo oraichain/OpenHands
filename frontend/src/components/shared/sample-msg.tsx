@@ -1,4 +1,3 @@
-import { useAccount } from "wagmi"
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings"
 import { useSettings } from "#/hooks/query/use-settings"
 import StarIcon from "#/icons/star-icons.svg?react"
@@ -7,6 +6,7 @@ import { displayErrorToast } from "#/utils/custom-toast-handlers"
 import { retrieveAxiosErrorMessage } from "#/utils/retrieve-axios-error-message"
 import { useConversationActions } from "#/zutand-stores/coin/selector"
 import { useGetJwt } from "#/zutand-stores/persist-config/selector"
+import { useAccount } from "wagmi"
 
 export function SampleMsg() {
   const { handleSetInitMsg, handleSetAgent } = useConversationActions()

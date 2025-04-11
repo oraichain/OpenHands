@@ -82,10 +82,11 @@ solana = "^0.36.6"
 base58 = "^2.1.1"
 solders = "^0.26.0"
 daytona-sdk = "0.12.1"
-mcp = "1.4.1"
+mcp = "1.6.0"
 python-json-logger = "^3.2.1"
 playwright = "^1.51.0"
 prompt-toolkit = "^3.0.50"
+traceloop-sdk = "0.24.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "0.11.4"
@@ -106,6 +107,7 @@ gevent = "^24.2.1"
 
 [tool.coverage.run]
 concurrency = ["gevent"]
+
 
 
 [tool.poetry.group.runtime.dependencies]
@@ -135,6 +137,7 @@ ignore = ["D1"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
 
 
 [tool.poetry.group.evaluation.dependencies]

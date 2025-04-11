@@ -1,10 +1,5 @@
-import { Autocomplete, AutocompleteItem } from "@heroui/react"
-import { ReactNode, useEffect, useState } from "react"
-import { twMerge } from "tailwind-merge"
-import { useAccount } from "wagmi"
-import { OptionalTag } from "./optional-tag"
-import { useSettings } from "#/hooks/query/use-settings"
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings"
+import { useSettings } from "#/hooks/query/use-settings"
 import {
   displayErrorToast,
   displaySuccessToast,
@@ -15,6 +10,11 @@ import {
   useGetConversationState,
 } from "#/zutand-stores/coin/selector"
 import { useGetJwt } from "#/zutand-stores/persist-config/selector"
+import { Autocomplete, AutocompleteItem } from "@heroui/react"
+import { ReactNode, useEffect, useState } from "react"
+import { twMerge } from "tailwind-merge"
+import { useAccount } from "wagmi"
+import { OptionalTag } from "./optional-tag"
 
 interface AgentSettingsDropdownInputProps {
   testId: string
