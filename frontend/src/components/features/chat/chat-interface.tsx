@@ -25,10 +25,14 @@ import React, { useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { FaFileInvoice } from "react-icons/fa"
 import { FaPowerOff } from "react-icons/fa6"
+import { IoFolder } from "react-icons/io5"
+import { RiPhoneFindLine } from "react-icons/ri"
 import { useDispatch, useSelector } from "react-redux"
 import { useLocation, useParams } from "react-router"
+import { twMerge } from "tailwind-merge"
 import { Controls } from "../controls/controls"
 import { FeedbackModal } from "../feedback/feedback-modal"
+import FileExplorerModal from "../file-explorer/modal-file-explorer"
 import { TrajectoryActions } from "../trajectory/trajectory-actions"
 import { ActionSuggestions } from "./action-suggestions"
 import { InteractiveChatBox } from "./interactive-chat-box"
@@ -106,10 +110,29 @@ export function ChatInterface() {
 
   const { messages } = useSelector((state: RootState) => state.chat)
   const { curAgentState } = useSelector((state: RootState) => state.agent)
-  const { data: files, refetch: refetchFiles } = useListFiles({
+  const {
+    data: files,
+    refetch: refetchFiles,
+    error,
+  } = useListFiles({
     isCached: false,
     enabled: true,
   })
+
+  useEffect(() => {
+    if (files?.length) {
+      const priorityFile = []
+
+      files.map((e) => {
+        if (e.includes("html") || e.includes("md") || e.includes("txt")) {
+          priorityFile.push(e)
+        }
+      })
+      if (priorityFile?.length) {
+        dispatch(setCurrentPathViewed(priorityFile[0]))
+      }
+    }
+  }, [files])
 
   useEffect(() => {
     if (curAgentState === AgentState.AWAITING_USER_INPUT) refetchFiles()
@@ -130,6 +153,13 @@ export function ChatInterface() {
     "positive" | "negative"
   >("positive")
   const [feedbackModalIsOpen, setFeedbackModalIsOpen] = React.useState(false)
+  const [explorerModal, setExplorerModal] = React.useState(false)
+  const [selectedPath, setSelectedPath] = React.useState(null)
+
+  const { currentPathViewed } = useSelector(
+    (state: RootState) => state.fileState,
+  )
+
   const [messageToSend, setMessageToSend] = React.useState<string | null>(null)
   const { selectedRepository, replayJson } = useSelector(
     (state: RootState) => state.initialQuery,
@@ -246,18 +276,52 @@ export function ChatInterface() {
 
         {files && files.length > 0 && (
           <div className="my-3 flex flex-wrap gap-2">
-            {files.map((file) => (
+            {files.slice(0, 2).map((file) => {
+              const isDirectory = file.endsWith("/")
+              return (
+                <div
+                  key={file}
+                  className={twMerge(
+                    "flex w-fit max-w-full cursor-pointer items-center gap-2 rounded-md bg-neutral-1000 p-2 hover:opacity-70",
+                    currentPathViewed.includes(file) &&
+                      "border border-blue-200 bg-blue-50",
+                  )}
+                  onClick={() => {
+                    if (isDirectory) {
+                      setExplorerModal(true)
+                      setSelectedPath(file)
+                    } else {
+                      dispatch(setCurrentPathViewed(file))
+                    }
+                  }}
+                >
+                  {isDirectory ? (
+                    <IoFolder className="h-4 w-4 shrink-0 fill-blue-500" />
+                  ) : (
+                    <FaFileInvoice className="h-4 w-4 shrink-0 fill-blue-500" />
+                  )}
+                  <div className="line-clamp-1 text-sm">{file}</div>
+                </div>
+              )
+            })}
+            {files.length >= 2 && (
               <div
-                key={file}
                 className="flex w-fit max-w-full cursor-pointer items-center gap-2 rounded-md bg-neutral-1000 p-2 hover:opacity-70"
-                onClick={() => dispatch(setCurrentPathViewed(file))}
+                onClick={() => {
+                  setExplorerModal(true)
+                  setSelectedPath(null)
+                }}
               >
-                <FaFileInvoice className="h-4 w-4 shrink-0 fill-blue-500" />
-                <div className="line-clamp-1 text-sm">{file}</div>
+                <RiPhoneFindLine className="h-4 w-4 shrink-0 fill-blue-500" />
+                <div className="line-clamp-1 text-sm">
+                  View all files in this task
+                </div>
               </div>
-            ))}
+            )}
           </div>
         )}
+
+        {/* {!error && <ExplorerTree files={files || []} />} */}
       </div>
       {isShareRoute ? (
         <div className="flex items-center justify-between bg-[rgba(0,0,0,0.05)] px-4 py-2">
@@ -344,6 +408,11 @@ export function ChatInterface() {
         isOpen={feedbackModalIsOpen}
         onClose={() => setFeedbackModalIsOpen(false)}
         polarity={feedbackPolarity}
+      />
+      <FileExplorerModal
+        filePath={selectedPath}
+        isOpen={explorerModal}
+        onClose={() => setExplorerModal(false)}
       />
     </div>
   )
