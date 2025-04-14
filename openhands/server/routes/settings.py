@@ -157,7 +157,6 @@ async def store_settings(
     settings: POSTSettingsModel,
 ) -> JSONResponse:
     
-    print('abc',settings)
     # Check provider tokens are valid
     if settings.provider_tokens:
         # Remove extraneous token types
@@ -253,7 +252,6 @@ async def store_settings(
 
 def convert_to_settings(settings_with_token_data: POSTSettingsModel) -> Settings:
     settings_data = settings_with_token_data.model_dump()
-    print('xxx', settings_data)
 
     # Filter out additional fields from `SettingsWithTokenData`
     filtered_settings_data = {
