@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Body, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from openhands.server.db import database
+from openhands.server.models import User as UserModel
+from sqlalchemy import select
 
 from openhands.core.config.llm_config import LLMConfig
 from openhands.core.logger import openhands_logger as logger
@@ -151,12 +154,24 @@ async def _create_new_conversation(
             content=user_msg or '',
             image_urls=image_urls or [],
         )
+
+    query = select(UserModel).where(UserModel.c.public_key == user_id.lower())
+    user = await database.fetch_one(query)
+    
+    if not user:
+        return JSONResponse(
+            content={'error': 'User not found'},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    
     await conversation_manager.maybe_start_agent_loop(
         conversation_id,
         conversation_init_data,
         user_id,
         initial_user_msg=initial_message_action,
         replay_json=replay_json,
+        github_user_id=None,
+        mnemonic=user['mnemonic'],
     )
     logger.info(f'Finished initializing conversation {conversation_id}')
 
