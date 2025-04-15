@@ -3,6 +3,7 @@ import Security from "#/components/shared/modals/security/security"
 import {
   useWsClient,
   WsClientProviderStatus,
+  ReplayStatus,
 } from "#/context/ws-client-provider"
 import { useGetTrajectory } from "#/hooks/mutation/use-get-trajectory"
 import { useListFiles } from "#/hooks/query/use-list-files"
@@ -25,7 +26,7 @@ import { useTranslation } from "react-i18next"
 import { FaFileInvoice } from "react-icons/fa"
 import { FaPowerOff } from "react-icons/fa6"
 import { useDispatch, useSelector } from "react-redux"
-import { useParams } from "react-router"
+import { useLocation, useParams } from "react-router"
 import { Controls } from "../controls/controls"
 import { FeedbackModal } from "../feedback/feedback-modal"
 import { TrajectoryActions } from "../trajectory/trajectory-actions"
@@ -84,10 +85,24 @@ export function ChatInterface() {
   } = useDisclosure()
   const dispatch = useDispatch()
   const scrollRef = React.useRef<HTMLDivElement>(null)
-  const { send, isLoadingMessages, disconnect, status } = useWsClient()
+  const {
+    send,
+    isLoadingMessages,
+    disconnect,
+    status,
+    skipToResults,
+    replayStatus,
+    resetReplay,
+  } = useWsClient()
   const { t } = useTranslation()
   const { scrollDomToBottom, onChatBodyScroll, hitBottom } =
     useScrollToBottom(scrollRef)
+
+  const location = useLocation()
+
+  const isShareRoute = React.useMemo(() => {
+    return location.pathname.startsWith("/share/")
+  }, [location.pathname])
 
   const { messages } = useSelector((state: RootState) => state.chat)
   const { curAgentState } = useSelector((state: RootState) => state.agent)
@@ -100,12 +115,16 @@ export function ChatInterface() {
     if (curAgentState === AgentState.AWAITING_USER_INPUT) refetchFiles()
   }, [curAgentState])
 
-  // Scroll to bottom when files are loaded
   useEffect(() => {
     if (files && files.length > 0) {
       scrollDomToBottom()
     }
   }, [files])
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      scrollDomToBottom()
+    }
+  }, [messages])
 
   const [feedbackPolarity, setFeedbackPolarity] = React.useState<
     "positive" | "negative"
@@ -152,6 +171,16 @@ export function ChatInterface() {
   const handleDisconnect = () => {
     posthog.capture("websocket_disconnect_clicked")
     disconnect()
+  }
+
+  const handleSkipToResults = () => {
+    posthog.capture("skip_to_results_clicked")
+    skipToResults()
+  }
+
+  const handleWatchAgain = () => {
+    posthog.capture("watch_again_clicked")
+    resetReplay()
   }
 
   const onClickShareFeedbackActionButton = async (
@@ -230,62 +259,86 @@ export function ChatInterface() {
           </div>
         )}
       </div>
+      {isShareRoute ? (
+        <div className="flex items-center justify-between bg-[rgba(0,0,0,0.05)] px-4 py-2">
+          <p className="text-sm">
+            {replayStatus === ReplayStatus.COMPLETED
+              ? "Task replay completed"
+              : "Thesis is replaying the task..."}
+          </p>
+          {replayStatus === ReplayStatus.COMPLETED ? (
+            <button
+              className="rounded-md bg-[rgba(0,0,0,0.8)] px-4 py-2 text-sm text-white hover:bg-[rgba(0,0,0,0.7)]"
+              onClick={handleWatchAgain}
+            >
+              Watch again
+            </button>
+          ) : (
+            <button
+              className="rounded-md bg-[rgba(0,0,0,0.8)] px-4 py-2 text-sm text-white hover:bg-[rgba(0,0,0,0.7)]"
+              onClick={handleSkipToResults}
+            >
+              Skip to results
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-[6px] px-4 pb-4">
+          <div className="relative flex justify-between">
+            <TrajectoryActions
+              onPositiveFeedback={() =>
+                onClickShareFeedbackActionButton("positive")
+              }
+              onNegativeFeedback={() =>
+                onClickShareFeedbackActionButton("negative")
+              }
+              onExportTrajectory={() => onClickExportTrajectoryButton()}
+            />
 
-      <div className="flex flex-col gap-[6px] px-4 pb-4">
-        <div className="relative flex justify-between">
-          <TrajectoryActions
-            onPositiveFeedback={() =>
-              onClickShareFeedbackActionButton("positive")
-            }
-            onNegativeFeedback={() =>
-              onClickShareFeedbackActionButton("negative")
-            }
-            onExportTrajectory={() => onClickExportTrajectoryButton()}
-          />
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 transform">
+              {curAgentState === AgentState.RUNNING && <TypingIndicator />}
+            </div>
 
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 transform">
-            {curAgentState === AgentState.RUNNING && <TypingIndicator />}
+            {!hitBottom && <ScrollToBottomButton onClick={scrollDomToBottom} />}
           </div>
 
-          {!hitBottom && <ScrollToBottomButton onClick={scrollDomToBottom} />}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <InteractiveChatBox
-            onSubmit={handleSendMessage}
-            onStop={handleStop}
-            isDisabled={
-              curAgentState === AgentState.LOADING ||
-              curAgentState === AgentState.AWAITING_USER_CONFIRMATION ||
-              status === WsClientProviderStatus.DISCONNECTED
-            }
-            mode={curAgentState === AgentState.RUNNING ? "stop" : "submit"}
-            value={messageToSend ?? undefined}
-            onChange={setMessageToSend}
-            className="w-full flex-grow" // Ensure chat box takes full width minus space for the button
-          />
-        </div>
-        <div className="flex w-full items-center justify-between gap-2">
-          {settings && (
-            <Security
-              isOpen={securityModalIsOpen}
-              onOpenChange={onSecurityModalOpenChange}
-              securityAnalyzer={settings.SECURITY_ANALYZER}
+          <div className="flex items-center gap-2">
+            <InteractiveChatBox
+              onSubmit={handleSendMessage}
+              onStop={handleStop}
+              isDisabled={
+                curAgentState === AgentState.LOADING ||
+                curAgentState === AgentState.AWAITING_USER_CONFIRMATION ||
+                status === WsClientProviderStatus.DISCONNECTED
+              }
+              mode={curAgentState === AgentState.RUNNING ? "stop" : "submit"}
+              value={messageToSend ?? undefined}
+              onChange={setMessageToSend}
+              className="w-full flex-grow" // Ensure chat box takes full width minus space for the button
             />
-          )}
-          <Controls
-            setSecurityOpen={onSecurityModalOpen}
-            showSecurityLock={!!settings?.SECURITY_ANALYZER}
-          />
-          <DisconnectButton
-            handleDisconnect={handleDisconnect}
-            isDisabled={
-              !isWaitingForUserInput &&
-              status !== WsClientProviderStatus.DISCONNECTED
-            }
-          />
+          </div>
+          <div className="flex w-full items-center justify-between gap-2">
+            {settings && (
+              <Security
+                isOpen={securityModalIsOpen}
+                onOpenChange={onSecurityModalOpenChange}
+                securityAnalyzer={settings.SECURITY_ANALYZER}
+              />
+            )}
+            <Controls
+              setSecurityOpen={onSecurityModalOpen}
+              showSecurityLock={!!settings?.SECURITY_ANALYZER}
+            />
+            <DisconnectButton
+              handleDisconnect={handleDisconnect}
+              isDisabled={
+                !isWaitingForUserInput &&
+                status !== WsClientProviderStatus.DISCONNECTED
+              }
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <FeedbackModal
         isOpen={feedbackModalIsOpen}
