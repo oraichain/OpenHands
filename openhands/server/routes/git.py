@@ -1,8 +1,9 @@
+import os
 from fastapi import APIRouter, Depends, status, Request
 from fastapi.responses import JSONResponse
 from pydantic import SecretStr
 from sqlalchemy import select
-from openhands.server.thesis_auth import get_user_detail_from_thesis_auth_server, ThesisUser, UserStatus
+from openhands.server.thesis_auth import  UserStatus
 from openhands.integrations.github.github_service import GithubServiceImpl
 from openhands.integrations.provider import (
     PROVIDER_TOKEN_TYPE,
@@ -19,7 +20,6 @@ from openhands.integrations.service_types import (
 from openhands.server.auth import get_access_token, get_provider_tokens, get_user_id
 from openhands.server.shared import server_config
 from openhands.server.db import database
-from openhands.server.thesis_auth import ThesisUser, UserStatus
 
 app = APIRouter(prefix='/api/user')
 
@@ -205,7 +205,15 @@ async def get_suggested_tasks(
 async def get_user_status(request: Request):
     """Get the current user's status (activated or non_activated)"""
     user = request.state.user
-    return {
-        'status': "activated" if user.whitelisted == UserStatus.WHITELISTED else "non_activated",
-        'activated': user.whitelisted == UserStatus.WHITELISTED
-    }
+
+    # TODO: If the run mode is DEV, return True to bypass the check
+    if os.getenv('RUN_MODE') == 'DEV':
+        return {
+            'status': "activated",
+            'activated': True
+        }
+    else:
+        return {
+            'status': "activated" if user.whitelisted == UserStatus.WHITELISTED else "non_activated",
+            'activated': user.whitelisted == UserStatus.WHITELISTED
+        }

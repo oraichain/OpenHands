@@ -38,8 +38,11 @@ from openhands.llm.fn_call_converter import (
 from openhands.llm.metrics import Metrics
 from openhands.llm.retry_mixin import RetryMixin
 
-# if os.getenv('TRACELOOP_BASE_URL'):
-#     Traceloop.init(disable_batch=True)
+if os.getenv('TRACELOOP_BASE_URL'):
+    Traceloop.init(
+        disable_batch=True,
+        app_name=os.getenv('OTEL_SERVICE_NAME', 'openhands')
+    )
 
 __all__ = ['LLM']
 
@@ -424,7 +427,7 @@ class LLM(RetryMixin, DebugMixin):
                 base_url = 'http://' + base_url
 
             response = httpx.get(
-                f'{base_url}/v1/model/info',
+                f'{base_url}v1/model/info',
                 headers={
                     'Authorization': f'Bearer {self.config.api_key.get_secret_value() if self.config.api_key else None}'
                 },
