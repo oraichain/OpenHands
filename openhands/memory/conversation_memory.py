@@ -548,8 +548,9 @@ class ConversationMemory:
             # TODO: test this
             return []
         elif isinstance(obs, A2AListRemoteAgentsObservation):
-            text = truncate_content(obs.content, max_message_chars)
-            message = Message(role='user', content=[TextContent(text=text)])
+            # text = truncate_content(obs.content, max_message_chars)
+            # don't truncate here since we could miss some important information about the remote agents
+            message = Message(role='user', content=[TextContent(text=obs.content)])
         elif isinstance(obs, A2ASendTaskObservation):
             text = truncate_content(obs.content, max_message_chars)
             message = Message(role='user', content=[TextContent(text=text)])
