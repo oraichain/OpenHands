@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import threading
@@ -38,6 +39,7 @@ from openhands.events.observation import (
     Observation,
     UserRejectObservation,
 )
+from openhands.events.observation.a2a import A2AListRemoteAgentsObservation, A2ASendTaskObservation
 from openhands.events.serialization import event_to_dict, observation_from_dict
 from openhands.events.serialization.action import ACTION_TYPE_TO_CLASS
 from openhands.integrations.provider import PROVIDER_TOKEN_TYPE
@@ -76,7 +78,6 @@ class ActionExecutionClient(Runtime):
         headless_mode: bool = True,
         user_id: str | None = None,
         git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
-        a2a_manager: A2AManager | None = None,
     ):
         self.session = HttpSession()
         self.action_semaphore = threading.Semaphore(1)  # Ensure one action at a time
@@ -95,7 +96,6 @@ class ActionExecutionClient(Runtime):
             headless_mode,
             user_id,
             git_provider_tokens,
-            a2a_manager=a2a_manager,
         )
 
     @abstractmethod
@@ -339,6 +339,19 @@ class ActionExecutionClient(Runtime):
                 sid=self.sid,
             )
         return await call_tool_mcp_handler(self.mcp_clients, action)
+    
+    async def call_a2a(self, action: A2AListRemoteAgentsAction | A2ASendTaskAction) -> AsyncGenerator[Observation, None]:
+        a2a_manager = A2AManager()
+        if isinstance(action, A2AListRemoteAgentsAction):
+            list_agents = await a2a_manager.list_remote_agents(action.a2a_server_urls)
+            yield A2AListRemoteAgentsObservation(content=json.dumps(list_agents))
+        elif isinstance(action, A2ASendTaskAction):
+            agent_card = await a2a_manager.get_agent_card(action.agent_url)
+            if agent_card:
+                async for task_response in a2a_manager.send_task(agent_card, action.task_message, self.sid):
+                    yield A2ASendTaskObservation(content=task_response.result.model_dump_json())
+            else:
+                yield A2ASendTaskObservation(content=json.dumps({"error": "Agent card not found"}))
 
     async def aclose(self) -> None:
         if self.mcp_clients:

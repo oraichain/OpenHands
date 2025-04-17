@@ -113,7 +113,6 @@ class Runtime(FileEditRuntimeMixin):
         headless_mode: bool = False,
         user_id: str | None = None,
         git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
-        a2a_manager: A2AManager | None = None,
     ):
         self.sid = sid
         self.event_stream = event_stream
@@ -160,7 +159,6 @@ class Runtime(FileEditRuntimeMixin):
 
         self.user_id = user_id
         self.git_provider_tokens = git_provider_tokens
-        self.a2a_manager = a2a_manager
 
     def setup_initial_env(self) -> None:
         if self.attach_to_existing:
@@ -292,7 +290,7 @@ class Runtime(FileEditRuntimeMixin):
                 logger.debug(f'Calling call_tool_mcp with event: {event}')
                 observation: Observation = await getattr(self, McpAction.action)(event)
             elif isinstance(event, A2AListRemoteAgentsAction) or isinstance(event, A2ASendTaskAction):
-                async for observation in self.call_a2a(event):
+                async for observation in getattr(self, A2AListRemoteAgentsAction.action if isinstance(event, A2AListRemoteAgentsAction) else A2ASendTaskAction.action)(event):
                    if observation is not None:
                        observation._cause = event.id  # type: ignore[attr-defined]
                        observation.tool_call_metadata = event.tool_call_metadata
@@ -568,17 +566,10 @@ class Runtime(FileEditRuntimeMixin):
     @abstractmethod
     async def call_tool_mcp(self, action: McpAction) -> Observation:
         pass
-
+    
+    @abstractmethod
     async def call_a2a(self, action: A2AListRemoteAgentsAction | A2ASendTaskAction) -> AsyncGenerator[Observation, None]:
-        if self.a2a_manager is None:
-            raise RuntimeError('A2A manager is not set')
-        
-        if isinstance(action, A2AListRemoteAgentsAction):
-            list_agent = self.a2a_manager.list_remote_agents()
-            yield A2AListRemoteAgentsObservation(content=json.dumps(list_agent))
-        elif isinstance(action, A2ASendTaskAction):
-            async for task_response in self.a2a_manager.send_task(action.agent_name, action.task_message, self.sid):
-                yield A2ASendTaskObservation(content=task_response.result.model_dump_json())
+        pass
 
     # ====================================================================
     # File operations

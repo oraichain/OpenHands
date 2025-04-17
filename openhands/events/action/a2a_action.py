@@ -6,6 +6,7 @@ from openhands.events.action.action import Action
 
 @dataclass
 class A2AListRemoteAgentsAction(Action):
+    a2a_server_urls: list[str]
     action: str = ActionType.A2A_LIST_REMOTE_AGENTS
 
     def __init__(self, **kwargs):
@@ -13,11 +14,12 @@ class A2AListRemoteAgentsAction(Action):
 
     @property
     def message(self) -> str:
-        return "I am listing the available remote agents."    
+        return "I am listing the available remote agents."
 
 
 @dataclass
 class A2ASendTaskAction(Action):
+    agent_url: str
     agent_name: str
     task_message: str
     action: str = ActionType.A2A_SEND_TASK

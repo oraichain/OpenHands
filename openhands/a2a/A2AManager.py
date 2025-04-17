@@ -12,46 +12,29 @@ from openhands.core.logger import openhands_logger as logger
 
 
 class A2AManager(ABC): 
-    list_remote_agent_servers: List[str] = []
-    list_remote_agent_cards: dict[str, AgentCard] = {}
-    
-    def __init__(self, a2a_server_urls: List[str]):
-        self.list_remote_agent_servers = a2a_server_urls
-        self.list_remote_agent_cards = {}
-
-    def register_remote_card(self, agent_card: AgentCard):
-        self.list_remote_agent_cards[agent_card.name] = agent_card
-
-    async def initialize_agent_cards(self):
-        if not self.list_remote_agent_servers:
-            return
-        async def fetch_card(server_url: str) -> AgentCard:
-            async with A2ACardResolver(server_url) as resolver:
-                try:
-                    return await resolver.get_agent_card()
-                except (A2AClientHTTPError, A2AClientJSONError) as e:
-                    print(f"Failed to fetch agent card from {server_url}: {str(e)}")
-                    return None
-        tasks = [fetch_card(server) for server in self.list_remote_agent_servers]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+    async def get_agent_card(self, a2a_server_url: str):
+        async with A2ACardResolver(a2a_server_url) as resolver:
+            try:
+                card = await resolver.get_agent_card()
+                return card
+            except (A2AClientHTTPError, A2AClientJSONError) as e:
+                logger.error(f"Failed to fetch agent card from {a2a_server_url}: {str(e)}")
+                return None
         
-        for card in results:
-            if card is not None:
-                logger.info(f"Registered remote agent card: {card.name}")
-                self.list_remote_agent_cards[card.name] = card
-
-    def list_remote_agents(self):
+    async def list_remote_agents(self, a2a_server_urls: List[str]):
         """List the available remote agents you can use to delegate the task."""
-        if not self.list_remote_agent_cards:
+        if not a2a_server_urls:
             return []
         remote_agent_info = []
-        for card in self.list_remote_agent_cards.values():
-            remote_agent_info.append(
-                {"name": card.name, "description": card.description}
-            )
+        for a2a_server_url in a2a_server_urls:
+            card = await self.get_agent_card(a2a_server_url)
+            if card:
+                remote_agent_info.append(
+                    {"agent_name": card.name, "description": card.description, "agent_url": a2a_server_url}
+                )
         return remote_agent_info
     
-    async def send_task(self, agent_name: str, message: str, sid: str) -> AsyncGenerator[SendTaskStreamingResponse | SendTaskResponse, None]:
+    async def send_task(self, agent_card: AgentCard, message: str, sid: str) -> AsyncGenerator[SendTaskStreamingResponse | SendTaskResponse, None]:
         """Send a task to a remote agent and yield task responses.
         
         Args:
@@ -62,11 +45,7 @@ class A2AManager(ABC):
         Yields:
             TaskStatusUpdateEvent or Task: Task response updates
         """
-        if agent_name not in self.list_remote_agent_cards:
-            raise ValueError(f"Agent {agent_name} not found")
-            
-        card = self.list_remote_agent_cards[agent_name]
-        client = A2AClient(card)
+        client = A2AClient(agent_card)
         
         request: TaskSendParams = TaskSendParams(
             id=str(uuid.uuid4()),
@@ -80,7 +59,7 @@ class A2AManager(ABC):
             metadata={'conversation_id': sid},
         )
         
-        if card.capabilities.streaming:
+        if agent_card.capabilities.streaming:
             async for response in client.send_task_streaming(request):
                 yield response
         else:

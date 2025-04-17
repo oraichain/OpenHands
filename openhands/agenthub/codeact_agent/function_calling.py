@@ -60,6 +60,7 @@ def response_to_actions(
     response: ModelResponse,
     sid: str | None = None,
     workspace_mount_path_in_sandbox_store_in_session: bool = True,
+    a2a_server_urls: list[str] | None = None,
 ) -> list[Action]:
     actions: list[Action] = []
     assert len(response.choices) == 1, 'Only one choice is supported for now'
@@ -231,13 +232,16 @@ def response_to_actions(
             # A2A
             # ================================================
             elif tool_call.function.name == 'a2a_list_remote_agents':
-                action = A2AListRemoteAgentsAction()
+                action = A2AListRemoteAgentsAction(
+                    a2a_server_urls=a2a_server_urls,
+                )
             elif tool_call.function.name == 'a2a_send_task':
                 if 'agent_name' and 'task_message' not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "agent_name" and "task_message" in tool call {tool_call.function.name}'
                     )
                 action = A2ASendTaskAction(
+                    agent_url=arguments['agent_url'],
                     agent_name=arguments['agent_name'],
                     task_message=arguments['task_message'],
                 )

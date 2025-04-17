@@ -77,7 +77,6 @@ class DockerRuntime(ActionExecutionClient):
         status_callback: Callable | None = None,
         attach_to_existing: bool = False,
         headless_mode: bool = True,
-        a2a_manager: A2AManager | None = None,
     ):
         if not DockerRuntime._shutdown_listener_id:
             DockerRuntime._shutdown_listener_id = add_shutdown_listener(
@@ -124,7 +123,6 @@ class DockerRuntime(ActionExecutionClient):
             status_callback,
             attach_to_existing,
             headless_mode,
-            a2a_manager=a2a_manager
         )
 
         # Log runtime_extra_deps after base class initialization so self.sid is available
