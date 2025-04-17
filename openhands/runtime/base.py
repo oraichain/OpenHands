@@ -290,7 +290,7 @@ class Runtime(FileEditRuntimeMixin):
                 logger.debug(f'Calling call_tool_mcp with event: {event}')
                 observation: Observation = await getattr(self, McpAction.action)(event)
             elif isinstance(event, A2AListRemoteAgentsAction) or isinstance(event, A2ASendTaskAction):
-                async for observation in getattr(self, A2AListRemoteAgentsAction.action if isinstance(event, A2AListRemoteAgentsAction) else A2ASendTaskAction.action)(event):
+                async for observation in self.call_a2a(event):
                    if observation is not None:
                        observation._cause = event.id  # type: ignore[attr-defined]
                        observation.tool_call_metadata = event.tool_call_metadata
