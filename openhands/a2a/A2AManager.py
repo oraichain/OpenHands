@@ -30,11 +30,11 @@ class A2AManager(ABC):
             card = await self.get_agent_card(a2a_server_url)
             if card:
                 remote_agent_info.append(
-                    {"agent_name": card.name, "description": card.description, "agent_url": a2a_server_url}
+                    {"agent_name": card.name, "description": card.description, "agent_url": a2a_server_url, "streaming": card.capabilities.streaming}
                 )
         return remote_agent_info
     
-    async def send_task(self, agent_card: AgentCard, message: str, sid: str) -> AsyncGenerator[SendTaskStreamingResponse | SendTaskResponse, None]:
+    async def send_task(self, agent_url: str, message: str, sid: str, streaming: bool) -> AsyncGenerator[SendTaskStreamingResponse | SendTaskResponse, None]:
         """Send a task to a remote agent and yield task responses.
         
         Args:
@@ -45,7 +45,7 @@ class A2AManager(ABC):
         Yields:
             TaskStatusUpdateEvent or Task: Task response updates
         """
-        client = A2AClient(agent_card)
+        client = A2AClient(agent_url=agent_url)
         
         request: TaskSendParams = TaskSendParams(
             id=str(uuid.uuid4()),
@@ -59,7 +59,7 @@ class A2AManager(ABC):
             metadata={'conversation_id': sid},
         )
         
-        if agent_card.capabilities.streaming:
+        if streaming:
             async for response in client.send_task_streaming(request):
                 yield response
         else:

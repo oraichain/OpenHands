@@ -346,12 +346,8 @@ class ActionExecutionClient(Runtime):
             list_agents = await a2a_manager.list_remote_agents(action.a2a_server_urls)
             yield A2AListRemoteAgentsObservation(content=json.dumps(list_agents))
         elif isinstance(action, A2ASendTaskAction):
-            agent_card = await a2a_manager.get_agent_card(action.agent_url)
-            if agent_card:
-                async for task_response in a2a_manager.send_task(agent_card, action.task_message, self.sid):
-                    yield A2ASendTaskObservation(content=task_response.result.model_dump_json())
-            else:
-                yield A2ASendTaskObservation(content=json.dumps({"error": "Agent card not found"}))
+            async for task_response in a2a_manager.send_task(action.agent_url, action.task_message, self.sid, action.streaming):
+                yield A2ASendTaskObservation(content=task_response.result.model_dump_json())
 
     async def aclose(self) -> None:
         if self.mcp_clients:

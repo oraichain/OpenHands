@@ -244,6 +244,7 @@ def response_to_actions(
                     agent_url=arguments['agent_url'],
                     agent_name=arguments['agent_name'],
                     task_message=arguments['task_message'],
+                    streaming=arguments['streaming'],
                 )
             else:
                 raise FunctionCallNotExistsError(

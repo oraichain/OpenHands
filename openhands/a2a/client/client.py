@@ -23,8 +23,9 @@ import json
 
 
 class A2AClient:
-    def __init__(self, agent_card: AgentCard):
-        self.url = agent_card.url
+    def __init__(self, agent_url: str, agent_card: AgentCard | None = None):
+        self.url = agent_url
+        self.agent_card = agent_card
 
     async def send_task(self, payload: dict[str, Any]) -> SendTaskResponse:
         request = SendTaskRequest(params=payload)

@@ -22,6 +22,7 @@ class A2ASendTaskAction(Action):
     agent_url: str
     agent_name: str
     task_message: str
+    streaming: bool
     action: str = ActionType.A2A_SEND_TASK
 
     def __init__(self, **kwargs):
