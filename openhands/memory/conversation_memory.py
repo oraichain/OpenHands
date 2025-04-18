@@ -2,6 +2,8 @@ from typing import Generator
 
 from litellm import ModelResponse
 
+from openhands.a2a.common.types import Artifact
+from openhands.a2a.utils import convert_parts
 from openhands.core.config.agent_config import AgentConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import ImageContent, Message, TextContent
@@ -19,6 +21,10 @@ from openhands.events.action import (
     IPythonRunCellAction,
     MessageAction,
 )
+from openhands.events.action.a2a_action import (
+    A2AListRemoteAgentsAction,
+    A2ASendTaskAction,
+)
 from openhands.events.action.mcp import McpAction
 from openhands.events.event import Event, RecallType
 from openhands.events.observation import (
@@ -32,6 +38,11 @@ from openhands.events.observation import (
     IPythonRunCellObservation,
     PlanObservation,
     UserRejectObservation,
+)
+from openhands.events.observation.a2a import (
+    A2AListRemoteAgentsObservation,
+    A2ASendTaskArtifactObservation,
+    A2ASendTaskUpdateObservation,
 )
 from openhands.events.observation.agent import (
     MicroagentKnowledge,
@@ -200,6 +211,8 @@ class ConversationMemory:
                 BrowseInteractiveAction,
                 BrowseURLAction,
                 McpAction,
+                A2AListRemoteAgentsAction,
+                A2ASendTaskAction,
             ),
         ) or (isinstance(action, CmdRunAction) and action.source == 'agent'):
             tool_metadata = action.tool_call_metadata
@@ -543,6 +556,18 @@ class ConversationMemory:
             # If prompt extensions are disabled, we don't add any additional info
             # TODO: test this
             return []
+        elif isinstance(obs, A2AListRemoteAgentsObservation):
+            text = truncate_content(obs.content, max_message_chars)
+            message = Message(role='user', content=[TextContent(text=text)])
+        elif isinstance(obs, A2ASendTaskUpdateObservation):
+            return []
+        elif isinstance(obs, A2ASendTaskArtifactObservation):
+            artifact = Artifact(**obs.task_artifact_event['artifact'])
+            parts = artifact.parts
+            converted_parts = convert_parts(parts)
+            text = '\n'.join(converted_parts)
+            logger.info(f'A2ASendTaskArtifactObservation: {text}')
+            message = Message(role='user', content=[TextContent(text=text)])
         else:
             # If an observation message is not returned, it will cause an error
             # when the LLM tries to return the next message
