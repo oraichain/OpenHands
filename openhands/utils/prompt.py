@@ -43,6 +43,7 @@ class PromptManager:
         self.user_template: Template = self._load_template('user_prompt')
         self.additional_info_template: Template = self._load_template('additional_info')
         self.microagent_info_template: Template = self._load_template('microagent_info')
+        self.system_prompt: str | None = None
 
     def _load_template(self, template_name: str) -> Template:
         if self.prompt_dir is None:
@@ -54,8 +55,13 @@ class PromptManager:
         with open(template_path, 'r') as file:
             return Template(file.read())
 
+    def set_system_message(self, system_prompt: str) -> None:
+        self.system_prompt = system_prompt
+        
     def get_system_message(self, **kwargs) -> str:
         # **kwargs is used to pass additional context to the system prompt, such as current date, ...
+        if self.system_prompt:
+            return self.system_prompt
         return self.system_template.render(**kwargs).strip()
 
     def get_example_user_message(self) -> str:

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING, Callable, Type
 
 if TYPE_CHECKING:
     from openhands.controller.state.state import State
@@ -42,6 +42,7 @@ class Agent(ABC):
         self.workspace_mount_path_in_sandbox_store_in_session = (
             workspace_mount_path_in_sandbox_store_in_session
         )
+        self.system_prompt: str = ''
 
     @property
     def complete(self) -> bool:
@@ -124,3 +125,11 @@ class Agent(ABC):
         - mcp_tools (list[dict]): The list of MCP tools.
         """
         self.mcp_tools = mcp_tools
+        
+    def set_system_prompt(self, system_prompt: str) -> None:
+        """Sets the system prompt for the agent.
+
+        Args:
+        - system_prompt (str): The system prompt.
+        """
+        self.system_prompt = system_prompt
