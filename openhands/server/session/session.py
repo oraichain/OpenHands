@@ -86,6 +86,7 @@ class Session:
         initial_message: MessageAction | None,
         replay_json: str | None,
         mnemonic: str | None = None,
+        system_prompt: str | None = None,
     ):
         start_time = time.time()
         self.agent_session.event_stream.add_event(
@@ -148,6 +149,8 @@ class Session:
             llm, agent_config, workspace_mount_path_in_sandbox_store_in_session
         )
         agent.set_mcp_tools(mcp_tools)
+        if system_prompt:
+            agent.set_system_prompt(system_prompt)
 
         git_provider_tokens = None
         selected_repository = None

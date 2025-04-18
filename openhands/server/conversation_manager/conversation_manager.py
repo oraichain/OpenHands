@@ -55,6 +55,7 @@ class ConversationManager(ABC):
         user_id: str | None,
         github_user_id: str | None,
         mnemonic: str | None,
+        system_prompt: str | None,
     ) -> EventStore | None:
         """Join a conversation and return its event stream."""
 
