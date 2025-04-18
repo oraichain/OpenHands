@@ -10,6 +10,9 @@ from openhands.agenthub import (  # noqa: E402
     future_trading_agent,
     task_solving_agent,
     visualbrowsing_agent,
+    futures_whale_agent,
+    stable_coin_earning_agent,
+    lp_farming_agent
 )
 from openhands.controller.agent import Agent  # noqa: E402
 
@@ -21,4 +24,7 @@ __all__ = [
     'visualbrowsing_agent',
     'task_solving_agent',
     'future_trading_agent',
+    'futures_whale_agent',
+    'stable_coin_earning_agent',
+    'lp_farming_agent'
 ]
