@@ -26,3 +26,5 @@ LOG_LEVEL=debug make start-backend
 ```bash
 poetry run pytest tests/e2e/test_e2e.py
 ```
+
+Note that you can pass an existing CONVERSATION_ID to re-connect with its corresponding runtime. Each `test_e2e.py` process is a conversation, simulating the behavior of different sessions on the frontend, chatting with the LLM.
