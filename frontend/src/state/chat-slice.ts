@@ -27,7 +27,8 @@ export const HANDLED_ACTIONS: OpenHandsEventType[] = [
   "call_tool_mcp",
   "browser_mcp",
   "recall",
-]
+  "think",
+];
 
 function getRiskText(risk: ActionSecurityRisk) {
   switch (risk) {

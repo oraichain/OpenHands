@@ -56,7 +56,8 @@ export function handleObservationMessage(message: ObservationMessage) {
     case ObservationType.NULL:
     case ObservationType.MCP:
     case ObservationType.RECALL:
-      break // We don't display the default message for these observations
+    case ObservationType.ERROR:
+      break; // We don't display the default message for these observations
     default:
       store.dispatch(addAssistantMessage(message.message))
       break

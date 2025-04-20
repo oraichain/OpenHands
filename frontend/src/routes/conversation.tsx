@@ -1,35 +1,43 @@
-import { ChatInterface } from "#/components/features/chat/chat-interface"
-import { Container } from "#/components/layout/container"
-import {
-  Orientation,
-  ResizablePanel,
-} from "#/components/layout/resizable-panel"
-import ThesisComputer from "#/components/layout/RightSideContent"
-import ViewFile from "#/components/layout/view-file"
+import { useDisclosure } from "@heroui/react";
+import React from "react";
+import { Outlet } from "react-router";
+import { useDispatch, useSelector } from "react-redux";
+import { FaServer } from "react-icons/fa";
+import { useTranslation } from "react-i18next";
+import { DiGit } from "react-icons/di";
+import { I18nKey } from "#/i18n/declaration";
 import {
   ConversationProvider,
   useConversation,
-} from "#/context/conversation-context"
-import { FilesProvider } from "#/context/files"
-import { WsClientProvider } from "#/context/ws-client-provider"
-import { useConversationConfig } from "#/hooks/query/use-conversation-config"
-import { useSettings } from "#/hooks/query/use-settings"
-import { useUserConversation } from "#/hooks/query/use-user-conversation"
-import { useDocumentTitleFromState } from "#/hooks/use-document-title-from-state"
-import { useEffectOnce } from "#/hooks/use-effect-once"
-import { useEndSession } from "#/hooks/use-end-session"
-import { addUserMessage, clearMessages } from "#/state/chat-slice"
-import { clearTerminal } from "#/state/command-slice"
-import { clearComputerList } from "#/state/computer-slice"
-import { clearFiles, clearInitialPrompt } from "#/state/initial-query-slice"
-import { clearJupyter } from "#/state/jupyter-slice"
-import { RootState } from "#/store"
-import { displayErrorToast } from "#/utils/custom-toast-handlers"
-import { EventHandler } from "#/wrapper/event-handler"
-import React from "react"
-import { useTranslation } from "react-i18next"
-import { useDispatch, useSelector } from "react-redux"
-import { useAccount } from "wagmi"
+} from "#/context/conversation-context";
+import { Controls } from "#/components/features/controls/controls";
+import { clearMessages, addUserMessage } from "#/state/chat-slice";
+import { clearTerminal } from "#/state/command-slice";
+import { useEffectOnce } from "#/hooks/use-effect-once";
+import CodeIcon from "#/icons/code.svg?react";
+import GlobeIcon from "#/icons/globe.svg?react";
+import JupyterIcon from "#/icons/jupyter.svg?react";
+import TerminalIcon from "#/icons/terminal.svg?react";
+import { clearJupyter } from "#/state/jupyter-slice";
+import { FilesProvider } from "#/context/files";
+import { ChatInterface } from "../components/features/chat/chat-interface";
+import { WsClientProvider } from "#/context/ws-client-provider";
+import { EventHandler } from "../wrapper/event-handler";
+import { useConversationConfig } from "#/hooks/query/use-conversation-config";
+import { Container } from "#/components/layout/container";
+import {
+  Orientation,
+  ResizablePanel,
+} from "#/components/layout/resizable-panel";
+import Security from "#/components/shared/modals/security/security";
+import { useEndSession } from "#/hooks/use-end-session";
+import { useUserConversation } from "#/hooks/query/use-user-conversation";
+import { ServedAppLabel } from "#/components/layout/served-app-label";
+import { useSettings } from "#/hooks/query/use-settings";
+import { clearFiles, clearInitialPrompt } from "#/state/initial-query-slice";
+import { RootState } from "#/store";
+import { displayErrorToast } from "#/utils/custom-toast-handlers";
+import { useDocumentTitleFromState } from "#/hooks/use-document-title-from-state";
 
 function AppContent() {
   useConversationConfig()
@@ -51,14 +59,7 @@ function AppContent() {
   const dispatch = useDispatch()
   const endSession = useEndSession()
 
-  const [width, setWidth] = React.useState(window.innerWidth)
-  // Set the document title to the conversation title when available
-  useDocumentTitleFromState()
-
-  // const Terminal = React.useMemo(
-  //   () => React.lazy(() => import("#/components/features/terminal/terminal")),
-  //   [],
-  // );
+  const [width, setWidth] = React.useState(window.innerWidth);
 
   React.useEffect(() => {
     if (isFetched && !conversation) {
@@ -122,12 +123,44 @@ function AppContent() {
         secondClassName="flex flex-col overflow-hidden"
         firstChild={<ChatInterface />}
         secondChild={
-          <Container className="!mb-4 mt-4 h-full rounded-xl border-none bg-white">
-            {currentPathViewed ? (
-              <ViewFile currentPathViewed={currentPathViewed} />
-            ) : (
-              <ThesisComputer />
-            )}
+          <Container
+            className="h-full w-full"
+            labels={[
+              {
+                label: "Changes",
+                to: "",
+                icon: <DiGit className="w-6 h-6" />,
+              },
+              {
+                label: t(I18nKey.WORKSPACE$TITLE),
+                to: "workspace",
+                icon: <CodeIcon />,
+              },
+              {
+                label: t(I18nKey.WORKSPACE$TERMINAL_TAB_LABEL),
+                to: "terminal",
+                icon: <TerminalIcon />,
+              },
+              { label: "Jupyter", to: "jupyter", icon: <JupyterIcon /> },
+              {
+                label: <ServedAppLabel />,
+                to: "served",
+                icon: <FaServer />,
+              },
+              {
+                label: (
+                  <div className="flex items-center gap-1">
+                    {t(I18nKey.BROWSER$TITLE)}
+                  </div>
+                ),
+                to: "browser",
+                icon: <GlobeIcon />,
+              },
+            ]}
+          >
+            <FilesProvider>
+              <Outlet />
+            </FilesProvider>
           </Container>
         }
       />

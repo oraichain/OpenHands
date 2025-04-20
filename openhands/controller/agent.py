@@ -1,14 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Type
+from typing import TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
     from openhands.controller.state.state import State
     from openhands.core.config import AgentConfig
     from openhands.events.action import Action
+    from openhands.events.action.message import SystemMessageAction
 from openhands.core.exceptions import (
     AgentAlreadyRegisteredError,
     AgentNotRegisteredError,
 )
+from openhands.core.logger import openhands_logger as logger
+from openhands.events.event import EventSource
 from openhands.llm.llm import LLM
 from openhands.runtime.plugins import PluginRequirement
 
@@ -44,6 +47,46 @@ class Agent(ABC):
         )
         self.system_prompt: str = ''
         self.user_prompt: str = ''
+        self.tools: list = []
+
+    def get_system_message(self) -> 'SystemMessageAction | None':
+        """
+        Returns a SystemMessageAction containing the system message and tools.
+        This will be added to the event stream as the first message.
+
+        Returns:
+            SystemMessageAction: The system message action with content and tools
+            None: If there was an error generating the system message
+        """
+        # Import here to avoid circular imports
+        from openhands.events.action.message import SystemMessageAction
+
+        try:
+            if not self.prompt_manager:
+                logger.warning(
+                    f'[{self.name}] Prompt manager not initialized before getting system message'
+                )
+                return None
+
+            system_message = (
+                self.system_prompt
+                if self.system_prompt
+                else self.prompt_manager.get_system_message()
+            )
+
+            # Get tools if available
+            tools = getattr(self, 'tools', None)
+
+            system_message_action = SystemMessageAction(
+                content=system_message, tools=tools
+            )
+            # Set the source attribute
+            system_message_action._source = EventSource.AGENT  # type: ignore
+
+            return system_message_action
+        except Exception as e:
+            logger.warning(f'[{self.name}] Failed to generate system message: {e}')
+            return None
 
     @property
     def complete(self) -> bool:
@@ -126,7 +169,7 @@ class Agent(ABC):
         - mcp_tools (list[dict]): The list of MCP tools.
         """
         self.mcp_tools = mcp_tools
-        
+
     def set_system_prompt(self, system_prompt: str) -> None:
         """Set the system prompt for the agent.
 
@@ -134,7 +177,7 @@ class Agent(ABC):
         - system_prompt (str): The system prompt.
         """
         self.system_prompt = system_prompt
-        
+
     def set_user_prompt(self, user_prompt: str) -> None:
         """Set the user prompt for the agent.
 

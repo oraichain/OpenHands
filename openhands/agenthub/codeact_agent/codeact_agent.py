@@ -2,12 +2,24 @@ import os
 from collections import deque
 from typing import override
 
+from litellm import ChatCompletionToolParam
+
 import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
+from openhands.agenthub.codeact_agent.tools.bash import create_cmd_run_tool
+from openhands.agenthub.codeact_agent.tools.browser import BrowserTool
+from openhands.agenthub.codeact_agent.tools.finish import FinishTool
+from openhands.agenthub.codeact_agent.tools.ipython import IPythonTool
+from openhands.agenthub.codeact_agent.tools.llm_based_edit import LLMBasedFileEditTool
+from openhands.agenthub.codeact_agent.tools.str_replace_editor import (
+    create_str_replace_editor_tool,
+)
+from openhands.agenthub.codeact_agent.tools.think import ThinkTool
+from openhands.agenthub.codeact_agent.tools.web_read import WebReadTool
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
 from openhands.core.logger import openhands_logger as logger
-from openhands.core.message import Message, TextContent
+from openhands.core.message import Message
 from openhands.events.action import (
     Action,
     AgentFinishAction,
@@ -70,15 +82,7 @@ class CodeActAgent(Agent):
         super().__init__(llm, config, workspace_mount_path_in_sandbox_store_in_session)
         self.pending_actions: deque[Action] = deque()
         self.reset()
-
-        built_in_tools = codeact_function_calling.get_tools(
-            codeact_enable_browsing=self.config.codeact_enable_browsing,
-            codeact_enable_jupyter=self.config.codeact_enable_jupyter,
-            codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
-            llm=self.llm,
-        )
-
-        self.tools = built_in_tools
+        self.tools = self._get_tools()
 
         self.prompt_manager = PromptManager(
             prompt_dir=os.path.join(os.path.dirname(__file__), 'prompts'),
@@ -90,18 +94,56 @@ class CodeActAgent(Agent):
             logger.info(f'Condenser config: {self.config.condenser.llm_config}')
         self.condenser = Condenser.from_config(self.config.condenser)
         logger.info(f'Using condenser: {type(self.condenser)}')
-        
+        self.response_to_actions_fn = codeact_function_calling.response_to_actions
+
     @override
     def set_system_prompt(self, system_prompt: str) -> None:
         self.system_prompt = system_prompt
-        self.prompt_manager.set_system_message(system_prompt)
-        logger.info(f'New system prompt: {self.conversation_memory.process_initial_messages()}')
-        
+        if self.prompt_manager:
+            self.prompt_manager.set_system_message(system_prompt)
+            logger.info(
+                f'New system prompt: {self.prompt_manager.get_system_message()}'
+            )
+
     @override
     def set_user_prompt(self, user_prompt: str) -> None:
         self.user_prompt = user_prompt
-        self.prompt_manager.set_user_message(user_prompt)
-        logger.info(f'New user prompt: {self.conversation_memory.process_initial_messages()}')
+        if self.prompt_manager:
+            self.prompt_manager.set_user_message(user_prompt)
+
+    def _get_tools(self) -> list[ChatCompletionToolParam]:
+        SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
+
+        use_simplified_tool_desc = False
+        if self.llm is not None:
+            use_simplified_tool_desc = any(
+                model_substr in self.llm.config.model
+                for model_substr in SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS
+            )
+
+        tools = []
+        if self.config.enable_cmd:
+            tools.append(
+                create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc)
+            )
+        if self.config.enable_think:
+            tools.append(ThinkTool)
+        if self.config.enable_finish:
+            tools.append(FinishTool)
+        if self.config.enable_browsing:
+            tools.append(WebReadTool)
+            tools.append(BrowserTool)
+        if self.config.enable_jupyter:
+            tools.append(IPythonTool)
+        if self.config.enable_llm_editor:
+            tools.append(LLMBasedFileEditTool)
+        elif self.config.enable_editor:
+            tools.append(
+                create_str_replace_editor_tool(
+                    use_simplified_description=use_simplified_tool_desc
+                )
+            )
+        return tools
 
     def reset(self) -> None:
         """Resets the CodeAct Agent."""
@@ -168,7 +210,7 @@ class CodeActAgent(Agent):
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         response = self.llm.completion(**params)
         logger.debug(f'Response from LLM: {response}')
-        actions = codeact_function_calling.response_to_actions(
+        actions = self.response_to_actions_fn(
             response,
             state.session_id,
             self.workspace_mount_path_in_sandbox_store_in_session,
@@ -186,8 +228,8 @@ class CodeActAgent(Agent):
         message flow and function-calling scenarios.
 
         The method performs the following steps:
-        1. Initializes with system prompt and optional initial user message
-        2. Processes events (Actions and Observations) into messages
+        1. Checks for SystemMessageAction in events, adds one if missing (legacy support)
+        2. Processes events (Actions and Observations) into messages, including SystemMessageAction
         3. Handles tool calls and their responses in function-calling mode
         4. Manages message role alternation (user/assistant/tool)
         5. Applies caching for specific LLM providers (e.g., Anthropic)
@@ -198,8 +240,7 @@ class CodeActAgent(Agent):
 
         Returns:
             list[Message]: A list of formatted messages ready for LLM consumption, including:
-                - System message with prompt
-                - Initial user message (if configured)
+                - System message with prompt (from SystemMessageAction)
                 - Action messages (from both user and assistant)
                 - Observation messages (including tool responses)
                 - Environment reminders (in non-function-calling mode)
@@ -213,58 +254,14 @@ class CodeActAgent(Agent):
         if not self.prompt_manager:
             raise Exception('Prompt Manager not instantiated.')
 
-        # Use ConversationMemory to process initial messages
-        messages = self.conversation_memory.process_initial_messages(
-            with_caching=self.llm.is_caching_prompt_active()
-        )
-
-        # Use ConversationMemory to process events
+        # Use ConversationMemory to process events (including SystemMessageAction)
         messages = self.conversation_memory.process_events(
             condensed_history=events,
-            initial_messages=messages,
             max_message_chars=self.llm.config.max_message_chars,
             vision_is_active=self.llm.vision_is_active(),
         )
-
-        messages = self._enhance_messages(messages)
 
         if self.llm.is_caching_prompt_active():
             self.conversation_memory.apply_prompt_caching(messages)
 
         return messages
-
-    def _enhance_messages(self, messages: list[Message]) -> list[Message]:
-        """Enhances the user message with additional context based on keywords matched.
-
-        Args:
-            messages (list[Message]): The list of messages to enhance
-
-        Returns:
-            list[Message]: The enhanced list of messages
-        """
-        assert self.prompt_manager, 'Prompt Manager not instantiated.'
-
-        results: list[Message] = []
-        is_first_message_handled = False
-        prev_role = None
-
-        for msg in messages:
-            if msg.role == 'user' and not is_first_message_handled:
-                is_first_message_handled = True
-                # compose the first user message with examples
-                self.prompt_manager.add_examples_to_initial_message(msg)
-
-            elif msg.role == 'user':
-                # Add double newline between consecutive user messages
-                if prev_role == 'user' and len(msg.content) > 0:
-                    # Find the first TextContent in the message to add newlines
-                    for content_item in msg.content:
-                        if isinstance(content_item, TextContent):
-                            # If the previous message was also from a user, prepend two newlines to ensure separation
-                            content_item.text = '\n\n' + content_item.text
-                            break
-
-            results.append(msg)
-            prev_role = msg.role
-
-        return results

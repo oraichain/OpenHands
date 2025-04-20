@@ -121,13 +121,13 @@ export default function MainApp() {
   return (
     <div
       data-testid="root-layout"
-      className="flex h-dvh flex-col overflow-x-hidden md:min-w-[1024px] md:flex-row"
+      className="bg-base p-3 h-screen md:min-w-[1024px] flex flex-col md:flex-row gap-3"
     >
       <Sidebar />
 
       <div
         id="root-outlet"
-        className="relative h-[calc(100%-50px)] w-full bg-neutral-1100 dark:bg-neutral-200 md:h-full"
+        className="h-[calc(100%-50px)] md:h-full w-full relative overflow-auto"
       >
         <Outlet />
       </div>

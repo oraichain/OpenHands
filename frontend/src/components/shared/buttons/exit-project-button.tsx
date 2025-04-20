@@ -15,9 +15,7 @@ export function ExitProjectButton({
   isActive = false,
 }: ExitProjectButtonProps) {
   const { t } = useTranslation();
-  const startNewProject = t(I18nKey.PROJECT$START_NEW);
-  const Icon = isActive ? PlusWhiteIcon : PlusIcon;
-
+  const startNewProject = t(I18nKey.CONVERSATION$START_NEW);
   return (
     <TooltipButton
       tooltip={startNewProject}

@@ -1,9 +1,12 @@
-import { ChatMessage } from "#/components/features/chat/chat-message"
-import { ConfirmationButtons } from "#/components/shared/buttons/confirmation-buttons"
-import type { Message } from "#/message"
-import React, { useEffect, useState } from "react"
-import { ImageCarousel } from "../images/image-carousel"
-import { ExpandableMessage } from "./expandable-message"
+import React from "react";
+import type { Message } from "#/message";
+import { ChatMessage } from "#/components/features/chat/chat-message";
+import { ConfirmationButtons } from "#/components/shared/buttons/confirmation-buttons";
+import { ImageCarousel } from "../images/image-carousel";
+import { ExpandableMessage } from "./expandable-message";
+import { useUserConversation } from "#/hooks/query/use-user-conversation";
+import { useConversation } from "#/context/conversation-context";
+import { I18nKey } from "#/i18n/declaration";
 
 interface MessagesProps {
   messages: Message[]
@@ -12,27 +15,36 @@ interface MessagesProps {
 
 export const Messages: React.FC<MessagesProps> = React.memo(
   ({ messages, isAwaitingUserConfirmation }) => {
-    const [latestTimestamp, setLatestTimestamp] = useState<string | null>(null)
+    const { conversationId } = useConversation();
+    const { data: conversation } = useUserConversation(conversationId || null);
 
-    useEffect(() => {
-      if (messages.length > 0) {
-        const newestMessage = messages.reduce((prev, current) =>
-          new Date(current.timestamp) > new Date(prev.timestamp)
-            ? current
-            : prev,
-        )
-        setLatestTimestamp(newestMessage.timestamp)
-      }
-    }, [messages])
+    // Check if conversation metadata has trigger=resolver
+    const isResolverTrigger = conversation?.trigger === "resolver";
 
     return messages.map((message, index) => {
-      const isLatestMessage = message.timestamp === latestTimestamp
-      const messageClass = isLatestMessage ? "message-fade-in" : ""
-
       const shouldShowConfirmationButtons =
         messages.length - 1 === index &&
         message.sender === "assistant" &&
         isAwaitingUserConfirmation
+
+      const isFirstUserMessageWithResolverTrigger =
+        index === 0 && message.sender === "user" && isResolverTrigger;
+
+      // Special case: First user message with resolver trigger
+      if (isFirstUserMessageWithResolverTrigger) {
+        return (
+          <div key={index}>
+            <ExpandableMessage
+              type="action"
+              message={message.content}
+              id={I18nKey.CHAT$RESOLVER_INSTRUCTIONS}
+            />
+            {message.imageUrls && message.imageUrls.length > 0 && (
+              <ImageCarousel size="small" images={message.imageUrls} />
+            )}
+          </div>
+        );
+      }
 
       if (message.type === "error" || message.type === "action") {
         return (
@@ -65,7 +77,9 @@ export const Messages: React.FC<MessagesProps> = React.memo(
           )}
           {shouldShowConfirmationButtons && <ConfirmationButtons />}
         </ChatMessage>
-      )
-    })
+      );
+    });
   },
-)
+);
+
+Messages.displayName = "Messages";

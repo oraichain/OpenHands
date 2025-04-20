@@ -54,9 +54,12 @@ async def connect(connection_id: str, environ):
     conversation_id = query_params.get('conversation_id', [None])[0]
     system_prompt = query_params.get('system_prompt', [None])[0]
     user_prompt = query_params.get('user_prompt', [None])[0]
-
-    # providers_raw: list[str] = query_params.get('providers_set', [])
-    # providers_set: list[ProviderType] = [ProviderType(p) for p in providers_raw]
+    # raw_list = query_params.get('providers_set', [])
+    # providers_list = []
+    # for item in raw_list:
+    #     providers_list.extend(item.split(',') if isinstance(item, str) else [])
+    # providers_list = [p for p in providers_list if p]
+    # providers_set = [ProviderType(p) for p in providers_list]
 
     user_id = None
     mnemonic = None
@@ -147,7 +150,14 @@ async def connect(connection_id: str, environ):
 
     github_user_id = ''
     event_stream = await conversation_manager.join_conversation(
-        conversation_id, connection_id, settings, user_id, github_user_id, mnemonic, system_prompt, user_prompt
+        conversation_id,
+        connection_id,
+        settings,
+        user_id,
+        github_user_id,
+        mnemonic,
+        system_prompt,
+        user_prompt,
     )
     logger.info(
         f'Connected to conversation {conversation_id} with connection_id {connection_id}. Replaying event stream...'

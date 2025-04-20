@@ -3,18 +3,11 @@ import os
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-<<<<<<< HEAD
 
 from openhands.core.logger import openhands_logger as logger
 
 app = APIRouter(prefix='/api/auth')
 
-=======
-from openhands.core.logger import openhands_logger as logger
-
-app = APIRouter(prefix='/api/auth')
-
->>>>>>> 0ddea9a6bb58646190cc44334f48960a15e66a69
 # JWT settings
 JWT_SECRET = os.getenv('JWT_SECRET')
 JWT_ALGORITHM = 'HS256'

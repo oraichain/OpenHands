@@ -7,7 +7,11 @@ import socketio
 
 from openhands.controller.agent import Agent
 from openhands.core.config import AppConfig
-from openhands.core.config.condenser_config import LLMSummarizingCondenserConfig
+from openhands.core.config.condenser_config import (
+    BrowserOutputCondenserConfig,
+    CondenserPipelineConfig,
+    LLMSummarizingCondenserConfig,
+)
 from openhands.core.logger import OpenHandsLoggerAdapter
 from openhands.core.schema import AgentState
 from openhands.events.action import MessageAction, NullAction
@@ -127,10 +131,20 @@ class Session:
 
         llm = self._create_llm(agent_cls)
         agent_config = self.config.get_agent_config(agent_cls)
-        self.logger.info(f'Enabling default condenser: {agent_config.condenser}')
+
         if settings.enable_default_condenser and agent_config.condenser.type == 'noop':
-            default_condenser_config = LLMSummarizingCondenserConfig(
-                llm_config=llm.config, keep_first=3, max_size=20
+            # Default condenser chains a condenser that limits browser the total
+            # size of browser observations with a condenser that limits the size
+            # of the view given to the LLM. The order matters: with the browser
+            # output first, the summarizer will only see the most recent browser
+            # output, which should keep the summarization cost down.
+            default_condenser_config = CondenserPipelineConfig(
+                condensers=[
+                    BrowserOutputCondenserConfig(),
+                    LLMSummarizingCondenserConfig(
+                        llm_config=llm.config, keep_first=3, max_size=20
+                    ),
+                ]
             )
 
             self.logger.info(f'Enabling default condenser: {default_condenser_config}')
@@ -150,10 +164,10 @@ class Session:
             llm, agent_config, workspace_mount_path_in_sandbox_store_in_session
         )
         agent.set_mcp_tools(mcp_tools)
-        
+
         if system_prompt:
             agent.set_system_prompt(system_prompt)
-            
+
         if user_prompt:
             agent.set_user_prompt(user_prompt)
 

@@ -69,6 +69,7 @@ class MCPClient(BaseModel):
                     await self._initialize_and_list_tools()
         except Exception as e:
             logger.error(f'Error connecting to {server_url}: {str(e)}')
+            await self.disconnect()  # Clean up resources
             raise
 
     async def _connect_sse(

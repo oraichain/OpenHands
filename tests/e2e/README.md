@@ -16,7 +16,7 @@ JWT_SECRET=your-secret-key
 ```
 
 ## Start the backend server
- 
+
 ```bash
 LOG_LEVEL=debug make start-backend
 ```
