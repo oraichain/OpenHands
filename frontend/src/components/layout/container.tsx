@@ -5,13 +5,14 @@ import { NavTab } from "./nav-tab"
 interface ContainerProps {
   label?: React.ReactNode
   labels?: {
-    label: string | React.ReactNode
-    to: string
-    icon?: React.ReactNode
-    isBeta?: boolean
-  }[]
-  children: React.ReactNode
-  className?: React.HTMLAttributes<HTMLDivElement>["className"]
+    label: string | React.ReactNode;
+    to: string;
+    icon?: React.ReactNode;
+    isBeta?: boolean;
+    isLoading?: boolean;
+  }[];
+  children: React.ReactNode;
+  className?: React.HTMLAttributes<HTMLDivElement>["className"];
 }
 
 export function Container({
@@ -23,14 +24,21 @@ export function Container({
   return (
     <div
       className={clsx(
-        "flex flex-col rounded-xl border border-gray-200 bg-gray-300",
+        "bg-base-secondary border border-neutral-600 rounded-xl flex flex-col h-full",
         className,
       )}
     >
       {labels && (
-        <div className="flex h-12 text-xs">
-          {labels.map(({ label: l, to, icon, isBeta }) => (
-            <NavTab key={to} to={to} label={l} icon={icon} isBeta={isBeta} />
+        <div className="flex text-xs h-[36px]">
+          {labels.map(({ label: l, to, icon, isBeta, isLoading }) => (
+            <NavTab
+              key={to}
+              to={to}
+              label={l}
+              icon={icon}
+              isBeta={isBeta}
+              isLoading={isLoading}
+            />
           ))}
         </div>
       )}
@@ -39,7 +47,7 @@ export function Container({
           {label}
         </div>
       )}
-      <div className="h-full overflow-hidden">{children}</div>
+      <div className="overflow-hidden flex-grow rounded-b-xl">{children}</div>
     </div>
   )
 }

@@ -1,26 +1,30 @@
+import { useSelector } from "react-redux";
+import { useTranslation } from "react-i18next";
+import { RootState } from "#/store";
 import { useTerminal } from "#/hooks/use-terminal";
 import { RootState } from "#/store";
 import { RUNTIME_INACTIVE_STATES } from "#/types/agent-state";
 import "@xterm/xterm/css/xterm.css";
 import { useSelector } from "react-redux";
 
-interface TerminalProps {
-  secrets: string[];
-}
-
-function Terminal({ secrets }: TerminalProps) {
+function Terminal() {
   const { commands } = useSelector((state: RootState) => state.cmd);
   const { curAgentState } = useSelector((state: RootState) => state.agent);
+  const isRuntimeInactive = RUNTIME_INACTIVE_STATES.includes(curAgentState);
+  const { t } = useTranslation();
 
   const ref = useTerminal({
     commands,
-    secrets,
-    disabled: RUNTIME_INACTIVE_STATES.includes(curAgentState),
   });
 
   return (
-    <div className="h-full min-h-0 ">
-      <div ref={ref} className="h-full w-full rounded-lg" />
+    <div className="h-full p-2 min-h-0 flex-grow">
+      {isRuntimeInactive && (
+        <div className="text-sm text-gray-400 mb-2">
+          {t("DIFF_VIEWER$WAITING_FOR_RUNTIME")}
+        </div>
+      )}
+      <div ref={ref} className="h-full w-full" />
     </div>
   );
 }

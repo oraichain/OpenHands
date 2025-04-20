@@ -26,7 +26,8 @@ build:
 	@$(MAKE) -s install-python-dependencies
 	@$(MAKE) -s install-frontend-dependencies
 	@$(MAKE) -s install-pre-commit-hooks
-	@$(MAKE) -s build-frontend
+	# we don't use openhands fe
+	# @$(MAKE) -s build-frontend
 	@echo "$(GREEN)Build completed successfully.$(RESET)"
 
 check-dependencies:
@@ -175,7 +176,7 @@ install-pre-commit-hooks:
 
 lint-backend:
 	@echo "$(YELLOW)Running linters...$(RESET)"
-	@poetry run pre-commit run --files openhands/**/* agenthub/**/* evaluation/**/* --show-diff-on-failure --config $(PRE_COMMIT_CONFIG_PATH)
+	@poetry run pre-commit run --files openhands/**/* evaluation/**/* tests/**/* --show-diff-on-failure --config $(PRE_COMMIT_CONFIG_PATH)
 
 lint-frontend:
 	@echo "$(YELLOW)Running linters for frontend...$(RESET)"
