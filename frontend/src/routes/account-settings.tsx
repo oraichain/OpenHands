@@ -277,34 +277,51 @@ function AccountSettings() {
                     defaultSelectedKey={settings.AGENT}
                     isClearable={false}
                   />
-                  {isSaas && (
-                    <SettingsDropdownInput
-                      testId="runtime-settings-input"
-                      name="runtime-settings-input"
-                      label={
-                        <>
-                          Runtime Settings (
-                          <a
-                            href="mailto:contact@all-hands.dev"
-                            className="text-orange-500"
-                          >
-                            get in touch for access
-                          </a>
-                          )
-                        </>
-                      }
-                      items={REMOTE_RUNTIME_OPTIONS}
-                      defaultSelectedKey={settings.REMOTE_RUNTIME_RESOURCE_FACTOR?.toString()}
-                      isDisabled
-                      isClearable={false}
-                    />
-                  )}
-                  {/* <div className="flex flex-col gap-8 md:flex-row md:items-center">
-                    <SettingsSwitch
-                      testId="enable-confirmation-mode-switch"
-                      onToggle={setConfirmationModeIsEnabled}
-                      defaultIsToggled={!!settings.CONFIRMATION_MODE}
-                      isBeta
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="flex flex-col gap-6">
+            <h2 className="text-[28px] leading-8 tracking-[-0.02em] font-bold">
+              {t(I18nKey.SETTINGS$GIT_SETTINGS)}
+            </h2>
+            {isSaas && hasAppSlug && (
+              <Link
+                to={`https://github.com/apps/${config.APP_SLUG}/installations/new`}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                <BrandButton type="button" variant="secondary">
+                  {t(I18nKey.GITHUB$CONFIGURE_REPOS)}
+                </BrandButton>
+              </Link>
+            )}
+            {!isSaas && (
+              <>
+                <SettingsInput
+                  testId="github-token-input"
+                  name="github-token-input"
+                  label={t(I18nKey.GITHUB$TOKEN_LABEL)}
+                  type="password"
+                  className="w-[680px]"
+                  startContent={
+                    isGitHubTokenSet && (
+                      <KeyStatusIcon isSet={!!isGitHubTokenSet} />
+                    )
+                  }
+                  placeholder={isGitHubTokenSet ? "<hidden>" : ""}
+                />
+                <p data-testid="github-token-help-anchor" className="text-xs">
+                  {" "}
+                  {t(I18nKey.GITHUB$GET_TOKEN)}{" "}
+                  <b>
+                    {" "}
+                    <a
+                      href="https://github.com/settings/tokens/new?description=openhands-app&scopes=repo,user,workflow"
+                      target="_blank"
+                      className="underline underline-offset-2"
+                      rel="noopener noreferrer"
                     >
                       Enable confirmation mode
                     </SettingsSwitch>

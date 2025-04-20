@@ -14,7 +14,13 @@ import {
   GetVSCodeUrlResponse,
   GitHubAccessTokenResponse,
   ResultSet,
-} from "./open-hands.types"
+  GetTrajectoryResponse,
+  GitChangeDiff,
+  GitChange,
+} from "./open-hands.types";
+import { openHands } from "./open-hands-axios";
+import { ApiSettings, PostApiSettings } from "#/types/settings";
+import { GitUser, GitRepository } from "#/types/git";
 
 interface VerifySignatureResponse {
   user: {
@@ -401,6 +407,26 @@ class OpenHands {
       console.error("getConversationVisibility", error)
       return false
     }
+  }
+
+  static async getGitChanges(conversationId: string): Promise<GitChange[]> {
+    const { data } = await openHands.get<GitChange[]>(
+      `/api/conversations/${conversationId}/git/changes`,
+    );
+    return data;
+  }
+
+  static async getGitChangeDiff(
+    conversationId: string,
+    path: string,
+  ): Promise<GitChangeDiff> {
+    const { data } = await openHands.get<GitChangeDiff>(
+      `/api/conversations/${conversationId}/git/diff`,
+      {
+        params: { path },
+      },
+    );
+    return data;
   }
 }
 

@@ -98,7 +98,7 @@ async def fetch_mcp_tools_from_config(
         )
 
         if not mcp_clients:
-            logger.warning('No MCP clients were successfully connected')
+            logger.debug('No MCP clients were successfully connected')
             return []
 
         mcp_tools = convert_mcp_clients_to_tools(mcp_clients)

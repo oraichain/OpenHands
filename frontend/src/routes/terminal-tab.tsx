@@ -1,13 +1,22 @@
 import React from "react";
-import Terminal from "#/components/features/terminal/terminal";
 
-function TerminalPage() {
-  const secrets = React.useMemo(
-    // secrets to filter go here
-    () => [].filter((secret) => secret !== null),
+function TerminalTab() {
+  const Terminal = React.useMemo(
+    () => React.lazy(() => import("#/components/features/terminal/terminal")),
     [],
   );
-  return <Terminal secrets={secrets} />;
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex-grow overflow-auto">
+        {/* Terminal uses some API that is not compatible in a server-environment. For this reason, we lazy load it to ensure
+         * that it loads only in the client-side. */}
+        <React.Suspense fallback={<div className="h-full" />}>
+          <Terminal />
+        </React.Suspense>
+      </div>
+    </div>
+  );
 }
 
-export default TerminalPage;
+export default TerminalTab;

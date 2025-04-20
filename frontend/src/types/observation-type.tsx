@@ -38,6 +38,9 @@ enum ObservationType {
   // An observation that shows agent's context extension
   RECALL = "recall",
 
+  // An error observation
+  ERROR = "error",
+
   // A no-op observation
   NULL = "null",
 

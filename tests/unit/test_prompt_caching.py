@@ -55,6 +55,10 @@ def response_mock(content: str, tool_call_id: str):
 def test_get_messages(codeact_agent: CodeActAgent):
     # Add some events to history
     history = list()
+    # Add system message action
+    system_message_action = codeact_agent.get_system_message()
+    history.append(system_message_action)
+
     message_action_1 = MessageAction('Initial user message')
     message_action_1._source = 'user'
     history.append(message_action_1)
@@ -77,9 +81,10 @@ def test_get_messages(codeact_agent: CodeActAgent):
     assert (
         len(messages) == 6
     )  # System, initial user + user message, agent message, last user message
-    assert messages[0].content[0].cache_prompt  # system message
+    assert messages[0].role == 'system'  # system message
+    assert messages[0].content[0].cache_prompt  # system message should be cached
     assert messages[1].role == 'user'
-    assert messages[1].content[0].text.endswith('computer to solve tasks.')
+    assert messages[1].content[0].text.endswith('Initial user message')
     # we add cache breakpoint to only the last user message
     assert not messages[1].content[0].cache_prompt
 
@@ -96,6 +101,10 @@ def test_get_messages(codeact_agent: CodeActAgent):
 
 def test_get_messages_prompt_caching(codeact_agent: CodeActAgent):
     history = list()
+    # Add system message action
+    system_message_action = codeact_agent.get_system_message()
+    history.append(system_message_action)
+
     # Add multiple user and agent messages
     for i in range(15):
         message_action_user = MessageAction(f'User message {i}')
@@ -116,8 +125,9 @@ def test_get_messages_prompt_caching(codeact_agent: CodeActAgent):
     ]
     assert (
         len(cached_user_messages) == 2
-    )  # Including the initial system+user + last user message
+    )  # Including the initial system message + last user message
 
     # Verify that these are indeed the last user message (from start)
+    print('cached user message: ', cached_user_messages[0].content[0].text)
     assert cached_user_messages[0].content[0].text.startswith('You are Thesis agent')
     assert cached_user_messages[1].content[0].text.startswith('User message 14')

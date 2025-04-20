@@ -13,6 +13,9 @@ interface SettingsInputProps {
   startContent?: React.ReactNode;
   className?: string;
   onChange?: (value: string) => void;
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 export function SettingsInput({
@@ -27,6 +30,9 @@ export function SettingsInput({
   startContent,
   className,
   onChange,
+  min,
+  max,
+  step,
 }: SettingsInputProps) {
   return (
     <label className={cn("flex flex-col gap-2 w-fit", className)}>
@@ -43,6 +49,9 @@ export function SettingsInput({
         type={type}
         defaultValue={defaultValue}
         placeholder={placeholder}
+        min={min}
+        max={max}
+        step={step}
         className={cn(
           "bg-white dark:bg-[#1E1E1F] border border-neutral-1000 dark:border-[#232521] h-11 w-full rounded-lg p-2 placeholder:italic",
           "disabled:bg-[#2D2F36] disabled:border-[#2D2F36] disabled:cursor-not-allowed",

@@ -110,15 +110,13 @@ export function handleActionMessage(message: ActionMessage) {
   }
 
   if (message.source === "agent") {
-    // console.log("message-handleActionMessage", message, message.action);
-    if (message.args && message.args.thought) {
-      // if (message.action === ActionType.MCP) {
-      //   // @ts-expect-error TODO: fix
-      //   store.dispatch(addAssistantAction(message));
-      // } else {
-      //   store.dispatch(addAssistantMessage(message.args.thought));
-      // }
-      store.dispatch(addAssistantMessage(message.args.thought))
+    // Only add thought as a message if it's not a "think" action
+    if (
+      message.args &&
+      message.args.thought &&
+      message.action !== ActionType.THINK
+    ) {
+      store.dispatch(addAssistantMessage(message.args.thought));
     }
     // Need to convert ActionMessage to RejectAction
     // @ts-expect-error TODO: fix

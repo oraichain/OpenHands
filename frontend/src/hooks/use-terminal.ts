@@ -5,7 +5,13 @@ import { parseTerminalOutput } from "#/utils/parse-terminal-output";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import React from "react";
-// import { useLocation } from "react-router";
+import { useSelector } from "react-redux";
+import { Command } from "#/state/command-slice";
+import { RootState } from "#/store";
+import { RUNTIME_INACTIVE_STATES } from "#/types/agent-state";
+import { useWsClient } from "#/context/ws-client-provider";
+import { getTerminalCommand } from "#/services/terminal-service";
+import { parseTerminalOutput } from "#/utils/parse-terminal-output";
 
 /*
   NOTE: Tests for this hook are indirectly covered by the tests for the XTermTerminal component.
@@ -14,49 +20,35 @@ import React from "react";
 
 interface UseTerminalConfig {
   commands: Command[];
-  secrets: string[];
-  disabled: boolean;
 }
 
 const DEFAULT_TERMINAL_CONFIG: UseTerminalConfig = {
   commands: [],
-  secrets: [],
-  disabled: false,
 };
+
+const renderCommand = (command: Command, terminal: Terminal) => {
+  const { content } = command;
+
+  terminal.writeln(
+    parseTerminalOutput(content.replaceAll("\n", "\r\n").trim()),
+  );
+};
+
+// Create a persistent reference that survives component unmounts
+// This ensures terminal history is preserved when navigating away and back
+const persistentLastCommandIndex = { current: 0 };
 
 export const useTerminal = ({
   commands,
-  secrets,
-  disabled,
 }: UseTerminalConfig = DEFAULT_TERMINAL_CONFIG) => {
   const { send } = useWsClient();
+  const { curAgentState } = useSelector((state: RootState) => state.agent);
   const terminal = React.useRef<Terminal | null>(null);
   const fitAddon = React.useRef<FitAddon | null>(null);
   const ref = React.useRef<HTMLDivElement>(null);
-  const lastCommandIndex = React.useRef(0);
+  const lastCommandIndex = persistentLastCommandIndex; // Use the persistent reference
   const keyEventDisposable = React.useRef<{ dispose: () => void } | null>(null);
-  // const location = useLocation();
-  // const pathname = location.pathname;
-
-  // Reset lastCommandIndex when commands array is empty
-  React.useEffect(() => {
-    if (commands.length === 0) {
-      lastCommandIndex.current = 0;
-    }
-  }, [commands]);
-
-  // Cleanup function to properly dispose terminal
-  const cleanup = React.useCallback(() => {
-    if (keyEventDisposable.current) {
-      keyEventDisposable.current.dispose();
-      keyEventDisposable.current = null;
-    }
-    if (terminal.current) {
-      terminal.current.dispose();
-      terminal.current = null;
-    }
-    lastCommandIndex.current = 0;
-  }, []);
+  const disabled = RUNTIME_INACTIVE_STATES.includes(curAgentState);
 
   const createTerminal = () =>
     new Terminal({
@@ -114,7 +106,11 @@ export const useTerminal = ({
 
   const handleEnter = (command: string) => {
     terminal.current?.write("\r\n");
+    // Don't write the command again as it will be added to the commands array
+    // and rendered by the useEffect that watches commands
     send(getTerminalCommand(command));
+    // Don't add the prompt here as it will be added when the command is processed
+    // and the commands array is updated
   };
 
   const handleBackspace = (command: string) => {
@@ -122,55 +118,66 @@ export const useTerminal = ({
     return command.slice(0, -1);
   };
 
-  // Initialize terminal
+  // Initialize terminal and handle cleanup
   React.useEffect(() => {
-    cleanup(); // Clean up existing terminal before creating new one
-
     terminal.current = createTerminal();
     fitAddon.current = new FitAddon();
 
-    let resizeObserver: ResizeObserver | null = null;
     if (ref.current) {
       initializeTerminal();
+      // Render all commands in array
+      // This happens when we just switch to Terminal from other tabs
+      if (commands.length > 0) {
+        for (let i = 0; i < commands.length; i += 1) {
+          if (commands[i].type === "input") {
+            terminal.current.write("$ ");
+          }
+          renderCommand(commands[i], terminal.current);
+        }
+        lastCommandIndex.current = commands.length;
+      }
       terminal.current.write("$ ");
-
-      resizeObserver = new ResizeObserver(() => {
-        fitAddon.current?.fit();
-      });
-      resizeObserver.observe(ref.current);
     }
 
     return () => {
-      cleanup();
-      resizeObserver?.disconnect();
+      terminal.current?.dispose();
     };
   }, []); // Keep this as empty dependency array
 
   // Handle commands updates
   React.useEffect(() => {
-    if (!terminal.current || commands.length === 0) return;
-
-    // Write all commands when switching tabs
-    for (let i = lastCommandIndex.current; i < commands.length; i += 1) {
-      let { content } = commands[i];
-      const { type } = commands[i];
-
-      secrets.forEach((secret) => {
-        content = content.replaceAll(secret, "*".repeat(10));
-      });
-
-      terminal.current.writeln(
-        parseTerminalOutput(content.replaceAll("\n", "\r\n").trim()),
-      );
-
-      if (type === "output") {
-        terminal.current.write("\n$ ");
+    if (
+      terminal.current &&
+      commands.length > 0 &&
+      lastCommandIndex.current < commands.length
+    ) {
+      let lastCommandType = "";
+      for (let i = lastCommandIndex.current; i < commands.length; i += 1) {
+        lastCommandType = commands[i].type;
+        renderCommand(commands[i], terminal.current);
+      }
+      lastCommandIndex.current = commands.length;
+      if (lastCommandType === "output") {
+        terminal.current.write("$ ");
       }
     }
+  }, [commands, disabled]);
 
-    lastCommandIndex.current = commands.length;
-    fitAddon.current?.fit(); // Ensure terminal fits after writing commands
-  }, [commands, secrets]);
+  React.useEffect(() => {
+    let resizeObserver: ResizeObserver | null = null;
+
+    resizeObserver = new ResizeObserver(() => {
+      fitAddon.current?.fit();
+    });
+
+    if (ref.current) {
+      resizeObserver.observe(ref.current);
+    }
+
+    return () => {
+      resizeObserver?.disconnect();
+    };
+  }, []);
 
   React.useEffect(() => {
     if (terminal.current) {

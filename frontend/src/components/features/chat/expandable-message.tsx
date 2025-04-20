@@ -61,6 +61,7 @@ export function ExpandableMessage({
   })
 
   useEffect(() => {
+    // If we have a translation ID, process it
     if (id && i18n.exists(id)) {
       let processedObservation = observation
       let processedAction = action
