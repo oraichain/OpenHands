@@ -94,7 +94,8 @@ class CodeActAgent(Agent):
     @override
     def set_system_prompt(self, system_prompt: str) -> None:
         self.system_prompt = system_prompt
-        self.prompt_manager.set_system_message(system_prompt)
+        if self.prompt_manager:
+            self.prompt_manager.set_system_message(system_prompt)
         logger.info(
             f'New system prompt: {self.conversation_memory.process_initial_messages()}'
         )
@@ -102,7 +103,8 @@ class CodeActAgent(Agent):
     @override
     def set_user_prompt(self, user_prompt: str) -> None:
         self.user_prompt = user_prompt
-        self.prompt_manager.set_user_message(user_prompt)
+        if self.prompt_manager:
+            self.prompt_manager.set_user_message(user_prompt)
         logger.info(
             f'New user prompt: {self.conversation_memory.process_initial_messages()}'
         )

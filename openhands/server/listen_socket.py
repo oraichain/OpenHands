@@ -90,10 +90,15 @@ async def connect(connection_id: str, environ):
             conversation_store = await ConversationStoreImpl.get_instance(
                 config, whitelisted_user_id, None
             )
+            if not conversation_store:
+                raise ConnectionRefusedError('Conversation store not found')
             conversation_metadata_result_set = await conversation_store.get_metadata(
                 conversation_id
             )
-            if conversation_metadata_result_set.user_id == whitelisted_user_id:
+            if (
+                conversation_metadata_result_set
+                and conversation_metadata_result_set.user_id == whitelisted_user_id
+            ):
                 is_whitelisted = True
                 logger.info(
                     f'Whitelisted access for user {user_id} and conversation {conversation_id}'
