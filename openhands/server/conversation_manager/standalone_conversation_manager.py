@@ -118,6 +118,7 @@ class StandaloneConversationManager(ConversationManager):
         github_user_id: str | None,
         mnemonic: str | None = None,
         system_prompt: str | None = None,
+        user_prompt: str | None = None,
     ) -> EventStore:
         logger.info(
             f'join_conversation:{sid}:{connection_id}',
@@ -127,7 +128,7 @@ class StandaloneConversationManager(ConversationManager):
         self._local_connection_id_to_session_id[connection_id] = sid
 
         event_stream = await self.maybe_start_agent_loop(
-            sid, settings, user_id, github_user_id=github_user_id, mnemonic=mnemonic, system_prompt=system_prompt
+            sid, settings, user_id, github_user_id=github_user_id, mnemonic=mnemonic, system_prompt=system_prompt, user_prompt=user_prompt
         )
         if not event_stream:
             logger.error(
@@ -136,6 +137,7 @@ class StandaloneConversationManager(ConversationManager):
             )
             raise RuntimeError(f'no_event_stream:{sid}')
         return event_stream
+        
 
     async def detach_from_conversation(self, conversation: Conversation):
         sid = conversation.sid
@@ -260,6 +262,7 @@ class StandaloneConversationManager(ConversationManager):
         github_user_id: str | None = None,
         mnemonic: str | None = None,
         system_prompt: str | None = None,
+        user_prompt: str | None = None,
     ) -> EventStore:
         logger.info(f'maybe_start_agent_loop:{sid}', extra={'session_id': sid})
         session: Session | None = None
@@ -302,7 +305,7 @@ class StandaloneConversationManager(ConversationManager):
             self._local_agent_loops_by_sid[sid] = session
             asyncio.create_task(
                 session.initialize_agent(
-                    settings, initial_user_msg, replay_json, mnemonic, system_prompt
+                    settings, initial_user_msg, replay_json, mnemonic, system_prompt, user_prompt
                 )
             )
             # This does not get added when resuming an existing conversation

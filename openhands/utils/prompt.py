@@ -44,6 +44,7 @@ class PromptManager:
         self.additional_info_template: Template = self._load_template('additional_info')
         self.microagent_info_template: Template = self._load_template('microagent_info')
         self.system_prompt: str | None = None
+        self.user_prompt: str | None = None
 
     def _load_template(self, template_name: str) -> Template:
         if self.prompt_dir is None:
@@ -57,6 +58,9 @@ class PromptManager:
 
     def set_system_message(self, system_prompt: str) -> None:
         self.system_prompt = system_prompt
+
+    def set_user_message(self, user_prompt: str) -> None:
+        self.user_prompt = user_prompt
         
     def get_system_message(self, **kwargs) -> str:
         # **kwargs is used to pass additional context to the system prompt, such as current date, ...
@@ -75,6 +79,8 @@ class PromptManager:
         into a more specialized agent that is tailored to the user's task.
         """
 
+        if (self.user_prompt):
+            return self.user_prompt
         return self.user_template.render().strip()
 
     def add_examples_to_initial_message(self, message: Message) -> None:
