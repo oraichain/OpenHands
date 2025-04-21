@@ -16,6 +16,7 @@ from openhands.events.observation.playwright_mcp import (
     BrowserMCPObservation,
 )
 from openhands.mcp.client import MCPClient
+from openhands.server.thesis_auth import get_mcp_from_thesis_auth_server, MCPStatus
 
 
 def convert_mcp_clients_to_tools(mcp_clients: list[MCPClient] | None) -> list[dict]:
@@ -80,6 +81,7 @@ async def fetch_mcp_tools_from_config(
     dict_mcp_config: dict[str, MCPConfig],
     sid: Optional[str] = None,
     mnemonic: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> list[dict]:
     """
     Retrieves the list of MCP tools from the MCP clients.
@@ -87,6 +89,19 @@ async def fetch_mcp_tools_from_config(
     Returns:
         A list of tool dictionaries. Returns an empty list if no connections could be established.
     """
+    if user_id:
+        user_mcp_config = await get_mcp_from_thesis_auth_server(user_id)
+        if user_mcp_config and 'data' in user_mcp_config:
+            dict_mcp_config.clear()  # Clear existing config
+            for mcp_config in user_mcp_config['data']:
+                if mcp_config.get('status') == MCPStatus.ACTIVE:
+                    dict_mcp_config[mcp_config['name']] = MCPConfig(
+                        name=mcp_config['name'],
+                        url=mcp_config['url'],
+                        mode='sse',
+                        command=None,
+                        args=None
+                    )
     mcp_clients = []
     mcp_tools = []
     try:
@@ -113,7 +128,6 @@ async def fetch_mcp_tools_from_config(
         logger.error(f'Error fetching MCP tools: {str(e)}')
         return []
 
-    # logger.debug(f'MCP tools: {mcp_tools}')
     return mcp_tools
 
 

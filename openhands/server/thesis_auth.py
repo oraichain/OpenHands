@@ -15,6 +15,10 @@ class UserStatus(IntEnum):
     WHITELISTED = 1
     BLACKLISTED = 0
 
+class MCPStatus(IntEnum):
+    INACTIVE = 0
+    ACTIVE = 1
+
 
 class ThesisUser(BaseModel):
     status: UserStatus
@@ -159,3 +163,37 @@ def check_access_token_in_header(request):
         raise HTTPException(
             status_code=401, detail='Unauthorized: Invalid token format'
         )
+
+
+async def get_mcp_from_thesis_auth_server(address: str) -> dict:
+    """Call the MCP endpoint with specific headers and parameters.
+    
+    Args:
+        address: The address to query in the MCP endpoint
+        
+    Returns:
+        dict: Response from the MCP endpoint
+    """
+    url = f'/api/mcp/{address}'
+    headers = {
+        'content-type': 'application/json',
+    }
+
+    try:
+        response = await thesis_auth_client.get(url, headers=headers)
+        
+        if response.status_code != 200:
+            logger.error(f'Failed to call MCP endpoint: {response.status_code} - {response.text}')
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=response.json().get('error', 'Unknown error'),
+            )
+
+        return response.json()
+
+    except httpx.RequestError as exc:
+        logger.error(f'Request error while calling MCP endpoint: {str(exc)}')
+        raise HTTPException(status_code=500, detail='Could not connect to MCP server')
+    except Exception as e:
+        logger.exception('Unexpected error while calling MCP endpoint')
+        raise HTTPException(status_code=500, detail=str(e))

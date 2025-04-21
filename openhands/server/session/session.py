@@ -135,7 +135,7 @@ class Session:
             agent_config.condenser = default_condenser_config
 
         mcp_tools = await fetch_mcp_tools_from_config(
-            self.config.dict_mcp_config, sid=self.sid, mnemonic=mnemonic
+            self.config.dict_mcp_config, sid=self.sid, mnemonic=mnemonic,user_id=self.user_id
         )
 
         workspace_mount_path_in_sandbox_store_in_session = (
