@@ -1,40 +1,52 @@
 import socketio
 import jwt
 import asyncio
+import json
 import os
-import requests
+import threading
 import time
-from typing import Optional, List
+from typing import List, Optional
+
+import requests
+import socketio
+from prompt_toolkit import HTML, print_formatted_text
+
+# Import required functions and classes from the first file
+from openhands.core.cli import (
+    DEFAULT_STYLE,
+    UsageMetrics,
+    display_message,
+    print_formatted_text,
+    shutdown,
+    update_usage_metrics,
+)
+from openhands.events.event import Event, EventSource
+from openhands.llm.metrics import Metrics, TokenUsage
 
 # Configuration
-JWT_SECRET = os.getenv('JWT_SECRET')
-JWT_ALGORITHM = "HS256"
-API_BASE_URL = "http://localhost:3000"
+API_BASE_URL = 'http://localhost:3000'
 
 # Create a SocketIO client
 sio = socketio.AsyncClient()
 
-def create_jwt_token(public_address: str):
-    """Create a JWT token for authentication"""
-    payload = {
-        "user": {
-            "publicAddress": public_address
-        },
-        "exp": int(time.time()) + 3600
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
 async def join_conversation(conversation_id: str, public_address: str):
-    # Generate JWT token
-    jwt_token = create_jwt_token(public_address)
+    # Initialize usage metrics
+    usage_metrics = UsageMetrics()
+    metrics_lock = threading.Lock()
+    sid = conversation_id  # Use conversation_id as session_id for shutdown
     
+    # Helper to run update_usage_metrics with lock
+    def update_metrics_with_lock(event, metrics):
+        with metrics_lock:
+            update_usage_metrics(event, metrics)
+
     # Create query string with parameters
     query_string = (
-        f"conversation_id={conversation_id}"
-        f"&auth={jwt_token}"
-        f"&latest_event_id=-1"
-        f"&mode=normal"
-        f"&system_prompt=You are a helpful AI assistant."
+        f'conversation_id={conversation_id}'
+        f'&auth={public_address}'
+        f'&latest_event_id=-1'
+        f'&mode=normal'
+        f'&system_prompt=You are a helpful AI assistant.'
     )
     
     try:
@@ -45,56 +57,97 @@ async def join_conversation(conversation_id: str, public_address: str):
             transports=['websocket'],
             namespaces='/'
         )
-        print(f"Connected with sid: {sio.sid}")
-        
+        display_message(f'Connected with sid: {sio.sid}')
+
         # Handle connection events
         @sio.event
         async def connect():
-            print("Connection established")
-        
+            display_message('Connection established')
+
         @sio.event
         async def disconnect():
-            print("Disconnected from server")
-        
+            display_message('Disconnected from server')
+            # Run shutdown in executor to handle synchronous prompt_toolkit calls
+            await asyncio.get_event_loop().run_in_executor(
+                None, lambda: shutdown(usage_metrics, sid)
+            )
+
         @sio.event
         async def oh_event(data):
-            print(f"Received event: {data}")
-        
+            # Create an Event object using the provided dataclass
+            event = Event()
+            event._source = data.get('source', '')
+            event._message = data.get('content', '')
+
+            # Populate llm_metrics if available
+            if event._source:
+                if 'llm_metrics' in data:
+                    llm_metrics = data['llm_metrics']
+                    print("event data: ", json.dumps(data))
+                    metrics = Metrics(model_name='default')
+                    cost = llm_metrics.get('accumulated_cost', 0.0)
+                    metrics.add_cost(cost)
+                    token_data = llm_metrics.get('accumulated_token_usage', {})
+                    metrics.add_token_usage(
+                        prompt_tokens=token_data.get('prompt_tokens', 0),
+                        completion_tokens=token_data.get('completion_tokens', 0),
+                        cache_read_tokens=token_data.get('cache_read_tokens', 0),
+                        cache_write_tokens=token_data.get('cache_write_tokens', 0),
+                        response_id=token_data.get('response_id', '')
+                    )
+                    event.llm_metrics = metrics
+
+                # Display agent messages, mimicking MessageAction handling
+                if event.source == EventSource.AGENT and event.message:
+                    display_message(event.message)
+                # Update usage metrics (synchronous, run in executor)
+                await asyncio.to_thread(
+                    update_metrics_with_lock, event, usage_metrics
+                )
+
         # Start the CLI input loop in a separate task
         async def cli_input_loop():
             while True:
                 try:
-                    # Use asyncio's event loop to run synchronous input in a non-blocking way
-                    user_input = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: input("Enter message (or Ctrl+C to exit): ")
+                    user_input = await asyncio.to_thread(
+                        input, 'Enter message (or Ctrl+C to exit): '
                     )
-                    if user_input.strip():  # Only emit non-empty messages
-                        # Emit a custom SocketIO event with the user's message
-                        await sio.emit('oh_user_action', {
-                            'action': "message",
-                            'args': { 'content': user_input, 'timestamp': time.time() }
-                        })
-                        print(f"Sent message: {user_input}")
+                    if user_input.strip():
+                        await sio.emit(
+                            'oh_user_action',
+                            {
+                                'action': 'message',
+                                'args': {
+                                    'content': user_input,
+                                    'timestamp': time.time(),
+                                },
+                            },
+                        )
+                        display_message(f'Sent message: {user_input}')
                 except KeyboardInterrupt:
-                    print("\nReceived Ctrl+C, disconnecting...")
+                    print_formatted_text(HTML('<grey>Received Ctrl+C, disconnecting...</grey>'), style=DEFAULT_STYLE)
                     await sio.disconnect()
                     break
                 except Exception as e:
-                    print(f"Error in CLI input: {e}")
+                    display_message(f'Error in CLI input: {e}')
 
-        # Run the CLI input loop concurrently with the SocketIO event loop
         input_task = asyncio.create_task(cli_input_loop())
-        
-        # Keep the connection alive and wait for the input task to complete
         await sio.wait()
-        await input_task  # Ensure the input task is cleaned up
-        
-    except socketio.exceptions.ConnectionError as e:
-        print(f"Connection failed: {e}")
-    except Exception as e:
-        print(f"Error: {e}")
+        await input_task
 
-# The create_conversation function remains unchanged
+    except socketio.exceptions.ConnectionError as e:
+        display_message(f'Connection failed: {e}')
+        # Run shutdown to display metrics on connection failure
+        await asyncio.get_event_loop().run_in_executor(
+            None, lambda: shutdown(usage_metrics, sid)
+        )
+    except Exception as e:
+        display_message(f'Error: {e}')
+        # Run shutdown to display metrics on general error
+        await asyncio.get_event_loop().run_in_executor(
+            None, lambda: shutdown(usage_metrics, sid)
+        )
+
 def create_conversation(
     initial_user_msg: Optional[str] = None,
     image_urls: Optional[List[str]] = None,
@@ -129,7 +182,7 @@ def create_conversation(
         print(f"Request Error: {e}")
         raise e
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     try:
         public_address = "0x11A87E9d573597d5A4271272df09C1177F34bEbC"
         conversation_id = os.getenv('CONVERSATION_ID')
@@ -143,7 +196,11 @@ if __name__ == "__main__":
                 public_address=public_address
             )
             conversation_id = new_conversation_response['conversation_id']
-        print(f"Conversation created with ID: {conversation_id}")
-        asyncio.run(join_conversation(conversation_id=conversation_id, public_address=public_address))
+        display_message(f'Conversation created with ID: {conversation_id}')
+        asyncio.run(
+            join_conversation(
+                conversation_id=conversation_id, public_address=public_address
+            )
+        )
     except Exception as e:
-        print(f"Error: {e}")
+        display_message(f'Error: {e}')
