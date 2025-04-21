@@ -1,5 +1,3 @@
-import socketio
-import jwt
 import asyncio
 import json
 import os
@@ -21,7 +19,7 @@ from openhands.core.cli import (
     update_usage_metrics,
 )
 from openhands.events.event import Event, EventSource
-from openhands.llm.metrics import Metrics, TokenUsage
+from openhands.llm.metrics import Metrics
 
 # Configuration
 API_BASE_URL = 'http://localhost:3000'
@@ -29,12 +27,13 @@ API_BASE_URL = 'http://localhost:3000'
 # Create a SocketIO client
 sio = socketio.AsyncClient()
 
+
 async def join_conversation(conversation_id: str, public_address: str):
     # Initialize usage metrics
     usage_metrics = UsageMetrics()
     metrics_lock = threading.Lock()
     sid = conversation_id  # Use conversation_id as session_id for shutdown
-    
+
     # Helper to run update_usage_metrics with lock
     def update_metrics_with_lock(event, metrics):
         with metrics_lock:
@@ -48,14 +47,14 @@ async def join_conversation(conversation_id: str, public_address: str):
         f'&mode=normal'
         f'&system_prompt=You are a helpful AI assistant.'
     )
-    
+
     try:
         # Connect to the server with query string
         await sio.connect(
-            f"{API_BASE_URL}?{query_string}",
+            f'{API_BASE_URL}?{query_string}',
             socketio_path='/socket.io',
             transports=['websocket'],
-            namespaces='/'
+            namespaces='/',
         )
         display_message(f'Connected with sid: {sio.sid}')
 
@@ -83,7 +82,7 @@ async def join_conversation(conversation_id: str, public_address: str):
             if event._source:
                 if 'llm_metrics' in data:
                     llm_metrics = data['llm_metrics']
-                    print("event data: ", json.dumps(data))
+                    print('event data: ', json.dumps(data))
                     metrics = Metrics(model_name='default')
                     cost = llm_metrics.get('accumulated_cost', 0.0)
                     metrics.add_cost(cost)
@@ -93,7 +92,7 @@ async def join_conversation(conversation_id: str, public_address: str):
                         completion_tokens=token_data.get('completion_tokens', 0),
                         cache_read_tokens=token_data.get('cache_read_tokens', 0),
                         cache_write_tokens=token_data.get('cache_write_tokens', 0),
-                        response_id=token_data.get('response_id', '')
+                        response_id=token_data.get('response_id', ''),
                     )
                     event.llm_metrics = metrics
 
@@ -101,9 +100,7 @@ async def join_conversation(conversation_id: str, public_address: str):
                 if event.source == EventSource.AGENT and event.message:
                     display_message(event.message)
                 # Update usage metrics (synchronous, run in executor)
-                await asyncio.to_thread(
-                    update_metrics_with_lock, event, usage_metrics
-                )
+                await asyncio.to_thread(update_metrics_with_lock, event, usage_metrics)
 
         # Start the CLI input loop in a separate task
         async def cli_input_loop():
@@ -125,7 +122,10 @@ async def join_conversation(conversation_id: str, public_address: str):
                         )
                         display_message(f'Sent message: {user_input}')
                 except KeyboardInterrupt:
-                    print_formatted_text(HTML('<grey>Received Ctrl+C, disconnecting...</grey>'), style=DEFAULT_STYLE)
+                    print_formatted_text(
+                        HTML('<grey>Received Ctrl+C, disconnecting...</grey>'),
+                        style=DEFAULT_STYLE,
+                    )
                     await sio.disconnect()
                     break
                 except Exception as e:
@@ -148,52 +148,52 @@ async def join_conversation(conversation_id: str, public_address: str):
             None, lambda: shutdown(usage_metrics, sid)
         )
 
+
 def create_conversation(
     initial_user_msg: Optional[str] = None,
     image_urls: Optional[List[str]] = None,
     selected_repository: Optional[dict] = None,
     selected_branch: Optional[str] = None,
     replay_json: Optional[str] = None,
-    public_address: Optional[str] = None
+    public_address: Optional[str] = None,
 ) -> dict:
     payload = {
-        "initial_user_msg": initial_user_msg,
-        "image_urls": image_urls or [],
-        "selected_repository": selected_repository,
-        "selected_branch": selected_branch,
-        "replay_json": replay_json
+        'initial_user_msg': initial_user_msg,
+        'image_urls': image_urls or [],
+        'selected_repository': selected_repository,
+        'selected_branch': selected_branch,
+        'replay_json': replay_json,
     }
     headers = {
-        "Authorization": f"Bearer {public_address}",
-        "Content-Type": "application/json"
+        'Authorization': f'Bearer {public_address}',
+        'Content-Type': 'application/json',
     }
     try:
         response = requests.post(
-            f"{API_BASE_URL}/api/conversations",
-            json=payload,
-            headers=headers
+            f'{API_BASE_URL}/api/conversations', json=payload, headers=headers
         )
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
-        print(f"HTTP Error: {e.response.json()}")
+        print(f'HTTP Error: {e.response.json()}')
         raise e
     except requests.exceptions.RequestException as e:
-        print(f"Request Error: {e}")
+        print(f'Request Error: {e}')
         raise e
+
 
 if __name__ == '__main__':
     try:
-        public_address = "0x11A87E9d573597d5A4271272df09C1177F34bEbC"
+        public_address = '0x11A87E9d573597d5A4271272df09C1177F34bEbC'
         conversation_id = os.getenv('CONVERSATION_ID')
         if not conversation_id:
             new_conversation_response = create_conversation(
-                initial_user_msg="Hello, world!",
+                initial_user_msg='Hello, world!',
                 image_urls=[],
                 selected_repository=None,
                 selected_branch=None,
                 replay_json=None,
-                public_address=public_address
+                public_address=public_address,
             )
             conversation_id = new_conversation_response['conversation_id']
         display_message(f'Conversation created with ID: {conversation_id}')

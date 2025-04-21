@@ -150,10 +150,10 @@ class Session:
             llm, agent_config, workspace_mount_path_in_sandbox_store_in_session
         )
         agent.set_mcp_tools(mcp_tools)
-        
+
         if system_prompt:
             agent.set_system_prompt(system_prompt)
-            
+
         if user_prompt:
             agent.set_user_prompt(user_prompt)
 

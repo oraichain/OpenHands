@@ -90,18 +90,22 @@ class CodeActAgent(Agent):
             logger.info(f'Condenser config: {self.config.condenser.llm_config}')
         self.condenser = Condenser.from_config(self.config.condenser)
         logger.info(f'Using condenser: {type(self.condenser)}')
-        
+
     @override
     def set_system_prompt(self, system_prompt: str) -> None:
         self.system_prompt = system_prompt
         self.prompt_manager.set_system_message(system_prompt)
-        logger.info(f'New system prompt: {self.conversation_memory.process_initial_messages()}')
-        
+        logger.info(
+            f'New system prompt: {self.conversation_memory.process_initial_messages()}'
+        )
+
     @override
     def set_user_prompt(self, user_prompt: str) -> None:
         self.user_prompt = user_prompt
         self.prompt_manager.set_user_message(user_prompt)
-        logger.info(f'New user prompt: {self.conversation_memory.process_initial_messages()}')
+        logger.info(
+            f'New user prompt: {self.conversation_memory.process_initial_messages()}'
+        )
 
     def reset(self) -> None:
         """Resets the CodeAct Agent."""

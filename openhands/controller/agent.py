@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Type
+from typing import TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
     from openhands.controller.state.state import State
@@ -126,7 +126,7 @@ class Agent(ABC):
         - mcp_tools (list[dict]): The list of MCP tools.
         """
         self.mcp_tools = mcp_tools
-        
+
     def set_system_prompt(self, system_prompt: str) -> None:
         """Set the system prompt for the agent.
 
@@ -134,7 +134,7 @@ class Agent(ABC):
         - system_prompt (str): The system prompt.
         """
         self.system_prompt = system_prompt
-        
+
     def set_user_prompt(self, user_prompt: str) -> None:
         """Set the user prompt for the agent.
 

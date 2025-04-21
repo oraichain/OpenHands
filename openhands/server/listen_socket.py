@@ -154,7 +154,14 @@ async def connect(connection_id: str, environ):
 
     github_user_id = ''
     event_stream = await conversation_manager.join_conversation(
-        conversation_id, connection_id, settings, user_id, github_user_id, mnemonic, system_prompt, user_prompt
+        conversation_id,
+        connection_id,
+        settings,
+        user_id,
+        github_user_id,
+        mnemonic,
+        system_prompt,
+        user_prompt,
     )
     logger.info(
         f'Connected to conversation {conversation_id} with connection_id {connection_id}. Replaying event stream...'

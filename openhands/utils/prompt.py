@@ -61,7 +61,7 @@ class PromptManager:
 
     def set_user_message(self, user_prompt: str) -> None:
         self.user_prompt = user_prompt
-        
+
     def get_system_message(self, **kwargs) -> str:
         # **kwargs is used to pass additional context to the system prompt, such as current date, ...
         if self.system_prompt:
@@ -79,7 +79,7 @@ class PromptManager:
         into a more specialized agent that is tailored to the user's task.
         """
 
-        if (self.user_prompt):
+        if self.user_prompt:
             return self.user_prompt
         return self.user_template.render().strip()
 

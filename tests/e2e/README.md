@@ -15,7 +15,7 @@ THESIS_AUTH_SERVER_URL=http://localhost:5000
 ```
 
 ## Start the backend server
- 
+
 ```bash
 LOG_LEVEL=debug make start-backend
 ```
@@ -23,7 +23,7 @@ LOG_LEVEL=debug make start-backend
 ## Start the tests
 
 ```bash
-poetry run pytest tests/e2e/test_e2e.py
+poetry run python tests/e2e/test_e2e.py
 ```
 
 Note that you can pass an existing CONVERSATION_ID to re-connect with its corresponding runtime. Each `test_e2e.py` process is a conversation, simulating the behavior of different sessions on the frontend, chatting with the LLM.
