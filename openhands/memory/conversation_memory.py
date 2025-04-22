@@ -2,6 +2,7 @@ from typing import Generator
 
 from litellm import ModelResponse
 
+from openhands.a2a.task_event_handler import TaskEventHandler
 from openhands.core.config.agent_config import AgentConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import ImageContent, Message, TextContent
@@ -562,7 +563,7 @@ class ConversationMemory:
             text = truncate_content(obs.content, max_message_chars)
             message = Message(role='user', content=[TextContent(text=text)])
         elif isinstance(obs, A2ASendTaskUpdateObservation):
-            return []
+            return TaskEventHandler.handle_observation(obs) if TaskEventHandler.should_step_on_task_update(obs) is not None else []
         elif isinstance(obs, A2ASendTaskArtifactObservation):
             text = self.prompt_manager.build_a2a_info(obs)
             message = Message(role='user', content=[TextContent(text=text)])
