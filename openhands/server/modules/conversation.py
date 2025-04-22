@@ -7,7 +7,7 @@ from openhands.server.shared import (
     ConversationStoreImpl,
     config,
 )
-from sqlalchemy import select, join, desc
+from sqlalchemy import select, join, desc, func, text
 from datetime import datetime
 
 from openhands.server.static import SortBy
@@ -16,12 +16,13 @@ from openhands.server.static import SortBy
 class ConversationModule:
 
     def get_view_count(self, conversation: dict, sort_by: str):
-        if sort_by == SortBy.total_view_24h:
-            return conversation.get('total_view_24h', 0) or 0
-        elif sort_by == SortBy.total_view_7d:
-            return conversation.get('total_view_7d', 0) or 0
-        elif sort_by == SortBy.total_view_30d:
-            return conversation.get('total_view_30d', 0) or 0
+        # Use direct string comparisons to avoid unreachable code errors
+        if sort_by == 'total_view_24h':
+            return conversation.get('total_view_24h', 0)
+        if sort_by == 'total_view_7d':
+            return conversation.get('total_view_7d', 0)
+        if sort_by == 'total_view_30d':
+            return conversation.get('total_view_30d', 0)
         return 0
 
     async def _update_research_view(self, conversation_id: str, ip_address: str = ''):
@@ -254,9 +255,9 @@ class ConversationModule:
             if sort_by:
                 query = select(
                     Conversation,
-                    ResearchTrending.c.total_view_24h,
-                    ResearchTrending.c.total_view_7d,
-                    ResearchTrending.c.total_view_30d
+                    func.coalesce(ResearchTrending.c.total_view_24h, 0).label('total_view_24h'),
+                    func.coalesce(ResearchTrending.c.total_view_7d, 0).label('total_view_7d'),
+                    func.coalesce(ResearchTrending.c.total_view_30d, 0).label('total_view_30d')
                 ).select_from(
                     Conversation.outerjoin(
                         ResearchTrending,
