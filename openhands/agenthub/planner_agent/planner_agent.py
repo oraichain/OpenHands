@@ -1,18 +1,13 @@
 from collections import deque
-
-from openhands.core.config.agent_config import AgentConfig
-from openhands.core.logger import openhands_logger as logger
+from openhands.agenthub.planner_agent.prompt import get_prompt_and_images
+from openhands.agenthub.planner_agent.response_parser import PlannerResponseParser
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
+from openhands.core.config import AgentConfig
 from openhands.core.message import ImageContent, Message, TextContent
 from openhands.events.action import Action, AgentFinishAction
 from openhands.llm.llm import LLM
-from openhands.runtime.plugins.agent_skills import AgentSkillsRequirement
-from openhands.runtime.plugins.jupyter import JupyterRequirement
-from openhands.runtime.plugins.requirement import PluginRequirement
-from openhands.agenthub.task_solving_agent.function_calling import get_tools as TaskSolvingTools, response_to_actions as TaskSolvingParser
-
-from .prompt import get_prompt
+from openhands.agenthub.codeact_agent import function_calling
 
 
 class PlannerAgent(Agent):
@@ -21,37 +16,32 @@ class PlannerAgent(Agent):
     The planner agent utilizes a special prompting strategy to create long term plans for solving problems.
     The agent is given its previous action-observation pairs, current task, and hint based on last action taken at every step.
     """
-    VERSION = '2.2'
+    response_parser = PlannerResponseParser()
 
-    sandbox_plugins: list[PluginRequirement] = [
-        # NOTE: AgentSkillsRequirement need to go before JupyterRequirement, since
-        # AgentSkillsRequirement provides a lot of Python functions,
-        # and it needs to be initialized before Jupyter for Jupyter to use those functions.
-        AgentSkillsRequirement(),
-        JupyterRequirement(),
-    ]
-
-    def __init__(self, llm: LLM, config: AgentConfig, workspace_mount_path_in_sandbox_store_in_session: bool = True,):
-        """
-        Initialize the Planner Agent with an LLM
+    def __init__(
+        self,
+        llm: LLM,
+        config: AgentConfig,
+        workspace_mount_path_in_sandbox_store_in_session: bool = True,
+    ) -> None:
+        """Initializes a new instance of the TaskSolvingAgent class.
 
         Parameters:
         - llm (LLM): The llm to be used by this agent
+        - config (AgentConfig): The configuration for this agent
+        - workspace_mount_path_in_sandbox_store_in_session (bool, optional): Whether to store the workspace mount path in session. Defaults to True.
         """
         super().__init__(llm, config, workspace_mount_path_in_sandbox_store_in_session)
+        self.pending_actions: deque[Action] = deque()
+        self.reset()
 
-        built_in_tools = TaskSolvingTools(
-            codeact_enable_browsing=self.config.codeact_enable_browsing,
-            codeact_enable_jupyter=self.config.codeact_enable_jupyter,
-            codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
-            llm=self.llm,
-        )
-
-        self.tools = built_in_tools
+    def reset(self) -> None:
+        """Resets the CodeAct Agent."""
+        super().reset()
+        self.pending_actions.clear()
 
     def step(self, state: State) -> Action:
-        """
-        Checks to see if current step is completed, returns AgentFinishAction if True.
+        """Checks to see if current step is completed, returns AgentFinishAction if True.
         Otherwise, creates a plan prompt and sends to model for inference, returning the result as the next action.
 
         Parameters:
@@ -62,21 +52,34 @@ class PlannerAgent(Agent):
         - Action: The next action to take based on llm response
         """
 
+        # Continue with pending actions if any
+        if self.pending_actions:
+            return self.pending_actions.popleft()
+
+        # if we're done, go back
+        latest_user_message = state.get_last_user_message()
+        if latest_user_message and latest_user_message.content.strip() == '/exit':
+            return AgentFinishAction()
+
         if state.root_task.state in [
             'completed',
             'verified',
             'abandoned',
         ]:
             return AgentFinishAction()
-        prompt = get_prompt(state)
-        messages = [Message(
-            role='user',
-            content=[TextContent(text=prompt)],
-        )]
+
+        prompt, image_urls = get_prompt_and_images(
+            state, self.llm.config.max_message_chars
+        )
+        content = [TextContent(text=prompt)]
+        if self.llm.vision_is_active() and image_urls:
+            content.append(ImageContent(image_urls=image_urls))
+        message = Message(role='user', content=content)
+
         params: dict = {
-            'messages': self.llm.format_messages_for_llm(messages),
+            'messages': self.llm.format_messages_for_llm(message),
+            'tools': [],
         }
-        params['tools'] = self.tools
 
         if self.mcp_tools:
             # Only add tools with unique names
@@ -86,19 +89,12 @@ class PlannerAgent(Agent):
                 for tool in self.mcp_tools
                 if tool['function']['name'] not in existing_names
             ]
-            params['tools'] += unique_mcp_tools
+            params['tools'] = unique_mcp_tools
 
-        # log to litellm proxy if possible
-        params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         response = self.llm.completion(**params)
-        actions = TaskSolvingParser(
-            response,
-            state.session_id,
-            self.workspace_mount_path_in_sandbox_store_in_session,
-        )
-        logger.debug(f'Actions after response_to_actions: {actions}')
 
-        return actions[0]
-
-    def search_memory(self, query: str) -> list[str]:
-        return []
+        actions = self.response_parser.parse(response)
+        print(f'Actions after response_to_actions: {actions}')
+        for action in actions:
+            self.pending_actions.append(action)
+        return self.pending_actions.popleft()

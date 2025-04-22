@@ -169,7 +169,7 @@ def event_to_trajectory(event: 'Event', include_screenshots: bool = False) -> di
     return d
 
 
-def event_to_memory(event: 'Event') -> dict:
+def event_to_memory(event: 'Event', max_message_chars: int) -> dict:
     d = event_to_dict(event)
     d.pop('id', None)
     d.pop('cause', None)
@@ -178,7 +178,7 @@ def event_to_memory(event: 'Event') -> dict:
     if 'extras' in d:
         remove_fields(d['extras'], DELETE_FROM_MEMORY_EXTRAS)
     if isinstance(event, Observation) and 'content' in d:
-        d['content'] = truncate_content(d['content'])
+        d['content'] = truncate_content(d['content'], max_message_chars)
     return d
 
 
