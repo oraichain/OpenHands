@@ -4,6 +4,7 @@ from openhands.core.config.agent_config import AgentConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
+from openhands.core.message import ImageContent, Message, TextContent
 from openhands.events.action import Action, AgentFinishAction
 from openhands.llm.llm import LLM
 from openhands.runtime.plugins.agent_skills import AgentSkillsRequirement
@@ -38,8 +39,6 @@ class PlannerAgent(Agent):
         - llm (LLM): The llm to be used by this agent
         """
         super().__init__(llm, config, workspace_mount_path_in_sandbox_store_in_session)
-        self.pending_actions: deque[Action] = deque()
-        self.reset()
 
         built_in_tools = TaskSolvingTools(
             codeact_enable_browsing=self.config.codeact_enable_browsing,
@@ -70,7 +69,10 @@ class PlannerAgent(Agent):
         ]:
             return AgentFinishAction()
         prompt = get_prompt(state)
-        messages = [{'content': prompt, 'role': 'user'}]
+        messages = [Message(
+            role='user',
+            content=[TextContent(text=prompt)],
+        )]
         params: dict = {
             'messages': self.llm.format_messages_for_llm(messages),
         }
@@ -88,16 +90,15 @@ class PlannerAgent(Agent):
 
         # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
-        response = self.llm.completion(messages=messages)
-        actions = TaskSolvingParser.response_to_actions(
+        response = self.llm.completion(**params)
+        actions = TaskSolvingParser(
             response,
             state.session_id,
             self.workspace_mount_path_in_sandbox_store_in_session,
         )
         logger.debug(f'Actions after response_to_actions: {actions}')
-        for action in actions:
-            self.pending_actions.append(action)
-        return self.pending_actions.popleft()
+
+        return actions[0]
 
     def search_memory(self, query: str) -> list[str]:
         return []
