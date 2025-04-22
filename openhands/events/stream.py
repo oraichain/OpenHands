@@ -79,25 +79,38 @@ class EventStream(EventStore):
         self._thread_loops[subscriber_id][callback_id] = loop
 
     def close(self) -> None:
+        # Signal thread to stop processing new events
         self._stop_flag.set()
+        
+        # Give a small buffer time for event processing to acknowledge stop flag
+        time.sleep(0.05)
         
         # First unsubscribe all subscribers before joining the queue thread
         subscriber_ids = list(self._subscribers.keys())
         for subscriber_id in subscriber_ids:
             callback_ids = list(self._subscribers[subscriber_id].keys())
             for callback_id in callback_ids:
-                self._clean_up_subscriber(subscriber_id, callback_id)
+                try:
+                    self._clean_up_subscriber(subscriber_id, callback_id)
+                except Exception as e:
+                    logger.warning(f"Error cleaning up subscriber {subscriber_id}/{callback_id}: {e}")
         
         # Then join the queue thread
         if self._queue_thread.is_alive():
-            self._queue_thread.join(timeout=5.0)  # Add timeout to avoid hanging
+            try:
+                self._queue_thread.join(timeout=5.0)  # Add timeout to avoid hanging
+            except Exception as e:
+                logger.warning(f"Error joining queue thread: {e}")
             
         # Clear queue after thread has stopped or timed out
-        while not self._queue.empty():
-            try:
-                self._queue.get_nowait()
-            except queue.Empty:
-                break
+        try:
+            while not self._queue.empty():
+                try:
+                    self._queue.get_nowait()
+                except queue.Empty:
+                    break
+        except Exception as e:
+            logger.warning(f"Error clearing queue: {e}")
 
     def _clean_up_subscriber(self, subscriber_id: str, callback_id: str) -> None:
         if subscriber_id not in self._subscribers:
@@ -282,9 +295,18 @@ class EventStream(EventStore):
                 callbacks = self._subscribers[key]
                 for callback_id in callbacks:
                     callback = callbacks[callback_id]
-                    pool = self._thread_pools[key][callback_id]
-                    future = pool.submit(callback, event)
-                    future.add_done_callback(self._make_error_handler(callback_id, key))
+                    try:
+                        pool = self._thread_pools[key][callback_id]
+                        future = pool.submit(callback, event)
+                        future.add_done_callback(self._make_error_handler(callback_id, key))
+                    except RuntimeError as e:
+                        # Pool might be shutdown during close() while we're still processing
+                        if "cannot schedule new futures after shutdown" in str(e):
+                            logger.debug(f"Skipping event for {key}/{callback_id} as pool is shutting down")
+                            continue
+                        else:
+                            # Re-raise other RuntimeErrors
+                            raise
 
     def _make_error_handler(
         self, callback_id: str, subscriber_id: str
