@@ -5,7 +5,6 @@ from logging import LoggerAdapter
 from types import MappingProxyType
 from typing import Callable, cast
 
-from openhands.a2a.A2AManager import A2AManager
 from openhands.controller import AgentController
 from openhands.controller.agent import Agent
 from openhands.controller.replay import ReplayManager
@@ -118,16 +117,16 @@ class AgentSession:
         runtime_connected = False
         self.config = config
         # Initialize A2A manager before creating controller
-        a2a_manager = A2AManager(agent.config.a2a_server_urls)
-        try:
-            await a2a_manager.initialize_agent_cards()
-        except Exception as e:
-            self.logger.warning(f'Error initializing A2A manager: {e}')
-            a2a_manager = None
-        # If the agent has its own A2A manager, use that instead of the one we just created
-        if a2a_manager is not None:
-            agent.a2a_manager = a2a_manager
-            logger.info(f'Using agent\'s own A2A manager: {agent.a2a_manager}')
+        # a2a_manager: A2AManager | None = None
+        # try:
+        #     a2a_manager = A2AManager(agent.config.a2a_server_urls)
+        #     await a2a_manager.initialize_agent_cards()
+        # except Exception as e:
+        #     self.logger.warning(f'Error initializing A2A manager: {e}')
+        #     a2a_manager = None
+        # # If the agent has its own A2A manager, use that instead of the one we just created
+        # if a2a_manager is not None:
+        #     agent.a2a_manager = agent.a2a_manager
         try:
             self._create_security_analyzer(config.security.security_analyzer)
             start_time = time.time()
@@ -138,7 +137,6 @@ class AgentSession:
                 git_provider_tokens=git_provider_tokens,
                 selected_repository=selected_repository,
                 selected_branch=selected_branch,
-                a2a_manager=a2a_manager,
             )
             end_time = time.time()
             total_time = end_time - start_time
@@ -163,7 +161,6 @@ class AgentSession:
                     max_budget_per_task=max_budget_per_task,
                     agent_to_llm_config=agent_to_llm_config,
                     agent_configs=agent_configs,
-                    a2a_manager=a2a_manager,
                 )
 
             repo_directory = None
@@ -284,7 +281,6 @@ class AgentSession:
         git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
         selected_repository: Repository | None = None,
         selected_branch: str | None = None,
-        a2a_manager: A2AManager | None = None,
     ) -> bool:
         """Creates a runtime instance
 
@@ -314,7 +310,7 @@ class AgentSession:
                 attach_to_existing=False,
                 git_provider_tokens=git_provider_tokens,
                 user_id=self.user_id,
-                a2a_manager=a2a_manager,
+                a2a_manager=agent.a2a_manager,
             )
         else:
             provider_handler = ProviderHandler(
@@ -332,7 +328,7 @@ class AgentSession:
                 status_callback=self._status_callback,
                 headless_mode=False,
                 attach_to_existing=False,
-                a2a_manager=a2a_manager,
+                a2a_manager=agent.a2a_manager,
                 env_vars=env_vars,
             )
             end_time = time.time()
@@ -378,7 +374,6 @@ class AgentSession:
         agent_to_llm_config: dict[str, LLMConfig] | None = None,
         agent_configs: dict[str, AgentConfig] | None = None,
         replay_events: list[Event] | None = None,
-        a2a_manager: A2AManager | None = None,
     ) -> AgentController:
         """Creates an AgentController instance
 
@@ -411,7 +406,7 @@ class AgentSession:
             '-------------------------------------------------------------------------------------------'
         )
         # self.logger.debug(msg)
-        
+
         controller = AgentController(
             sid=self.sid,
             event_stream=self.event_stream,
@@ -425,7 +420,7 @@ class AgentSession:
             status_callback=self._status_callback,
             initial_state=self._maybe_restore_state(),
             replay_events=replay_events,
-            a2a_manager=a2a_manager,
+            a2a_manager=agent.a2a_manager,
         )
 
         return controller

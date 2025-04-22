@@ -1,9 +1,10 @@
 import os
 from collections import deque
+from typing import override
 
 from openhands.a2a.A2AManager import A2AManager
-from openhands.a2a.tool import ListRemoteAgents, SendTask
 import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
+from openhands.a2a.tool import ListRemoteAgents, SendTask
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
@@ -60,6 +61,7 @@ class CodeActAgent(Agent):
         llm: LLM,
         config: AgentConfig,
         workspace_mount_path_in_sandbox_store_in_session: bool = True,
+        a2a_manager: A2AManager | None = None,
     ) -> None:
         """Initializes a new instance of the CodeActAgent class.
 
@@ -67,8 +69,14 @@ class CodeActAgent(Agent):
         - llm (LLM): The llm to be used by this agent
         - config (AgentConfig): The configuration for this agent
         - workspace_mount_path_in_sandbox_store_in_session (bool, optional): Whether to store the workspace mount path in session. Defaults to True.
+        - a2a_manager (A2AManager, optional): The A2A manager to be used by this agent. Defaults to None.
         """
-        super().__init__(llm, config, workspace_mount_path_in_sandbox_store_in_session)
+        super().__init__(
+            llm,
+            config,
+            workspace_mount_path_in_sandbox_store_in_session,
+            a2a_manager,
+        )
         self.pending_actions: deque[Action] = deque()
         self.reset()
 
@@ -95,6 +103,24 @@ class CodeActAgent(Agent):
             logger.info(f'Condenser config: {self.config.condenser.llm_config}')
         self.condenser = Condenser.from_config(self.config.condenser)
         logger.info(f'Using condenser: {type(self.condenser)}')
+
+    @override
+    def set_system_prompt(self, system_prompt: str) -> None:
+        self.system_prompt = system_prompt
+        if self.prompt_manager:
+            self.prompt_manager.set_system_message(system_prompt)
+        logger.info(
+            f'New system prompt: {self.conversation_memory.process_initial_messages()}'
+        )
+
+    @override
+    def set_user_prompt(self, user_prompt: str) -> None:
+        self.user_prompt = user_prompt
+        if self.prompt_manager:
+            self.prompt_manager.set_user_message(user_prompt)
+        logger.info(
+            f'New user prompt: {self.conversation_memory.process_initial_messages()}'
+        )
 
     def reset(self) -> None:
         """Resets the CodeAct Agent."""
@@ -124,7 +150,7 @@ class CodeActAgent(Agent):
         latest_user_message = state.get_last_user_message()
         if latest_user_message and latest_user_message.content.strip() == '/exit':
             return AgentFinishAction()
-
+        
         # Condense the events from the state. If we get a view we'll pass those
         # to the conversation manager for processing, but if we get a condensation
         # event we'll just return that instead of an action. The controller will
@@ -205,11 +231,12 @@ class CodeActAgent(Agent):
         """
         if not self.prompt_manager:
             raise Exception('Prompt Manager not instantiated.')
-        agent_infos = self.a2a_manager.list_remote_agents() if self.a2a_manager else None
+        agent_infos = (
+            self.a2a_manager.list_remote_agents() if self.a2a_manager else None
+        )
         # Use ConversationMemory to process initial messages
         messages = self.conversation_memory.process_initial_messages(
-            with_caching=self.llm.is_caching_prompt_active(),
-            agent_infos=agent_infos
+            with_caching=self.llm.is_caching_prompt_active(), agent_infos=agent_infos
         )
 
         # Use ConversationMemory to process events
