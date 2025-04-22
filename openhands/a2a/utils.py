@@ -1,4 +1,3 @@
-import base64
 import yaml
 
 from openhands.a2a.common.types import DataPart, Part

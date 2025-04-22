@@ -563,7 +563,18 @@ class ConversationMemory:
             text = truncate_content(obs.content, max_message_chars)
             message = Message(role='user', content=[TextContent(text=text)])
         elif isinstance(obs, A2ASendTaskUpdateObservation):
-            return TaskEventHandler.handle_observation(obs) if TaskEventHandler.should_step_on_task_update(obs) is not None else []
+            return (
+                [
+                    Message(
+                        role='assistant',
+                        content=[
+                            TextContent(text=TaskEventHandler.handle_observation(obs))
+                        ],
+                    )
+                ]
+                if TaskEventHandler.handle_observation(obs) is not None
+                else []
+            )
         elif isinstance(obs, A2ASendTaskArtifactObservation):
             text = self.prompt_manager.build_a2a_info(obs)
             message = Message(role='user', content=[TextContent(text=text)])

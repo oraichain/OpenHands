@@ -134,7 +134,7 @@ def test_handle_observation_input_required_with_message():
     
     result = TaskEventHandler.handle_observation(observation)
     
-    assert result == "Please provide more information"
+    assert result == "test_agent: Please provide more information"
 
 
 def test_handle_observation_input_required_without_message():

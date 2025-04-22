@@ -11,7 +11,6 @@ from openhands.controller.state.state import State
 from openhands.core.message import Message, TextContent
 from openhands.events.observation.a2a import A2ASendTaskArtifactObservation
 from openhands.events.observation.agent import MicroagentKnowledge
-from openhands.core.logger import openhands_logger as logger
 
 
 @dataclass

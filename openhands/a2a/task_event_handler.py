@@ -1,10 +1,8 @@
-from abc import ABC
 from openhands.a2a.common.types import TaskState, TaskStatusUpdateEvent
 from openhands.events.observation.a2a import A2ASendTaskUpdateObservation
-from openhands.events.observation.observation import Observation
 
-class TaskEventHandler(ABC):
-    
+
+class TaskEventHandler:
     @staticmethod
     def should_step_on_task_update(event: A2ASendTaskUpdateObservation) -> bool:
         task_update_event = TaskStatusUpdateEvent(**event.task_update_event)
@@ -26,7 +24,7 @@ class TaskEventHandler(ABC):
                 return False
             case TaskState.FAILED:
                 return True
-            
+
     @staticmethod
     def handle_observation(event: A2ASendTaskUpdateObservation) -> str | None:
         task_update_event = TaskStatusUpdateEvent(**event.task_update_event)
@@ -47,6 +45,6 @@ class TaskEventHandler(ABC):
             case TaskState.FAILED:
                 return None
             case TaskState.INPUT_REQUIRED:
-                return task_update_event.status.message.parts[0].text if task_update_event.status.message is not None else None
-
-
+                if task_update_event.status.message is not None:
+                    return f"{event.agent_name}: {task_update_event.status.message.parts[0].text}"
+                return None

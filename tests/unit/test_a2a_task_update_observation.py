@@ -10,12 +10,16 @@ from openhands.controller.agent import Agent
 from openhands.controller.agent_controller import AgentController
 from openhands.controller.state.state import State
 from openhands.core.config import LLMConfig
+from openhands.core.config.agent_config import AgentConfig
+from openhands.core.message import Message, TextContent
 from openhands.core.schema import AgentState
 from openhands.events import EventSource, EventStream
 from openhands.events.action import MessageAction
 from openhands.events.observation.a2a import A2ASendTaskUpdateObservation
 from openhands.llm.metrics import Metrics
+from openhands.memory.conversation_memory import ConversationMemory
 from openhands.storage.memory import InMemoryFileStore
+from openhands.utils.prompt import PromptManager
 
 
 @pytest.fixture
@@ -27,6 +31,7 @@ def mock_agent():
     agent.llm.metrics = Metrics()
     agent.llm.config = LLMConfig()
     agent.llm.config.max_message_chars = 1000
+    agent.config = AgentConfig()
     return agent
 
 
@@ -49,6 +54,13 @@ def agent_controller(mock_agent, mock_event_stream):
     yield controller
     # Properly close the controller to avoid thread issues during shutdown
     asyncio.get_event_loop().run_until_complete(controller.close(set_stop_state=False))
+
+
+@pytest.fixture
+def conversation_memory(mock_agent):
+    # Create a conversation memory with the agent config
+    prompt_manager = PromptManager()
+    return ConversationMemory(config=mock_agent.config, prompt_manager=prompt_manager)
 
 
 def create_task_update_event(
@@ -257,7 +269,7 @@ async def test_observation_event_interaction(agent_controller, mock_event_stream
 
 
 @pytest.mark.asyncio
-async def test_input_required_followed_by_user_response(agent_controller, mock_event_stream):
+async def test_input_required_followed_by_user_response(agent_controller, mock_event_stream, conversation_memory):
     """Test the conversation flow of task requiring input followed by user's response"""
     # Step 1: Set up initial agent state to RUNNING
     await agent_controller.set_agent_state_to(AgentState.RUNNING)
@@ -321,4 +333,47 @@ async def test_input_required_followed_by_user_response(agent_controller, mock_e
     user_response_count = sum(1 for e in history_events if isinstance(e, MessageAction) and e.content == user_message.content)
     
     assert input_required_count == 1, "Input required message appears multiple times in history"
-    assert user_response_count == 1, "User response should appear exactly once in history" 
+    assert user_response_count == 1, "User response should appear exactly once in history"
+    
+    # Step 5: Verify ConversationMemory processes the events correctly
+    # Process the observation through ConversationMemory
+    tool_call_id_to_message = {}
+    observation_messages = conversation_memory._process_observation(
+        obs=input_required_observation, 
+        tool_call_id_to_message=tool_call_id_to_message, 
+        max_message_chars=None
+    )
+    
+    # Verify the input required observation was properly processed into a message
+    assert len(observation_messages) == 1
+    assert observation_messages[0].role == 'user'
+    assert any(content.text == input_required_observation.content for content in observation_messages[0].content)
+    
+    # Process the user message action through ConversationMemory
+    action_messages = conversation_memory._process_action(
+        action=user_message,
+        pending_tool_call_action_messages={}
+    )
+    
+    # Verify the user message was properly processed
+    assert len(action_messages) == 1
+    assert action_messages[0].role == 'user'
+    assert any(content.text == user_message.content for content in action_messages[0].content)
+    
+    # Verify the conversation flow by processing the history events in order
+    messages = []
+    
+    # First, process the observation
+    for msg in observation_messages:
+        messages.append(msg)
+    
+    # Then, process the user's response
+    for msg in action_messages:
+        messages.append(msg)
+    
+    # Verify the correct conversation flow
+    assert len(messages) == 2
+    assert any(content.text == input_required_observation.content for content in messages[0].content)
+    assert any(content.text == user_message.content for content in messages[1].content)
+    assert messages[0].role == 'user'
+    assert messages[1].role == 'user' 

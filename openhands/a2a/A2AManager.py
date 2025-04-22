@@ -99,8 +99,8 @@ class A2AManager(ABC):
             response = await client.send_task(request)
             yield response
 
-    async def send_cancel_task(self, task_id: str, sid: str):
-        pass
+    # async def send_cancel_task(self, task_id: str, sid: str):
+    #     pass
 
     @classmethod
     def from_toml_config(cls, config: dict) -> 'A2AManager':
