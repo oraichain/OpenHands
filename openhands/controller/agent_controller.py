@@ -54,6 +54,8 @@ from openhands.events.action import (
     IPythonRunCellAction,
     MessageAction,
     NullAction,
+    AddTaskAction,
+    ModifyTaskAction,
 )
 from openhands.events.action.agent import CondensationAction, RecallAction
 from openhands.events.event import Event
@@ -402,7 +404,10 @@ class AgentController:
                 )
                 await self.delegate.set_agent_state_to(AgentState.RUNNING)
             return
-
+        elif isinstance(action, AddTaskAction):
+            self.state.root_task.add_subtask(action.parent, action.goal, action.subtasks)
+        elif isinstance(action, ModifyTaskAction):
+            self.state.root_task.set_subtask_state(action.task_id, action.state)
         elif isinstance(action, AgentFinishAction):
             self.state.outputs = action.outputs
             self.state.metrics.merge(self.state.local_metrics)

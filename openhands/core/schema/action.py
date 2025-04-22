@@ -87,3 +87,12 @@ class ActionType(str, Enum):
 
     CONDENSATION = 'condensation'
     """Condenses a list of events into a summary."""
+
+    ADD_TASK = 'add_task'
+    """Add a task to the plan."""
+
+    MODIFY_TASK = 'modify_task'
+    """Modify a task in the plan."""
+
+    SUMMARIZE = 'summarize'
+    """Summarize the plan."""

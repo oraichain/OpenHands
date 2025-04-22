@@ -41,6 +41,12 @@ enum ActionType {
 
   // Take a screenshot of the browser
   BROWSER_MCP = "browser_mcp",
+
+  // Adds a task to the plan.
+  ADD_TASK = "add_task",
+
+  // Updates a task in the plan.
+  MODIFY_TASK = "modify_task",
 }
 
-export default ActionType;
+export default ActionType

@@ -11,6 +11,7 @@ import { appendJupyterInput } from "#/state/jupyter-slice"
 import { setMetrics } from "#/state/metrics-slice"
 import { appendSecurityAnalyzerInput } from "#/state/security-analyzer-slice"
 import { setCurStatusMessage } from "#/state/status-slice"
+import { setRootTask } from "#/state/task-slice"
 import store from "#/store"
 import ActionType from "#/types/action-type"
 import {
@@ -21,6 +22,7 @@ import {
 import ObservationType from "#/types/observation-type"
 import { trackError } from "#/utils/error-handler"
 import { handleObservationMessage } from "./observations"
+import { getRootTask } from "./task-service"
 
 const messageActions = {
   [ActionType.BROWSE]: (message: ActionMessage) => {
@@ -64,6 +66,16 @@ const messageActions = {
     if (message.args.confirmation_state !== "rejected") {
       store.dispatch(appendJupyterInput(message.args.code))
     }
+  },
+  [ActionType.ADD_TASK]: () => {
+    getRootTask().then((fetchedRootTask) =>
+      store.dispatch(setRootTask(fetchedRootTask)),
+    )
+  },
+  [ActionType.MODIFY_TASK]: () => {
+    getRootTask().then((fetchedRootTask) =>
+      store.dispatch(setRootTask(fetchedRootTask)),
+    )
   },
   [ActionType.FINISH]: (message: ActionMessage) => {
     store.dispatch(addAssistantMessage(message.args.final_thought))

@@ -12,6 +12,7 @@ from openhands.events.serialization.observation import observation_from_dict
 from openhands.events.serialization.utils import remove_fields
 from openhands.events.tool import ToolCallMetadata
 from openhands.llm.metrics import Cost, Metrics, ResponseLatency, TokenUsage
+from openhands.events.observation.observation import Observation
 
 # TODO: move `content` into `extras`
 TOP_KEYS = [
@@ -47,6 +48,18 @@ DELETE_FROM_TRAJECTORY_EXTRAS = {
 DELETE_FROM_TRAJECTORY_EXTRAS_AND_SCREENSHOTS = DELETE_FROM_TRAJECTORY_EXTRAS | {
     'screenshot',
     'set_of_marks',
+}
+
+DELETE_FROM_MEMORY_EXTRAS = {
+    'screenshot',
+    'dom_object',
+    'axtree_object',
+    'open_pages_urls',
+    'active_page_index',
+    'last_browser_action',
+    'last_browser_action_error',
+    'focused_element_bid',
+    'extra_element_properties',
 }
 
 
@@ -153,6 +166,19 @@ def event_to_trajectory(event: 'Event', include_screenshots: bool = False) -> di
             if include_screenshots
             else DELETE_FROM_TRAJECTORY_EXTRAS_AND_SCREENSHOTS,
         )
+    return d
+
+
+def event_to_memory(event: 'Event') -> dict:
+    d = event_to_dict(event)
+    d.pop('id', None)
+    d.pop('cause', None)
+    d.pop('timestamp', None)
+    d.pop('message', None)
+    if 'extras' in d:
+        remove_fields(d['extras'], DELETE_FROM_MEMORY_EXTRAS)
+    if isinstance(event, Observation) and 'content' in d:
+        d['content'] = truncate_content(d['content'])
     return d
 
 

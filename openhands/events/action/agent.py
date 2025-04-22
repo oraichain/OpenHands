@@ -195,3 +195,18 @@ class CondensationAction(Action):
         if self.summary:
             return f'Summary: {self.summary}'
         return f'Condenser is dropping the events: {self.forgotten}.'
+
+
+@dataclass
+class AgentSummarizeAction(Action):
+    summary: str
+    action: str = ActionType.SUMMARIZE
+
+    @property
+    def message(self) -> str:
+        return self.summary
+
+    def __str__(self) -> str:
+        ret = '**AgentSummarizeAction**\n'
+        ret += f'SUMMARY: {self.summary}'
+        return ret
