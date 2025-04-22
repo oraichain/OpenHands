@@ -15,15 +15,15 @@ from openhands.server.static import SortBy
 
 class ConversationModule:
 
-    def get_view_count(self, conversation: dict, sort_by: str):
-        # Use direct string comparisons to avoid unreachable code errors
-        if sort_by == 'total_view_24h':
+    def get_view_count(self, conversation: dict, sort_by=None):
+        if not sort_by:
+            return 0
+        if sort_by == SortBy.total_view_24h:
             return conversation.get('total_view_24h', 0)
-        if sort_by == 'total_view_7d':
+        if sort_by == SortBy.total_view_7d:
             return conversation.get('total_view_7d', 0)
-        if sort_by == 'total_view_30d':
+        if sort_by == SortBy.total_view_30d:
             return conversation.get('total_view_30d', 0)
-        return 0
 
     async def _update_research_view(self, conversation_id: str, ip_address: str = ''):
         try:
@@ -151,7 +151,7 @@ class ConversationModule:
             logger.error(f'Error getting conversation info: {str(e)}')
             return None
 
-    async def _response_conversation(self, conversations: list[dict], sort_by: str = ''):
+    async def _response_conversation(self, conversations: list[dict], sort_by=None):
         try:
             # Filter conversations without titles
             conversation_updated = [
@@ -251,13 +251,13 @@ class ConversationModule:
             published = kwargs.get('published')
             conversation_ids = kwargs.get('conversation_ids', [])
             prioritized_usecase_ids = kwargs.get('prioritized_usecase_ids', [])
-            sort_by = kwargs.get('sort_by', '')
+            sort_by = kwargs.get('sort_by', None)
             if sort_by:
                 query = select(
                     Conversation,
-                    func.coalesce(ResearchTrending.c.total_view_24h, 0).label('total_view_24h'),
-                    func.coalesce(ResearchTrending.c.total_view_7d, 0).label('total_view_7d'),
-                    func.coalesce(ResearchTrending.c.total_view_30d, 0).label('total_view_30d')
+                    ResearchTrending.c.total_view_24h,
+                    ResearchTrending.c.total_view_7d,
+                    ResearchTrending.c.total_view_30d
                 ).select_from(
                     Conversation.outerjoin(
                         ResearchTrending,
@@ -291,7 +291,7 @@ class ConversationModule:
 
                 items = [*prioritized_items, *remaining_items]
                 items = [dict(row) for row in items]
-                items = await self._response_conversation(items, sort_by)
+                items = await self._response_conversation(items, str(sort_by))
                 return {
                     'items': items,
                     'page': page,
