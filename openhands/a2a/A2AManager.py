@@ -99,7 +99,7 @@ class A2AManager(ABC):
             response = await client.send_task(request)
             yield response
 
-    async def send_cancel_task(self, task_id: str):
+    async def send_cancel_task(self, task_id: str, sid: str):
         pass
 
     @classmethod

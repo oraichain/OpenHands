@@ -10,6 +10,7 @@ from openhands.controller.state.state import State
 from openhands.core.message import Message, TextContent
 from openhands.events.observation.a2a import A2ASendTaskArtifactObservation
 from openhands.events.observation.agent import MicroagentKnowledge
+from openhands.core.logger import openhands_logger as logger
 
 
 @dataclass
@@ -60,6 +61,7 @@ class PromptManager:
 
     def get_system_message(self, agent_infos: list | None = None) -> str:
         # **kwargs is used to pass additional context to the system prompt, such as current date, ...
+        logger.info(f'agent_infos: {agent_infos}')
         if agent_infos:
             return self.system_template.render(agent_infos=agent_infos).strip()
         return self.system_template.render().strip()

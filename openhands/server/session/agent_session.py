@@ -10,6 +10,7 @@ from openhands.controller import AgentController
 from openhands.controller.agent import Agent
 from openhands.controller.replay import ReplayManager
 from openhands.controller.state.state import State
+from openhands.core.logger import openhands_logger as logger
 from openhands.core.config import AgentConfig, AppConfig, LLMConfig
 from openhands.core.exceptions import AgentRuntimeUnavailableError
 from openhands.core.logger import OpenHandsLoggerAdapter
@@ -125,7 +126,8 @@ class AgentSession:
             a2a_manager = None
         # If the agent has its own A2A manager, use that instead of the one we just created
         if a2a_manager is not None:
-            agent.a2a_manager = agent.a2a_manager
+            agent.a2a_manager = a2a_manager
+            logger.info(f'Using agent\'s own A2A manager: {agent.a2a_manager}')
         try:
             self._create_security_analyzer(config.security.security_analyzer)
             start_time = time.time()
