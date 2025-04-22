@@ -262,7 +262,6 @@ class CheckUserActivationMiddleware(BaseHTTPMiddleware):
                     return await call_next(request)
 
         user_id = get_user_id(request)
-        logger.info(f'Checking user activation for {user_id}')
         if not user_id:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,

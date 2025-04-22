@@ -53,7 +53,6 @@ async def get_user_detail_from_thesis_auth_server(
         start_time = time.time()
         response = await thesis_auth_client.get(url, headers=headers)
         end_time = time.time()
-        logger.info(f'Time taken to get user detail: {end_time - start_time} seconds')
     except httpx.RequestError as exc:
         logger.error(f'Request error while getting user detail: {exc}')
         raise HTTPException(status_code=500, detail='Unable to reach auth server')

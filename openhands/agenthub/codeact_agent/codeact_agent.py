@@ -96,7 +96,7 @@ class CodeActAgent(Agent):
         self.system_prompt = system_prompt
         if self.prompt_manager:
             self.prompt_manager.set_system_message(system_prompt)
-        logger.info(
+        logger.debug(
             f'New system prompt: {self.conversation_memory.process_initial_messages()}'
         )
 
@@ -105,7 +105,7 @@ class CodeActAgent(Agent):
         self.user_prompt = user_prompt
         if self.prompt_manager:
             self.prompt_manager.set_user_message(user_prompt)
-        logger.info(
+        logger.debug(
             f'New user prompt: {self.conversation_memory.process_initial_messages()}'
         )
 
@@ -150,7 +150,7 @@ class CodeActAgent(Agent):
             case Condensation(action=condensation_action):
                 return condensation_action
 
-        logger.info(
+        logger.debug(
             f'Processing {len(condensed_history)} events from a total of {len(state.history)} events'
         )
 

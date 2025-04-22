@@ -60,7 +60,7 @@ class FutureTradingAgent(Agent):
         self.tools = built_in_tools
 
         # Retrieve the enabled tools
-        logger.info(
+        logger.debug(
             f"TOOLS loaded for TaskSolvingAgent: {', '.join([tool.get('function').get('name') for tool in self.tools])}"
         )
         self.prompt_manager = PromptManager(

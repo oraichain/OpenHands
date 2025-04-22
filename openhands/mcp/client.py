@@ -58,8 +58,6 @@ class MCPClient(BaseModel):
             'timeout': timeout,
             'sse_read_timeout': read_timeout,
         }
-        logger.info(f'sid: {sid}')
-        logger.info('Connecting to MCP server')
 
         try:
             async with sse_client(**self._server_params) as (read, write):
