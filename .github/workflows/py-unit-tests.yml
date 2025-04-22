@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       INSTALL_DOCKER: '0' # Set to '0' to skip Docker installation
+      POETRY_VIRTUALENVS_IN_PROJECT: true
     strategy:
       matrix:
         python-version: ['3.12']
