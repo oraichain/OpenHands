@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from typing import Any, Dict
 from unittest.mock import MagicMock
 
@@ -11,6 +12,7 @@ from openhands.controller.state.state import State
 from openhands.core.config import LLMConfig
 from openhands.core.schema import AgentState
 from openhands.events import EventSource, EventStream
+from openhands.events.action import MessageAction
 from openhands.events.observation.a2a import A2ASendTaskUpdateObservation
 from openhands.llm.metrics import Metrics
 from openhands.storage.memory import InMemoryFileStore
@@ -31,7 +33,9 @@ def mock_agent():
 @pytest.fixture
 def mock_event_stream():
     stream = EventStream(sid="test-session", file_store=InMemoryFileStore())
-    return stream
+    yield stream
+    # Properly close the event stream to avoid thread issues during shutdown
+    stream.close()
 
 
 @pytest.fixture
@@ -42,7 +46,9 @@ def agent_controller(mock_agent, mock_event_stream):
         max_iterations=10,
         sid="test-session",
     )
-    return controller
+    yield controller
+    # Properly close the controller to avoid thread issues during shutdown
+    asyncio.get_event_loop().run_until_complete(controller.close(set_stop_state=False))
 
 
 def create_task_update_event(
@@ -247,4 +253,72 @@ async def test_observation_event_interaction(agent_controller, mock_event_stream
     assert len(added_events) == 2
     
     # Reset mock
-    mock_event_stream.add_event = original_add_event 
+    mock_event_stream.add_event = original_add_event
+
+
+@pytest.mark.asyncio
+async def test_input_required_followed_by_user_response(agent_controller, mock_event_stream):
+    """Test the conversation flow of task requiring input followed by user's response"""
+    # Step 1: Set up initial agent state to RUNNING
+    await agent_controller.set_agent_state_to(AgentState.RUNNING)
+    
+    # Step 2: Send an INPUT_REQUIRED task update
+    task_update_event = create_task_update_event(
+        state=TaskState.INPUT_REQUIRED,
+        message_text="Please provide additional information for this task"
+    )
+    
+    input_required_observation = A2ASendTaskUpdateObservation(
+        content="Please provide additional information for this task",
+        task_update_event=task_update_event,
+        agent_name="test_agent",
+    )
+    
+    # Process the input required observation
+    await agent_controller._on_event(input_required_observation)
+    
+    # Verify state changed to AWAITING_USER_INPUT
+    assert agent_controller.get_agent_state() == AgentState.AWAITING_USER_INPUT
+    
+    # Step 3: User responds with a message
+    user_message = MessageAction(content="Here's the additional information you requested")
+    
+    # Add the user message to the event stream with the source USER and process it via _on_event
+    mock_event_stream.add_event(user_message, EventSource.USER)
+    
+    # Process the user message using on_event which will add it to history
+    await agent_controller._on_event(user_message)
+    
+    # Verify the agent state was set back to RUNNING
+    assert agent_controller.get_agent_state() == AgentState.RUNNING
+    
+    # Step 4: Verify that both messages are in the history in the correct order
+    history_events = agent_controller.state.history
+    
+    # Find the input required message and user response in history
+    input_required_in_history = False
+    user_response_in_history = False
+    input_required_index = -1
+    user_response_index = -1
+    
+    for i, event in enumerate(history_events):
+        if isinstance(event, A2ASendTaskUpdateObservation) and event.content == input_required_observation.content:
+            input_required_in_history = True
+            input_required_index = i
+        elif isinstance(event, MessageAction) and event.content == user_message.content:
+            user_response_in_history = True
+            user_response_index = i
+    
+    # Verify both messages are in history
+    assert input_required_in_history, "Input required message not found in history"
+    assert user_response_in_history, "User response not found in history"
+    
+    # Verify the order is correct (input required followed by user response)
+    assert input_required_index < user_response_index, "Messages are not in the correct order"
+    
+    # Verify there's no duplicate entries of these messages
+    input_required_count = sum(1 for e in history_events if isinstance(e, A2ASendTaskUpdateObservation) and e.content == input_required_observation.content)
+    user_response_count = sum(1 for e in history_events if isinstance(e, MessageAction) and e.content == user_message.content)
+    
+    assert input_required_count == 1, "Input required message appears multiple times in history"
+    assert user_response_count == 1, "User response should appear exactly once in history" 
