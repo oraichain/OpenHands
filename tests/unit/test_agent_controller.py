@@ -1484,3 +1484,4 @@ def test_history_restoration_after_truncation(mock_event_stream, mock_agent):
     assert len(new_controller.state.history) == saved_history_len
     assert new_controller.state.history[0] == first_msg
     assert new_controller.state.start_id == saved_start_id
+
