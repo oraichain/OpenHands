@@ -46,5 +46,5 @@ class TaskEventHandler:
                 return None
             case TaskState.INPUT_REQUIRED:
                 if task_update_event.status.message is not None:
-                    return f"{event.agent_name}: {task_update_event.status.message.parts[0].text}"
+                    return f'{event.agent_name}: {task_update_event.status.message.parts[0].text}'
                 return None

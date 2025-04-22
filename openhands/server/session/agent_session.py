@@ -9,7 +9,6 @@ from openhands.controller import AgentController
 from openhands.controller.agent import Agent
 from openhands.controller.replay import ReplayManager
 from openhands.controller.state.state import State
-from openhands.core.logger import openhands_logger as logger
 from openhands.core.config import AgentConfig, AppConfig, LLMConfig
 from openhands.core.exceptions import AgentRuntimeUnavailableError
 from openhands.core.logger import OpenHandsLoggerAdapter
