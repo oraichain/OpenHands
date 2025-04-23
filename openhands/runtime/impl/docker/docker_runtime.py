@@ -33,6 +33,7 @@ from openhands.runtime.utils.command import get_action_execution_server_startup_
 from openhands.runtime.utils.log_streamer import LogStreamer
 from openhands.runtime.utils.runtime_build import build_runtime_image
 from openhands.utils.async_utils import call_sync_from_async
+from openhands.utils.shutdown_listener import add_shutdown_listener
 from openhands.utils.tenacity_stop import stop_if_should_exit
 
 CONTAINER_NAME_PREFIX = 'openhands-runtime-'
@@ -80,11 +81,10 @@ class DockerRuntime(ActionExecutionClient):
         headless_mode: bool = True,
         a2a_manager: A2AManager | None = None,
     ):
-        # TODO FIXME: we don't need to close containers when BE shut down. Only users can close the containers by deleting the conversation.
-        # if not DockerRuntime._shutdown_listener_id:
-        #     DockerRuntime._shutdown_listener_id = add_shutdown_listener(
-        #         lambda: stop_all_containers(CONTAINER_NAME_PREFIX)
-        #     )
+        if not DockerRuntime._shutdown_listener_id:
+            DockerRuntime._shutdown_listener_id = add_shutdown_listener(
+                lambda: stop_all_containers(CONTAINER_NAME_PREFIX)
+            )
 
         self.config = config
         self._runtime_initialized: bool = False
