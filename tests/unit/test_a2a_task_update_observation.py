@@ -1,4 +1,5 @@
 import asyncio
+import shutil
 from typing import Any, Dict
 from unittest.mock import MagicMock
 
@@ -43,6 +44,17 @@ def mock_event_stream():
 
 
 @pytest.fixture
+def prompt_dir(tmp_path):
+    # Copy contents from "openhands/agenthub/codeact_agent" to the temp directory
+    shutil.copytree(
+        'openhands/agenthub/codeact_agent/prompts', tmp_path, dirs_exist_ok=True
+    )
+
+    # Return the temporary directory path
+    return tmp_path
+
+
+@pytest.fixture
 def agent_controller(mock_agent, mock_event_stream):
     controller = AgentController(
         agent=mock_agent,
@@ -56,9 +68,9 @@ def agent_controller(mock_agent, mock_event_stream):
 
 
 @pytest.fixture
-def conversation_memory(mock_agent):
+def conversation_memory(mock_agent, prompt_dir):
     # Create a conversation memory with the agent config
-    prompt_manager = PromptManager()
+    prompt_manager = PromptManager(prompt_dir=prompt_dir)
     return ConversationMemory(config=mock_agent.config, prompt_manager=prompt_manager)
 
 
@@ -371,7 +383,7 @@ async def test_input_required_followed_by_user_response(
 
     # Verify the input required observation was properly processed into a message
     assert len(observation_messages) == 1
-    assert observation_messages[0].role == 'user'
+    assert observation_messages[0].role == 'assistant'
     assert any(
         content.text == input_required_observation.content
         for content in observation_messages[0].content
@@ -407,5 +419,5 @@ async def test_input_required_followed_by_user_response(
         for content in messages[0].content
     )
     assert any(content.text == user_message.content for content in messages[1].content)
-    assert messages[0].role == 'user'
+    assert messages[0].role == 'assistant'
     assert messages[1].role == 'user'

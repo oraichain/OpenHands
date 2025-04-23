@@ -1,4 +1,5 @@
 from openhands.a2a.common.types import TaskState, TaskStatusUpdateEvent
+from openhands.core.message import TextContent
 from openhands.events.observation.a2a import A2ASendTaskUpdateObservation
 
 
@@ -26,7 +27,9 @@ class TaskEventHandler:
                 return True
 
     @staticmethod
-    def handle_observation(event: A2ASendTaskUpdateObservation) -> str | None:
+    def handle_observation(
+        event: A2ASendTaskUpdateObservation,
+    ) -> list[TextContent] | None:
         task_update_event = TaskStatusUpdateEvent(**event.task_update_event)
         if task_update_event.final:
             return None
@@ -45,6 +48,14 @@ class TaskEventHandler:
             case TaskState.FAILED:
                 return None
             case TaskState.INPUT_REQUIRED:
-                if task_update_event.status.message is not None:
-                    return f'{event.agent_name}: {task_update_event.status.message.parts[0].text}'
+                if task_update_event.status.message:
+                    return [
+                        TextContent(
+                            text=f'Agent {event.agent_name} is waiting for input'
+                        ),
+                        *[
+                            TextContent(text=part.text)
+                            for part in task_update_event.status.message.parts
+                        ],
+                    ]
                 return None

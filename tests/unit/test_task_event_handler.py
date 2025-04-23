@@ -5,6 +5,7 @@ from openhands.a2a.common.types import (
     TextPart,
 )
 from openhands.a2a.task_event_handler import TaskEventHandler
+from openhands.core.message import TextContent
 from openhands.events.observation.a2a import A2ASendTaskUpdateObservation
 
 
@@ -114,7 +115,10 @@ def test_handle_observation_input_required_with_message():
 
     result = TaskEventHandler.handle_observation(observation)
 
-    assert result == 'test_agent: Please provide more information'
+    assert result == [
+        TextContent(text=f'Agent {observation.agent_name} is waiting for input'),
+        TextContent(text='Please provide more information'),
+    ]
 
 
 def test_handle_observation_input_required_without_message():
