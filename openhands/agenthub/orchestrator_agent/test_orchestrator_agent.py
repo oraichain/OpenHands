@@ -1,3 +1,4 @@
+#mypy: ignore
 import pytest
 from unittest.mock import MagicMock, patch
 import os

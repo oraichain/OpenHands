@@ -8,9 +8,9 @@ from openhands.agenthub import (  # noqa: E402
     codeact_agent,
     dummy_agent,
     future_trading_agent,
+    orchestrator_agent,
     task_solving_agent,
     visualbrowsing_agent,
-    orchestrator_agent,
 )
 from openhands.controller.agent import Agent  # noqa: E402
 

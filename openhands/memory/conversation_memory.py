@@ -32,10 +32,14 @@ from openhands.events.observation import (
     AgentThinkObservation,
     BrowserOutputObservation,
     CmdOutputObservation,
+    ErrorObservation,
     FileEditObservation,
     FileReadObservation,
     IPythonRunCellObservation,
+    Observation,
+    OrchestratorInitializeObservation,
     PlanObservation,
+    RecallObservation,
     UserRejectObservation,
 )
 from openhands.events.observation.a2a import (
@@ -45,11 +49,8 @@ from openhands.events.observation.a2a import (
 )
 from openhands.events.observation.agent import (
     MicroagentKnowledge,
-    RecallObservation,
 )
-from openhands.events.observation.error import ErrorObservation
 from openhands.events.observation.mcp import MCPObservation
-from openhands.events.observation.observation import Observation
 from openhands.events.observation.playwright_mcp import (
     BrowserMCPObservation,
 )
@@ -577,6 +578,10 @@ class ConversationMemory:
         elif isinstance(obs, A2ASendTaskArtifactObservation):
             text = self.prompt_manager.build_a2a_info(obs)
             message = Message(role='user', content=[TextContent(text=text)])
+        elif isinstance(obs, OrchestratorInitializeObservation):
+            # The full ledger contains the task, facts, plan and team info in a formatted way
+            text = truncate_content(obs.full_ledger, max_message_chars)
+            message = Message(role='assistant', content=[TextContent(text=text)])
         else:
             # If an observation message is not returned, it will cause an error
             # when the LLM tries to return the next message

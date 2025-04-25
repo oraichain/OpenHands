@@ -21,6 +21,7 @@ from openhands.a2a.common.types import (
     TaskArtifactUpdateEvent,
     TaskStatusUpdateEvent,
 )
+from openhands.agenthub.orchestrator_agent import _prompt as prompts
 from openhands.core.config import AppConfig, SandboxConfig
 from openhands.core.exceptions import AgentRuntimeDisconnectedError
 from openhands.core.logger import openhands_logger as logger
@@ -81,7 +82,6 @@ from openhands.utils.async_utils import (
     call_async_from_sync,
     call_sync_from_async,
 )
-from openhands.agenthub.orchestrator_agent import _prompt as prompts
 
 STATUS_MESSAGES = {
     'STATUS$STARTING_RUNTIME': 'Starting runtime...',
@@ -303,15 +303,12 @@ class Runtime(FileEditRuntimeMixin):
         assert event.timeout is not None
         try:
             await self._export_latest_git_provider_tokens(event)
-            
+
             # Handle OrchestratorInitializationAction specially
             if isinstance(event, OrchestratorInitializationAction):
                 # Create the full ledger prompt
                 full_ledger = prompts.ORCHESTRATOR_TASK_LEDGER_FULL_PROMPT.format(
-                    task=event.task,
-                    team=event.team,
-                    facts=event.facts,
-                    plan=event.plan
+                    task=event.task, team=event.team, facts=event.facts, plan=event.plan
                 )
                 # Create and add the observation
                 observation = OrchestratorInitializeObservation(
@@ -319,14 +316,12 @@ class Runtime(FileEditRuntimeMixin):
                     facts=event.facts,
                     plan=event.plan,
                     team=event.team,
-                    full_ledger=full_ledger
+                    full_ledger=full_ledger,
+                    content=full_ledger,
                 )
-                observation._cause = event.id
-                observation.tool_call_metadata = event.tool_call_metadata
                 self.event_stream.add_event(observation, EventSource.AGENT)
                 return
-                
-            if isinstance(event, McpAction):
+            elif isinstance(event, McpAction):
                 # we don't call call_tool_mcp impl directly because there can be other action ActionExecutionClient
                 logger.debug(f'Calling call_tool_mcp with event: {event}')
                 observation: Observation = await getattr(self, McpAction.action)(event)

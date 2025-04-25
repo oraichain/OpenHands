@@ -37,6 +37,7 @@ from openhands.events.observation.reject import UserRejectObservation
 from openhands.events.tool import ToolCallMetadata
 from openhands.memory.conversation_memory import ConversationMemory
 from openhands.utils.prompt import PromptManager, RepositoryInfo, RuntimeInfo
+from openhands.events.observation.orchestrator import OrchestratorInitializeObservation
 
 
 @pytest.fixture
@@ -993,9 +994,7 @@ def test_process_events_with_microagent_observation_deduplication_empty(
     )
 
     # Verify that empty RecallObservations are handled gracefully
-    assert (
-        len(messages) == 1
-    )  # system message, because an empty microagent is not added to Messages
+    assert len(messages) == 1  # system message, because an empty microagent is not added to Messages
 
 
 def test_has_agent_in_earlier_events(conversation_memory):
@@ -1198,3 +1197,32 @@ class TestFilterUnmatchedToolCalls:
         assert len(result) == len(expected)
         for i, msg in enumerate(result):
             assert msg == expected[i]
+
+
+def test_process_events_with_orchestrator_initialize_observation(conversation_memory):
+    """Test processing an OrchestratorInitializeObservation."""
+    obs = OrchestratorInitializeObservation(
+        task="Test task",
+        facts="Test facts",
+        plan="Test plan",
+        team="Test team",
+        full_ledger="Full ledger containing task, facts, plan and team information"
+    )
+
+    initial_messages = [
+        Message(role='system', content=[TextContent(text='System message')])
+    ]
+
+    messages = conversation_memory.process_events(
+        condensed_history=[obs],
+        initial_messages=initial_messages,
+        max_message_chars=None,
+        vision_is_active=False,
+    )
+
+    assert len(messages) == 2
+    result = messages[1]
+    assert result.role == 'assistant'
+    assert len(result.content) == 1
+    assert isinstance(result.content[0], TextContent)
+    assert result.content[0].text == "Full ledger containing task, facts, plan and team information"

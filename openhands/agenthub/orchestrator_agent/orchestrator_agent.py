@@ -141,7 +141,6 @@ class OrchestratorAgent(Agent):
         self.plan: str | None = None
         self.last_error: str | None = None
         self.stall_count: int = 0
-        # TODO: Add tracking for delegated tasks and their results if needed
 
     def _initialize_agent(self, state: State) -> OrchestratorInitializationAction:
         """Initialize the agent with task, team description, facts, and plan.
@@ -348,7 +347,9 @@ class OrchestratorAgent(Agent):
             return NullAction()
 
         # Format the progress prompt
-        available_names = [agent['name'] for agent in self.a2a_manager.list_remote_agents()] # Placeholder
+        available_names = []
+        if self.a2a_manager:
+            available_names = [agent['name'] for agent in self.a2a_manager.list_remote_agents()] # Placeholder
         prompt = prompts.ORCHESTRATOR_PROGRESS_LEDGER_PROMPT.format(
             task=self.task,
             team=self.team_description,

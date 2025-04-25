@@ -13,7 +13,3 @@ class OrchestratorInitializeObservation(Observation):
     team: str
     full_ledger: str
     observation: str = ObservationType.ORCHESTRATOR_INITIALIZE_OBSERVATION
-
-    @property
-    def content(self) -> str:
-        return self.full_ledger 
