@@ -28,7 +28,6 @@ from openhands.events.action.orchestrator import (
     UpdatingKnowledgeAction,
     FinalAnswerAction,
     OrchestratorInitializationAction,
-    OrchestratorInitializeObservation,
 )
 
 __all__ = [
@@ -58,5 +57,4 @@ __all__ = [
     'UpdatingKnowledgeAction',
     'FinalAnswerAction',
     'OrchestratorInitializationAction',
-    'OrchestratorInitializeObservation',
 ]

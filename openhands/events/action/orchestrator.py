@@ -11,6 +11,7 @@ class OrchestratorInitializationAction(Action):
     facts: str
     plan: str
     team: str
+    full_ledger: str
     action: str = ActionType.ORCHESTRATOR_INITIALIZATION
 
     @property
@@ -63,18 +64,3 @@ class FinalAnswerAction(Action):
     @property
     def message(self) -> str:
         return f'Generating final answer for task: {self.task}'
-
-
-@dataclass
-class OrchestratorInitializeObservation(Action):
-    """Observation containing the full ledger prompt after orchestrator initialization."""
-    task: str
-    facts: str
-    plan: str
-    team: str
-    full_ledger: str
-    action: str = ActionType.ORCHESTRATOR_INITIALIZE_OBSERVATION
-
-    @property
-    def message(self) -> str:
-        return f'Full ledger for task: {self.task}' 

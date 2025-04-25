@@ -21,7 +21,6 @@ from openhands.a2a.common.types import (
     TaskArtifactUpdateEvent,
     TaskStatusUpdateEvent,
 )
-from openhands.agenthub.orchestrator_agent import _prompt as prompts
 from openhands.core.config import AppConfig, SandboxConfig
 from openhands.core.exceptions import AgentRuntimeDisconnectedError
 from openhands.core.logger import openhands_logger as logger
@@ -303,28 +302,24 @@ class Runtime(FileEditRuntimeMixin):
         assert event.timeout is not None
         try:
             await self._export_latest_git_provider_tokens(event)
-
+            observation: Observation = NullObservation('')
             # Handle OrchestratorInitializationAction specially
             if isinstance(event, OrchestratorInitializationAction):
-                # Create the full ledger prompt
-                full_ledger = prompts.ORCHESTRATOR_TASK_LEDGER_FULL_PROMPT.format(
-                    task=event.task, team=event.team, facts=event.facts, plan=event.plan
-                )
                 # Create and add the observation
                 observation = OrchestratorInitializeObservation(
                     task=event.task,
                     facts=event.facts,
                     plan=event.plan,
                     team=event.team,
-                    full_ledger=full_ledger,
-                    content=full_ledger,
+                    full_ledger=event.full_ledger,
+                    content=event.full_ledger,
                 )
                 self.event_stream.add_event(observation, EventSource.AGENT)
                 return
             elif isinstance(event, McpAction):
                 # we don't call call_tool_mcp impl directly because there can be other action ActionExecutionClient
                 logger.debug(f'Calling call_tool_mcp with event: {event}')
-                observation: Observation = await getattr(self, McpAction.action)(event)
+                observation = await getattr(self, McpAction.action)(event)
             elif isinstance(event, A2AListRemoteAgentsAction) or isinstance(
                 event, A2ASendTaskAction
             ):

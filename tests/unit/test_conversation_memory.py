@@ -1206,7 +1206,8 @@ def test_process_events_with_orchestrator_initialize_observation(conversation_me
         facts="Test facts",
         plan="Test plan",
         team="Test team",
-        full_ledger="Full ledger containing task, facts, plan and team information"
+        full_ledger="Full ledger containing task, facts, plan and team information",
+        content="Full ledger containing task, facts, plan and team information"
     )
 
     initial_messages = [

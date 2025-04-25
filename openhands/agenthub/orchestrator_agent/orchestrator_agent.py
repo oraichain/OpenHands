@@ -103,8 +103,28 @@ class OrchestratorAgent(Agent):
         logger.info(f'Using condenser: {type(self.condenser)}')
 
         self.max_stall = max_stall
-        # Initialize state
-        self.reset()
+        
+        # Initialize state variables
+        self.phase = OrchestrationPhase.START
+        self.task: str | None = None
+        self.team_description: str = 'No team description available.'
+        self.facts: str | None = None
+        self.plan: str | None = None
+        self.last_error: str | None = None
+        self.stall_count: int = 0
+
+ 
+
+    def reset(self) -> None:
+        """Resets the agent state."""
+        super().reset()
+        self.phase = OrchestrationPhase.START
+        self.task = None
+        self.team_description = 'No team description available.'
+        self.facts = None
+        self.plan = None
+        self.last_error = None
+        self.stall_count = 0
 
     def _initialize_facts_and_plan(self, state: State) -> None:
         """Initialize facts and plan during agent setup.
@@ -131,17 +151,6 @@ class OrchestratorAgent(Agent):
             self.plan = self._call_llm(messages)
             logger.info(f"Generated Initial Plan:\n{self.plan}")
 
-    def reset(self) -> None:
-        """Resets the agent state."""
-        super().reset()
-        self.phase = OrchestrationPhase.START
-        self.task: str | None = None
-        self.team_description: str = 'No team description available.' # Should be provided externally or discovered
-        self.facts: str | None = None
-        self.plan: str | None = None
-        self.last_error: str | None = None
-        self.stall_count: int = 0
-
     def _initialize_agent(self, state: State) -> OrchestratorInitializationAction:
         """Initialize the agent with task, team description, facts, and plan.
         
@@ -155,13 +164,21 @@ class OrchestratorAgent(Agent):
         self._initialize_facts_and_plan(state)
         # Skip the fact gathering and plan creation phases
         self.phase = OrchestrationPhase.EXECUTING_PLAN
-
-        return OrchestratorInitializationAction(
-            task=self.task,
-            facts=self.facts,
-            plan=self.plan,
-            team=self.team_description
-        )
+        if self.facts and self.plan:
+            return OrchestratorInitializationAction(
+                task=self.task,
+                facts=self.facts,
+                plan=self.plan,
+                team=self.team_description,
+                full_ledger=prompts.ORCHESTRATOR_TASK_LEDGER_FULL_PROMPT.format(
+                    task=self.task,
+                    team=self.team_description,
+                    facts=self.facts,
+                    plan=self.plan
+                )
+            )
+        else:
+            raise AgentError("Failed to initialize facts and plan.")
 
     def _get_initial_task(self, state: State) -> str:
         """Extracts the initial task from the state history."""
@@ -462,7 +479,13 @@ class OrchestratorAgent(Agent):
             task=self.task,
             facts=self.facts,
             plan=self.plan,
-            team=self.team_description
+            team=self.team_description,
+            full_ledger=prompts.ORCHESTRATOR_TASK_LEDGER_FULL_PROMPT.format(
+                task=self.task,
+                team=self.team_description,
+                facts=self.facts,
+                plan=self.plan
+            )
         )
 
     def _generate_final_answer(self, state: State) -> Action:
