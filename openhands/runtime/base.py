@@ -41,6 +41,7 @@ from openhands.events.action.a2a_action import (
     A2ASendTaskAction,
 )
 from openhands.events.action.mcp import McpAction
+from openhands.events.action.orchestrator import OrchestratorInitializationAction
 from openhands.events.event import Event
 from openhands.events.observation import (
     AgentThinkObservation,
@@ -57,6 +58,7 @@ from openhands.events.observation.a2a import (
     A2ASendTaskResponseObservation,
     A2ASendTaskUpdateObservation,
 )
+from openhands.events.observation.orchestrator import OrchestratorInitializeObservation
 from openhands.events.serialization.action import ACTION_TYPE_TO_CLASS
 from openhands.integrations.provider import (
     PROVIDER_TOKEN_TYPE,
@@ -79,6 +81,7 @@ from openhands.utils.async_utils import (
     call_async_from_sync,
     call_sync_from_async,
 )
+from openhands.agenthub.orchestrator_agent import _prompt as prompts
 
 STATUS_MESSAGES = {
     'STATUS$STARTING_RUNTIME': 'Starting runtime...',
@@ -300,6 +303,29 @@ class Runtime(FileEditRuntimeMixin):
         assert event.timeout is not None
         try:
             await self._export_latest_git_provider_tokens(event)
+            
+            # Handle OrchestratorInitializationAction specially
+            if isinstance(event, OrchestratorInitializationAction):
+                # Create the full ledger prompt
+                full_ledger = prompts.ORCHESTRATOR_TASK_LEDGER_FULL_PROMPT.format(
+                    task=event.task,
+                    team=event.team,
+                    facts=event.facts,
+                    plan=event.plan
+                )
+                # Create and add the observation
+                observation = OrchestratorInitializeObservation(
+                    task=event.task,
+                    facts=event.facts,
+                    plan=event.plan,
+                    team=event.team,
+                    full_ledger=full_ledger
+                )
+                observation._cause = event.id
+                observation.tool_call_metadata = event.tool_call_metadata
+                self.event_stream.add_event(observation, EventSource.AGENT)
+                return
+                
             if isinstance(event, McpAction):
                 # we don't call call_tool_mcp impl directly because there can be other action ActionExecutionClient
                 logger.debug(f'Calling call_tool_mcp with event: {event}')

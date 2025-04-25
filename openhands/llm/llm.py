@@ -204,7 +204,6 @@ class LLM(RetryMixin, DebugMixin):
 
             messages: list[dict[str, Any]] | dict[str, Any] = []
             mock_function_calling = not self.is_function_calling_active()
-
             # Add session_id and user_id as span attributes if they exist
             try:
                 span = trace.get_current_span()
@@ -286,7 +285,6 @@ class LLM(RetryMixin, DebugMixin):
             #     f'LLM: calling litellm completion with model: {self.config.model}, base_url: {self.config.base_url}, args: {args}, kwargs: {kwargs}'
             # )
             resp: ModelResponse = self._completion_unwrapped(*args, **kwargs)
-
             # Calculate and record latency
             latency = time.time() - start_time
             response_id = resp.get('id', 'unknown')

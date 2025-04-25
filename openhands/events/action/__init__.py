@@ -10,6 +10,7 @@ from openhands.events.action.agent import (
     AgentThinkAction,
     ChangeAgentStateAction,
     RecallAction,
+    CondensationAction,
 )
 from openhands.events.action.browse import BrowseInteractiveAction, BrowseURLAction
 from openhands.events.action.commands import CmdRunAction, IPythonRunCellAction
@@ -21,6 +22,14 @@ from openhands.events.action.files import (
 )
 from openhands.events.action.mcp import McpAction
 from openhands.events.action.message import MessageAction
+from openhands.events.action.orchestrator import (
+    GatheringFactsAction,
+    CreatingPlanAction,
+    UpdatingKnowledgeAction,
+    FinalAnswerAction,
+    OrchestratorInitializationAction,
+    OrchestratorInitializeObservation,
+)
 
 __all__ = [
     'Action',
@@ -43,4 +52,11 @@ __all__ = [
     'McpAction',
     'A2AListRemoteAgentsAction',
     'A2ASendTaskAction',
+    'CondensationAction',
+    'GatheringFactsAction',
+    'CreatingPlanAction',
+    'UpdatingKnowledgeAction',
+    'FinalAnswerAction',
+    'OrchestratorInitializationAction',
+    'OrchestratorInitializeObservation',
 ]

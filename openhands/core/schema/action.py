@@ -3,6 +3,8 @@ from enum import Enum
 
 class ActionType(str, Enum):
     MESSAGE = 'message'
+    ORCHESTRATOR_INITIALIZATION = 'orchestrator_initialization'  # Indicates the orchestrator agent has completed initialization
+    ORCHESTRATOR_INITIALIZE_OBSERVATION = 'orchestrator_initialize_observation'  # Contains the full ledger after initialization
     """Represents a message.
     """
 
@@ -93,3 +95,15 @@ class ActionType(str, Enum):
 
     A2A_SEND_TASK = 'a2a_send_task'
     """Send a task to a remote agent."""
+
+    GATHERING_FACTS = 'gathering_facts'
+    """Indicates the orchestrator agent is gathering facts about the task."""
+
+    CREATING_PLAN = 'creating_plan'
+    """Indicates the orchestrator agent is creating a plan for the task."""
+
+    UPDATING_KNOWLEDGE = 'updating_knowledge'
+    """Indicates the orchestrator agent is updating its knowledge (facts and plan)."""
+
+    FINAL_ANSWER = 'final_answer'
+    """Indicates the orchestrator agent is generating the final answer."""

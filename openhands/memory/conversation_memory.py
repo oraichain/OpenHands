@@ -188,6 +188,8 @@ class ConversationMemory:
                 - AgentFinishAction: For ending the interaction
                 - MessageAction: For sending messages
                 - McpAction: For interacting with the MCP server
+                - A2AListRemoteAgentsAction: For listing remote agents
+                - A2ASendTaskAction: For sending a task to a remote agent
             pending_tool_call_action_messages: Dictionary mapping response IDs to their corresponding messages.
                 Used in function calling mode to track tool calls that are waiting for their results.
 
