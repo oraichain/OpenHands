@@ -208,7 +208,7 @@ def make_commit(repo_dir: str, issue: Issue, issue_type: str) -> None:
         logger.error(
             f'No changes to commit for issue #{issue.number}. Skipping commit.'
         )
-        raise RuntimeError('ERROR: Openhands failed to make code changes.')
+        raise RuntimeError('ERROR: Thesis failed to make code changes.')
 
     # Prepare the commit message
     commit_message = f'Fix {issue_type} #{issue.number}: {issue.title}'
@@ -406,7 +406,7 @@ def update_existing_pull_request(
             explanations = json.loads(additional_message)
             if explanations:
                 comment_message = (
-                    'OpenHands made the following changes to resolve the issues:\n\n'
+                    'Thesis made the following changes to resolve the issues:\n\n'
                 )
                 for explanation in explanations:
                     comment_message += f'- {explanation}\n'
@@ -429,7 +429,7 @@ def update_existing_pull_request(
                     comment_message = response.choices[0].message.content.strip()
 
         except (json.JSONDecodeError, TypeError):
-            comment_message = f'A new OpenHands update is available, but failed to parse or summarize the changes:\n{additional_message}'
+            comment_message = f'A new Thesis update is available, but failed to parse or summarize the changes:\n{additional_message}'
 
     # Post a comment on the PR
     if comment_message:
