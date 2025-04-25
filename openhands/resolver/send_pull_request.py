@@ -429,7 +429,7 @@ def update_existing_pull_request(
                     comment_message = response.choices[0].message.content.strip()
 
         except (json.JSONDecodeError, TypeError):
-            comment_message = f'A new Openhands update is available, but failed to parse or summarize the changes:\n{additional_message}'
+            comment_message = f'A new OpenHands update is available, but failed to parse or summarize the changes:\n{additional_message}'
 
     # Post a comment on the PR
     if comment_message:
