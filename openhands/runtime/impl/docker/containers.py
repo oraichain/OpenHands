@@ -10,11 +10,18 @@ from openhands.core.logger import openhands_logger as logger
 def stop_all_containers(prefix: str) -> None:
     docker_client = docker.from_env()
     try:
-        containers = docker_client.containers.list(all=True)
+        # Use filters to get containers with names starting with the prefix
+        filters = {'name': prefix}
+        logger.info(f'Prepared to terminate containers with prefix: {prefix}')
+        containers: list[Container] = docker_client.containers.list(
+            all=True, filters=filters
+        )
         for container in containers:
+            logger.info(f'Found container {container.name} to terminate')
             try:
-                if container.name.startswith(prefix):
-                    container.stop()
+                # if container.name.startswith(prefix):
+                container.stop()
+                container.remove()
             except docker.errors.APIError:
                 pass
             except docker.errors.NotFound:
