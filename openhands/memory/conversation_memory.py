@@ -38,6 +38,7 @@ from openhands.events.observation import (
     IPythonRunCellObservation,
     Observation,
     OrchestratorInitializeObservation,
+    OrchestratorFinalObservation,
     PlanObservation,
     RecallObservation,
     UserRejectObservation,
@@ -222,6 +223,14 @@ class ConversationMemory:
             ),
         ) or (isinstance(action, CmdRunAction) and action.source == 'agent'):
             tool_metadata = action.tool_call_metadata
+            if tool_metadata is None and isinstance(action, A2ASendTaskAction):
+                logger.info(f'A2ASendTaskAction tool_metadata is None task_message: {action.task_message}')
+                return [
+                    Message(
+                        role='assistant',
+                        content=[TextContent(text=action.task_message)],
+                    )
+                ]
             assert tool_metadata is not None, (
                 'Tool call metadata should NOT be None when function calling is enabled. Action: '
                 + str(action)
@@ -571,7 +580,7 @@ class ConversationMemory:
                 return []
             return [
                 Message(
-                    role='assistant',
+                    role='user',
                     content=task_update_content,
                 )
             ]
@@ -581,7 +590,10 @@ class ConversationMemory:
         elif isinstance(obs, OrchestratorInitializeObservation):
             # The full ledger contains the task, facts, plan and team info in a formatted way
             text = truncate_content(obs.full_ledger, max_message_chars)
-            message = Message(role='assistant', content=[TextContent(text=text)])
+            message = Message(role='user', content=[TextContent(text=text)])
+        elif isinstance(obs, OrchestratorFinalObservation):
+            text = truncate_content(obs.content, max_message_chars)
+            message = Message(role='user', content=[TextContent(text=text)])
         else:
             # If an observation message is not returned, it will cause an error
             # when the LLM tries to return the next message

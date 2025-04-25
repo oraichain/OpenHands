@@ -23,11 +23,8 @@ from openhands.events.action.files import (
 from openhands.events.action.mcp import McpAction
 from openhands.events.action.message import MessageAction
 from openhands.events.action.orchestrator import (
-    GatheringFactsAction,
-    CreatingPlanAction,
-    UpdatingKnowledgeAction,
-    FinalAnswerAction,
     OrchestratorInitializationAction,
+    OrchestratorFinalAnswerAction,
 )
 
 __all__ = [
@@ -52,9 +49,6 @@ __all__ = [
     'A2AListRemoteAgentsAction',
     'A2ASendTaskAction',
     'CondensationAction',
-    'GatheringFactsAction',
-    'CreatingPlanAction',
-    'UpdatingKnowledgeAction',
-    'FinalAnswerAction',
     'OrchestratorInitializationAction',
+    'OrchestratorFinalAnswerAction',
 ]

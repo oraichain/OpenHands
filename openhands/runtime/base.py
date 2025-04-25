@@ -35,6 +35,7 @@ from openhands.events.action import (
     FileReadAction,
     FileWriteAction,
     IPythonRunCellAction,
+    OrchestratorFinalAnswerAction,
 )
 from openhands.events.action.a2a_action import (
     A2AListRemoteAgentsAction,
@@ -58,7 +59,10 @@ from openhands.events.observation.a2a import (
     A2ASendTaskResponseObservation,
     A2ASendTaskUpdateObservation,
 )
-from openhands.events.observation.orchestrator import OrchestratorInitializeObservation
+from openhands.events.observation.orchestrator import (
+    OrchestratorInitializeObservation,
+    OrchestratorFinalObservation,
+)
 from openhands.events.serialization.action import ACTION_TYPE_TO_CLASS
 from openhands.integrations.provider import (
     PROVIDER_TOKEN_TYPE,
@@ -316,6 +320,14 @@ class Runtime(FileEditRuntimeMixin):
                 )
                 self.event_stream.add_event(observation, EventSource.AGENT)
                 return
+            elif isinstance(event, OrchestratorFinalAnswerAction):
+                # Create and add the final observation
+                observation = OrchestratorFinalObservation(
+                    task=event.task,
+                    content=event.reason,
+                )
+                self.event_stream.add_event(observation, EventSource.AGENT)
+                return
             elif isinstance(event, McpAction):
                 # we don't call call_tool_mcp impl directly because there can be other action ActionExecutionClient
                 logger.debug(f'Calling call_tool_mcp with event: {event}')
@@ -326,7 +338,8 @@ class Runtime(FileEditRuntimeMixin):
                 async for observation in self.call_a2a(event):
                     if observation is not None:
                         observation._cause = event.id  # type: ignore[attr-defined]
-                        observation.tool_call_metadata = event.tool_call_metadata
+                        if event.tool_call_metadata is not None:
+                            observation.tool_call_metadata = event.tool_call_metadata
                         self.event_stream.add_event(observation, EventSource.AGENT)
                 return
             else:
@@ -344,7 +357,8 @@ class Runtime(FileEditRuntimeMixin):
             return
 
         observation._cause = event.id  # type: ignore[attr-defined]
-        observation.tool_call_metadata = event.tool_call_metadata
+        if event.tool_call_metadata is not None:
+            observation.tool_call_metadata = event.tool_call_metadata
 
         # this might be unnecessary, since source should be set by the event stream when we're here
         source = event.source if event.source else EventSource.AGENT

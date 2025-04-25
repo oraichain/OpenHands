@@ -76,3 +76,6 @@ class ObservationType(str, Enum):
 
     ORCHESTRATOR_INITIALIZE_OBSERVATION = 'orchestrator_initialize_observation'
     """Result of an orchestrator initialization, containing the full ledger and context."""
+
+    ORCHESTRATOR_FINAL_OBSERVATION = 'orchestrator_final_observation'
+    """Result of an orchestrator final answer, containing the completed task's final answer."""

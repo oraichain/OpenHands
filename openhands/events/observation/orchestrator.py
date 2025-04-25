@@ -12,4 +12,20 @@ class OrchestratorInitializeObservation(Observation):
     plan: str
     team: str
     full_ledger: str
+    content: str
     observation: str = ObservationType.ORCHESTRATOR_INITIALIZE_OBSERVATION
+
+    @property
+    def message(self) -> str:
+        return self.content
+
+@dataclass
+class OrchestratorFinalObservation(Observation):
+    """Observation containing the final answer from the orchestrator."""
+    task: str
+    content: str
+    observation: str = ObservationType.ORCHESTRATOR_FINAL_OBSERVATION
+
+    @property
+    def message(self) -> str:
+        return self.content

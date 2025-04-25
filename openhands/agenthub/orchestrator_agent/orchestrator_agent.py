@@ -17,15 +17,15 @@ from openhands.events.action import (
     AgentFinishAction,
     A2ASendTaskAction,
     MessageAction,
-    NullAction,
 )
-from openhands.events.action.orchestrator import OrchestratorInitializationAction
+from openhands.events.action.orchestrator import OrchestratorFinalAnswerAction, OrchestratorInitializationAction
 from openhands.events.event import Event
 from openhands.llm.llm import LLM
 from openhands.utils.prompt import PromptManager
 from openhands.memory.conversation_memory import ConversationMemory
 from openhands.memory.condenser import Condenser
 from openhands.memory.condenser.condenser import Condensation, View
+from openhands.agenthub.codeact_agent import function_calling as codeact_function_calling
 
 # Add Pydantic for structured responses
 from pydantic import BaseModel
@@ -84,6 +84,10 @@ class OrchestratorAgent(Agent):
             config,
             workspace_mount_path_in_sandbox_store_in_session,
             a2a_manager,
+        )
+        self.tools = codeact_function_calling.get_tools(
+                codeact_enable_llm_editor=True,
+                llm=self.llm,
         )
         if not self.a2a_manager:
             # Orchestrator requires A2AManager
@@ -183,9 +187,12 @@ class OrchestratorAgent(Agent):
     def _get_initial_task(self, state: State) -> str:
         """Extracts the initial task from the state history."""
         # Find the first user message
-        for event in state.history:
-            if event.source == 'user' and isinstance(event, MessageAction):
-                return event.content
+           # if we're done, go back
+        latest_user_message = state.get_last_user_message()
+        if latest_user_message and latest_user_message.content.strip() == '/exit':
+            return AgentFinishAction()
+        if  latest_user_message.content:
+            return latest_user_message.content
         # Fallback or raise error if no task found
         # This could also be passed explicitly during agent initialization or first step
         # For now, try getting user prompt if set
@@ -212,7 +219,7 @@ class OrchestratorAgent(Agent):
         """Performs one step of the orchestration process."""
         logger.info(f"Orchestrator Agent step, current phase: {self.phase}")
         self.last_error = None # Clear last error at the start of a step
-
+     
         if self.phase == OrchestrationPhase.START:
             return self._initialize_agent(state)
         try:
@@ -324,13 +331,12 @@ class OrchestratorAgent(Agent):
         response = self.llm.completion(
             messages=self.llm.format_messages_for_llm(messages),
             thinking={"type": "disabled"},
-            # reasoning_effort="low",
-            # ,response_format=response_model
+            # tools=self.tools,
         )
        
         if not response.choices:
             raise AgentError("LLM response was empty or invalid.")
-
+        logger.info(f"LLM Response: {response.choices}")
         response_content = response.choices[0].message.content or ''
         if not isinstance(response_content, str):
             # Handle cases where content might not be simple string if LLM returns complex types
@@ -361,7 +367,7 @@ class OrchestratorAgent(Agent):
         if not self.task or not self.plan or not self.facts:
             self.phase = OrchestrationPhase.ERROR
             self.last_error = "Task, plan, or facts not defined for execution."
-            return NullAction()
+            raise AgentError(self.last_error)
 
         # Format the progress prompt
         available_names = []
@@ -380,7 +386,7 @@ class OrchestratorAgent(Agent):
             logger.error(f"Expected ProgressUpdate object, got {type(progress_update)}")
             self.phase = OrchestrationPhase.ERROR
             self.last_error = f"Failed to get structured ProgressUpdate, got {type(progress_update)}"
-            return NullAction("Error in getting structured progress update.")
+            raise AgentError(self.last_error)
 
         logger.info(f"Parsed Progress Update: {progress_update}")
 
@@ -393,43 +399,49 @@ class OrchestratorAgent(Agent):
             # Set phase to FINAL_ANSWER and restore task for final answer generation
             self.phase = OrchestrationPhase.FINAL_ANSWER
             self.task = completed_task
-            return NullAction("Task marked as satisfied, proceeding to final answer.")
+            return OrchestratorFinalAnswerAction(
+                task=completed_task, 
+                reason=progress_update.is_request_satisfied.reason
+            )
 
-        # If we're making progress, continue with execution
-        if not progress_update.is_in_loop.answer and progress_update.is_progress_being_made.answer:
-            self.stall_count = 0  # Reset stall count when making progress
-            # Delegate the task
-            next_speaker = progress_update.next_speaker.answer
-            instruction = progress_update.instruction_or_question.answer
+        if progress_update.is_in_loop.answer:
+            self.stall_count += 1
+        elif not progress_update.is_progress_being_made.answer:
+            self.stall_count += 1
+        else:
+            self.stall_count -= 1
 
-            if not next_speaker or not instruction:
-                raise AgentError("LLM progress update did not specify next speaker or instruction.")
-
-            if not self.a2a_manager:
-                raise AgentError("Cannot delegate task: A2AManager is not available.")
-
-            logger.info(f"Delegating to '{next_speaker}': {instruction}")
-            return A2ASendTaskAction(agent_name=next_speaker, task_message=instruction)
-
-        # Only update plan if we're actually stalled
-        self.stall_count += 1
-        logger.warning(f"Loop/stall detected (count: {self.stall_count}/{self.max_stall}): {progress_update.is_in_loop.reason or 'No reason provided'} / {progress_update.is_progress_being_made.reason or 'No reason provided'}")
-        
         if self.stall_count >= self.max_stall:
             # When max_stall is reached, try a more aggressive recovery by updating both facts and plan
             logger.warning(f"Max stall count ({self.max_stall}) reached. Attempting aggressive recovery by updating both facts and plan.")
             self.phase = OrchestrationPhase.UPDATING_KNOWLEDGE
             self.stall_count = 0  # Reset stall count for the recovery attempt
-            return NullAction("Max stalls reached, attempting recovery by updating both facts and plan.")
-        
-        return NullAction("Stuck or no progress detected, attempting to update plan.")
+            return OrchestratorInitializationAction(
+                task=self.task,
+                facts=self.facts,
+                plan=self.plan,
+                team=self.team_description,
+                full_ledger=prompts.ORCHESTRATOR_TASK_LEDGER_FULL_PROMPT.format(task=self.task, team=self.team_description, facts=self.facts, plan=self.plan)
+            )
+        # Delegate the task
+        next_speaker = progress_update.next_speaker.answer
+        instruction = progress_update.instruction_or_question.answer
 
-    def _update_plan(self, state: State) -> Action:
+        if not next_speaker or not instruction:
+            raise AgentError("LLM progress update did not specify next speaker or instruction.")
+
+        if not self.a2a_manager:
+            raise AgentError("Cannot delegate task: A2AManager is not available.")
+
+        logger.info(f"Delegating to '{next_speaker}': {instruction}")
+        return A2ASendTaskAction(agent_name=next_speaker, task_message=instruction)
+
+    def _update_plan(self, state: State) -> None:
         """Updates the plan based on recent failures or lack of progress."""
         if not self.task or not self.plan or not self.team_description:
             self.phase = OrchestrationPhase.ERROR
             self.last_error = "Task, plan, or team description not defined for plan update."
-            return NullAction()
+            raise AgentError(self.last_error)
 
         prompt = prompts.ORCHESTRATOR_TASK_LEDGER_PLAN_UPDATE_PROMPT.format(
             team=self.team_description,
@@ -442,14 +454,14 @@ class OrchestratorAgent(Agent):
 
         # After updating the plan, go back to execution
         self.phase = OrchestrationPhase.EXECUTING_PLAN
-        return NullAction("Updated plan, proceeding to execution.")
+        return None
 
     def _update_knowledge(self, state: State) -> Action:
         """Updates both facts and plan in a single phase to reduce state transitions."""
         if not self.task or not self.facts or not self.plan or not self.team_description:
             self.phase = OrchestrationPhase.ERROR
             self.last_error = "Task, facts, plan, or team description not defined for knowledge update."
-            return NullAction()
+            raise AgentError(self.last_error)
 
         # First update facts
         facts_prompt = prompts.ORCHESTRATOR_TASK_LEDGER_FACTS_UPDATE_PROMPT.format(
@@ -475,6 +487,7 @@ class OrchestratorAgent(Agent):
 
         # After updating both facts and plan, go back to execution with new initialization
         self.phase = OrchestrationPhase.EXECUTING_PLAN
+
         return OrchestratorInitializationAction(
             task=self.task,
             facts=self.facts,
@@ -493,21 +506,32 @@ class OrchestratorAgent(Agent):
         if not self.task:
              self.phase = OrchestrationPhase.ERROR
              self.last_error = "Task is not defined for final answer generation."
-             return NullAction()
-
+             raise AgentError(self.last_error)
+        
         prompt = prompts.ORCHESTRATOR_FINAL_ANSWER_PROMPT.format(
             task=self.task,
         )
-
+        
         messages = self._get_messages(state.history, prompt)
         
         response_content = self._call_llm(messages)
 
         logger.info(f"Generated Final Answer:\n{response_content}")
 
-        # Mark agent as complete and return the final answer
-        self._complete = True
-        return AgentFinishAction(outputs={
-            'output': response_content,
-            'status': 'success'
-        })
+        # Store completed task and response before reset
+        completed_task = self.task
+        final_answer = response_content
+
+        # Reset the agent state to be ready for new tasks
+        self.reset()
+        
+        # Set phase back to START to be ready for new tasks
+        self.phase = OrchestrationPhase.START
+
+        return AgentFinishAction(
+            outputs={
+                'output': final_answer,
+                'status': 'success'
+            }
+        )
+

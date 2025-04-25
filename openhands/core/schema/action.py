@@ -4,10 +4,7 @@ from enum import Enum
 class ActionType(str, Enum):
     MESSAGE = 'message'
     ORCHESTRATOR_INITIALIZATION = 'orchestrator_initialization'  # Indicates the orchestrator agent has completed initialization
-    ORCHESTRATOR_INITIALIZE_OBSERVATION = 'orchestrator_initialize_observation'  # Contains the full ledger after initialization
-    """Represents a message.
-    """
-
+ 
     START = 'start'
     """Starts a new development task OR send chat from the user. Only sent by the client.
     """
@@ -105,5 +102,5 @@ class ActionType(str, Enum):
     UPDATING_KNOWLEDGE = 'updating_knowledge'
     """Indicates the orchestrator agent is updating its knowledge (facts and plan)."""
 
-    FINAL_ANSWER = 'final_answer'
-    """Indicates the orchestrator agent is generating the final answer."""
+    ORCHESTRATOR_FINAL_ANSWER = 'orchestrator_final_answer'
+    """Indicates the orchestrator agent has completed the task and is providing the final answer."""
