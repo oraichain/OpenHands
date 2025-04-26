@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 
 import socketio
 from dotenv import load_dotenv
@@ -9,6 +10,7 @@ from openhands.server.conversation_manager.conversation_manager import (
     ConversationManager,
 )
 from openhands.server.monitoring import MonitoringListener
+from openhands.server.utils.s3_utils import S3Handler
 from openhands.storage import get_file_store
 from openhands.storage.conversation.conversation_store import ConversationStore
 from openhands.storage.settings.settings_store import SettingsStore
@@ -45,13 +47,29 @@ ConversationManagerImpl = get_impl(
     server_config.conversation_manager_class,
 )
 
-conversation_manager = ConversationManagerImpl.get_instance(  # type: ignore
+conversation_manager: ConversationManager = ConversationManagerImpl.get_instance(  # type: ignore
     sio, config, file_store, server_config, monitoring_listener
 )
 
-SettingsStoreImpl = get_impl(SettingsStore, server_config.settings_store_class)  # type: ignore
+SettingsStoreImpl: SettingsStore = get_impl(
+    SettingsStore, server_config.settings_store_class
+)  # type: ignore
 
-ConversationStoreImpl = get_impl(
+ConversationStoreImpl: ConversationStore = get_impl(
     ConversationStore,  # type: ignore
     server_config.conversation_store_class,
 )
+
+
+@lru_cache
+def get_s3_handler():
+    if (
+        not os.getenv('S3_ACCESS_KEY_ID')
+        or not os.getenv('S3_SECRET_ACCESS_KEY')
+        or not os.getenv('S3_BUCKET')
+    ):
+        return None
+    return S3Handler()
+
+
+s3_handler = get_s3_handler()

@@ -327,10 +327,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 ) = await conversation_module._get_conversation_visibility_info(
                     conversation_id
                 )
-                print(
-                    f'error: {error}, conversation_id: {conversation_id}, JWT Middleware'
-                )
-                if not error:
+                if error is None:
                     request.state.sid = conversation_id
                     request.state.user_id = visibility_info['user_id']
                     return await call_next(request)
@@ -345,7 +342,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # token = auth_header.split(' ')[1]
         try:
             user: ThesisUser | None = await get_user_detail_from_thesis_auth_server(
-                request.headers.get('Authorization')
+                request.headers.get('Authorization'),
+                request.headers.get('x-device-id'),
             )
             if not user:
                 return JSONResponse(
