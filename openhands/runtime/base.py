@@ -609,7 +609,7 @@ class Runtime(FileEditRuntimeMixin):
                     result = task_response.result
 
                     if isinstance(result, TaskStatusUpdateEvent):
-                        logger.info(
+                        logger.debug(
                             f"""Task state: {result.status.state}\n
                             Task message: {result.status.message}"""
                         )

@@ -1,10 +1,18 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Body, HTTPException, Request, status, UploadFile, File, Form
+from fastapi import (
+    APIRouter,
+    Body,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional
 
 from openhands.core.config.llm_config import LLMConfig
 from openhands.core.logger import openhands_logger as logger
@@ -33,6 +41,7 @@ from openhands.server.shared import (
     config,
     conversation_manager,
     file_store,
+    s3_handler,
 )
 from openhands.server.types import LLMAuthenticationError, MissingSettingsError
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
@@ -40,7 +49,6 @@ from openhands.storage.data_models.conversation_status import ConversationStatus
 from openhands.utils.async_utils import wait_all
 from openhands.utils.conversation_summary import generate_conversation_title
 from openhands.utils.get_user_setting import get_user_setting
-from openhands.server.shared import s3_handler
 
 app = APIRouter(prefix='/api')
 
@@ -442,7 +450,7 @@ async def change_visibility(
     request: Request,
     is_published: bool = Form(...),
     hidden_prompt: bool = Form(...),
-    file: Optional[UploadFile] = File(None),
+    file: Optional[UploadFile] = None,
 ) -> bool:
     user_id = get_user_id(request)
     conversation_store = await ConversationStoreImpl.get_instance(
@@ -458,8 +466,8 @@ async def change_visibility(
     }
 
     if file and s3_handler is not None:
-        print("processing file:", file)
-        folder_path = f"conversations/{conversation_id}"
+        print('processing file:', file)
+        folder_path = f'conversations/{conversation_id}'
         file_url = await s3_handler.upload_file(file, folder_path)
         if file_url:
             extra_data['thumbnail_url'] = file_url

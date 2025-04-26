@@ -60,7 +60,11 @@ class ConversationModule:
             }
         except Exception as e:
             logger.error(f'Error getting conversation visibility: {str(e)}')
-            return {'is_published': False, 'hidden_prompt': False, 'thumbnail_url': None}
+            return {
+                'is_published': False,
+                'hidden_prompt': False,
+                'thumbnail_url': None,
+            }
 
     async def _update_conversation_visibility(
         self,
@@ -84,7 +88,11 @@ class ConversationModule:
                         (Conversation.c.conversation_id == conversation_id)
                         & (Conversation.c.user_id == user_id)
                     )
-                    .values(published=is_published, configs={**existing_record.configs, **configs}, title=title)
+                    .values(
+                        published=is_published,
+                        configs={**existing_record.configs, **configs},
+                        title=title,
+                    )
                 )
             else:
                 await database.execute(
@@ -135,10 +143,12 @@ class ConversationModule:
             if not existing_record:
                 return 'Conversation not found', None
             await database.execute(
-                Conversation.update().where(
+                Conversation.update()
+                .where(
                     (Conversation.c.conversation_id == conversation_id)
                     & (Conversation.c.user_id == user_id)
-                ).values(status='deleted')
+                )
+                .values(status='deleted')
             )
             return True
         except Exception as e:
@@ -233,7 +243,9 @@ class ConversationModule:
                     'short_description': conversation.get('short_description'),
                     'published': conversation.get('published'),
                     'view_count': self.get_view_count(conversation, sort_by),
-                    'thumbnail_url': conversation.get('configs', {}).get('thumbnail_url', None),
+                    'thumbnail_url': conversation.get('configs', {}).get(
+                        'thumbnail_url', None
+                    ),
                 }
                 for conversation in conversations
             ]
@@ -248,7 +260,9 @@ class ConversationModule:
                     'short_description': conversation.get('short_description'),
                     'published': conversation.get('published'),
                     'view_count': self.get_view_count(conversation, sort_by),
-                    'thumbnail_url': conversation.get('configs', {}).get('thumbnail_url', None),
+                    'thumbnail_url': conversation.get('configs', {}).get(
+                        'thumbnail_url', None
+                    ),
                 }
                 for conversation in conversations
             ]
@@ -263,18 +277,22 @@ class ConversationModule:
             prioritized_usecase_ids = kwargs.get('prioritized_usecase_ids', [])
             sort_by = kwargs.get('sort_by', None)
             if sort_by:
-                query = select(
-                    Conversation,
-                    ResearchTrending.c.total_view_24h,
-                    ResearchTrending.c.total_view_7d,
-                    ResearchTrending.c.total_view_30d,
-                ).select_from(
-                    Conversation.outerjoin(
-                        ResearchTrending,
-                        Conversation.c.conversation_id
-                        == ResearchTrending.c.conversation_id,
+                query = (
+                    select(
+                        Conversation,
+                        ResearchTrending.c.total_view_24h,
+                        ResearchTrending.c.total_view_7d,
+                        ResearchTrending.c.total_view_30d,
                     )
-                ).where(Conversation.c.status != 'deleted')
+                    .select_from(
+                        Conversation.outerjoin(
+                            ResearchTrending,
+                            Conversation.c.conversation_id
+                            == ResearchTrending.c.conversation_id,
+                        )
+                    )
+                    .where(Conversation.c.status != 'deleted')
+                )
             else:
                 query = select(Conversation).where(Conversation.c.status != 'deleted')
 

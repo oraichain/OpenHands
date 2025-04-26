@@ -58,7 +58,18 @@ class A2AManager(ABC):
         remote_agent_info = []
         for card in self.list_remote_agent_cards.values():
             remote_agent_info.append(
-                {'name': card.name, 'description': card.description}
+                {
+                    'name': card.name,
+                    'description': card.description,
+                    'skills': [
+                        {
+                            'name': skill.name,
+                            'description': skill.description,
+                            'examples': skill.examples,
+                        }
+                        for skill in card.skills
+                    ],
+                }
             )
         return remote_agent_info
 
@@ -92,6 +103,8 @@ class A2AManager(ABC):
             metadata={'conversation_id': sid},
         )
 
+        logger.info(f'Sending task to {agent_name} with message: {message}')
+        logger.info(f'Card capabilities: {card.capabilities}')
         if card.capabilities.streaming:
             async for response in client.send_task_streaming(request):
                 yield response
