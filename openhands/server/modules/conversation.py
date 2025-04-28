@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 
 from openhands.core.logger import openhands_logger as logger
 from openhands.server.db import database
@@ -73,6 +73,7 @@ class ConversationModule:
         user_id: str,
         configs: dict,
         title: str,
+        status: str = 'available',
     ):
         try:
             query = Conversation.select().where(
@@ -92,6 +93,7 @@ class ConversationModule:
                         published=is_published,
                         configs={**existing_record.configs, **configs},
                         title=title,
+                        status=status,
                     )
                 )
             else:
@@ -283,18 +285,26 @@ class ConversationModule:
                         ResearchTrending.c.total_view_24h,
                         ResearchTrending.c.total_view_7d,
                         ResearchTrending.c.total_view_30d,
-                    )
-                    .select_from(
+                    ).select_from(
                         Conversation.outerjoin(
                             ResearchTrending,
                             Conversation.c.conversation_id
                             == ResearchTrending.c.conversation_id,
                         )
                     )
-                    .where(Conversation.c.status != 'deleted')
+                ).where(
+                    or_(
+                        Conversation.c.status != 'deleted',
+                        Conversation.c.status.is_(None),
+                    )
                 )
             else:
-                query = select(Conversation).where(Conversation.c.status != 'deleted')
+                query = select(Conversation).where(
+                    or_(
+                        Conversation.c.status != 'deleted',
+                        Conversation.c.status.is_(None),
+                    )
+                )
 
             if published is not None:
                 query = query.where(Conversation.c.published == published)
