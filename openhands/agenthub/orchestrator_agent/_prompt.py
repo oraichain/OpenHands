@@ -71,32 +71,7 @@ To make progress on the request, please answer the following questions, includin
     - Who should speak next? (select from: {names})
     - What instruction or question would you give this team member? (Phrase as if speaking directly to them, and include any specific information they may need)
 
-Return a plain JSON object that is parsable as-is, adhering strictly to the schema:
-
-    {{
-       "is_request_satisfied": {{
-            "reason": string,
-            "answer": boolean
-        }},
-        "is_in_loop": {{
-            "reason": string,
-            "answer": boolean
-        }},
-        "is_progress_being_made": {{
-            "reason": string,
-            "answer": boolean
-        }},
-        "next_speaker": {{
-            "reason": string,
-            "answer": string (select from: {names})
-        }},
-        "instruction_or_question": {{
-            "reason": string,
-            "answer": string
-        }}
-    }}
-
-Do not wrap the JSON in Markdown, code blocks (e.g., ```json), or any additional text. Do not include explanations, comments, or any content outside the JSON object itself.    
+Use `execute_plan` to update the progress of the plan and delegate the next speaker.
 """
 
 

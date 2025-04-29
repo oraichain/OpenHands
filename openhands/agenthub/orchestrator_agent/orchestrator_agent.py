@@ -4,12 +4,14 @@ from enum import Enum
 from typing import List, Type
 
 from openhands.a2a.A2AManager import A2AManager
+from openhands.agenthub.codeact_agent.tools.llm_based_edit import LLMBasedFileEditTool
 from openhands.agenthub.orchestrator_agent import _prompt as prompts
+from openhands.agenthub.orchestrator_agent.tools.execute_plan import ExecutePlanTool
 from openhands.agenthub.orchestrator_agent.utils import get_json_string_from_string
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
-from openhands.core.exceptions import AgentError
+from openhands.core.exceptions import AgentError, FunctionCallValidationError
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import Message, TextContent
 from openhands.events.action import (
@@ -18,14 +20,16 @@ from openhands.events.action import (
     A2ASendTaskAction,
     MessageAction,
 )
+from openhands.events.action.files import FileEditAction
 from openhands.events.action.orchestrator import OrchestratorFinalAnswerAction, OrchestratorInitializationAction
 from openhands.events.event import Event
+from openhands.events.tool import ToolCallMetadata
 from openhands.llm.llm import LLM
 from openhands.utils.prompt import PromptManager
 from openhands.memory.conversation_memory import ConversationMemory
 from openhands.memory.condenser import Condenser
 from openhands.memory.condenser.condenser import Condensation, View
-from openhands.agenthub.codeact_agent import function_calling as codeact_function_calling
+
 
 # Add Pydantic for structured responses
 from pydantic import BaseModel
@@ -85,10 +89,10 @@ class OrchestratorAgent(Agent):
             workspace_mount_path_in_sandbox_store_in_session,
             a2a_manager,
         )
-        self.tools = codeact_function_calling.get_tools(
-                codeact_enable_llm_editor=True,
-                llm=self.llm,
-        )
+        self.tools = [
+            LLMBasedFileEditTool,
+            ExecutePlanTool,
+        ]
         if not self.a2a_manager:
             # Orchestrator requires A2AManager
             # TODO: Or should it function without it, just answering directly?
@@ -116,8 +120,6 @@ class OrchestratorAgent(Agent):
         self.plan: str | None = None
         self.last_error: str | None = None
         self.stall_count: int = 0
-
- 
 
     def reset(self) -> None:
         """Resets the agent state."""
@@ -262,10 +264,14 @@ class OrchestratorAgent(Agent):
             list[Message]: A list of formatted messages ready for LLM consumption.
         """
         # Process historical events using ConversationMemory
+        messages = self.conversation_memory.process_initial_messages(
+            with_caching=self.llm.is_caching_prompt_active(),
+            agent_infos=self.a2a_manager.list_remote_agents() if self.a2a_manager else None,
+        )
         # This condenses actions/observations into suitable message formats
         messages = self.conversation_memory.process_events(
             condensed_history=events,
-            initial_messages=[],
+            initial_messages=messages,
             max_message_chars=self.llm.config.max_message_chars,
             vision_is_active=self.llm.vision_is_active(),
         )
@@ -320,47 +326,79 @@ class OrchestratorAgent(Agent):
 
         return results
 
-    def _call_llm(self, messages: List[Message], response_model: Type[BaseModel] | None = None) -> str | BaseModel:
+    def _call_llm(self, messages: List[Message]):
         """Helper method to call the LLM with a given list of messages, optionally with a response model."""
         logger.debug(f"Sending {len(messages)} messages to LLM for phase {self.phase}")
         # The last message is typically the current instruction/prompt
         if messages:
             logger.debug(f"Last message content: {messages[-1].content}")
-
+        params:dict = {
+            'messages': self.llm.format_messages_for_llm(messages),
+            'thinking': {"type": "disabled"},
+            'tools': self.tools,
+        }
         # Call the LLM completion method
-        response = self.llm.completion(
-            messages=self.llm.format_messages_for_llm(messages),
-            thinking={"type": "disabled"},
-            # tools=self.tools,
-        )
+        response = self.llm.completion(**params)
        
         if not response.choices:
             raise AgentError("LLM response was empty or invalid.")
         logger.info(f"LLM Response: {response.choices}")
-        response_content = response.choices[0].message.content or ''
-        if not isinstance(response_content, str):
-            # Handle cases where content might not be simple string if LLM returns complex types
-            logger.warning(f"Received non-string LLM content: {type(response_content)}. Attempting conversion.")
-            try:
-                response_content = str(response_content)
-            except Exception as e:
-                raise AgentError(f"Failed to convert LLM response content to string: {e}")
+        choice = response.choices[0]
+        assistant_msg = choice.message
+        if hasattr(assistant_msg, 'tool_calls') and assistant_msg.tool_calls:
+            # Check if there's assistant_msg.content. If so, add it to the thought
+            thought = ''
+            if isinstance(assistant_msg.content, str):
+                thought = assistant_msg.content
+            elif isinstance(assistant_msg.content, list):
+                for msg in assistant_msg.content:
+                    if msg['type'] == 'text':
+                        thought += msg['text']
+            # Process each tool call to OpenHands action
+            for i, tool_call in enumerate(assistant_msg.tool_calls):
+                logger.info(f'Tool call in function_calling.py: {tool_call.function.name}')
+                try:
+                    arguments = json.loads(tool_call.function.arguments)
+                except json.decoder.JSONDecodeError as e:
+                    raise RuntimeError(
+                        f'Failed to parse tool call arguments: {tool_call.function.arguments}'
+                    ) from e
+                
+                if tool_call.function.name == 'execute_plan':
+                    return ProgressUpdate(**arguments)
+                if tool_call.function.name == LLMBasedFileEditTool['function']['name']:
+                    if 'path' not in arguments:
+                        raise FunctionCallValidationError(
+                            f'Missing required argument "path" in tool call {tool_call.function.name}'
+                        )
+                    if 'content' not in arguments:
+                        raise FunctionCallValidationError(
+                            f'Missing required argument "content" in tool call {tool_call.function.name}'
+                        )
+                    path: str = arguments['path']
+                    if (
+                        self.sid is not None
+                        and self.sid not in path
+                        and self.workspace_mount_path_in_sandbox_store_in_session
+                    ):
+                        path = f"{path.rsplit('/', 1)[0]}/{self.sid}/{path.rsplit('/', 1)[1]}"
 
-        logger.debug(f"LLM Raw Response ({self.phase}): {response_content}")
-
-        # If a response_model is provided, attempt to parse the content into the Pydantic model
-        if response_model:
-            try:
-                json_string = get_json_string_from_string(response_content)
-                response_dict = json.loads(json_string)
-                parsed_response = response_model(**response_dict)
-                logger.debug(f"Parsed Structured Response ({self.phase}): {parsed_response}")
-                return parsed_response
-            except Exception as e:
-                logger.error(f"Failed to parse LLM response into {response_model.__name__}: {e}")
-                raise AgentError(f"Structured response parsing failed: {e}")
-        
-        return response_content
+                    action = FileEditAction(
+                        path=path,
+                        content=arguments['content'],
+                        start=arguments.get('start', 1),
+                        end=arguments.get('end', -1),
+                    )
+                    # Add metadata for tool calling
+                    action.tool_call_metadata = ToolCallMetadata(
+                        tool_call_id=tool_call.id,
+                        function_name=tool_call.function.name,
+                        model_response=response,
+                        total_calls_in_response=len(assistant_msg.tool_calls),
+                    )
+                    return action
+        else:
+            return assistant_msg.content
 
     def _execute_or_monitor_plan(self, state: State) -> Action:
         """Executes the plan by delegating or monitors progress."""
@@ -381,7 +419,7 @@ class OrchestratorAgent(Agent):
         logger.debug(f"prompt: {prompt}")
         messages = self._get_messages(state.history, prompt)
         logger.debug(f"messages: {messages}")
-        progress_update = self._call_llm(messages, response_model=ProgressUpdate)
+        progress_update = self._call_llm(messages)
         if not isinstance(progress_update, ProgressUpdate):
             logger.error(f"Expected ProgressUpdate object, got {type(progress_update)}")
             self.phase = OrchestrationPhase.ERROR
