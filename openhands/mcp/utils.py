@@ -129,10 +129,8 @@ async def call_tool_mcp(mcp_clients: list[MCPClient], action: McpAction) -> Obse
     """
     if not mcp_clients:
         raise ValueError('No MCP clients found')
-    logger.info(f'MCP action received: {action}')
     # Find the MCP agent that has the matching tool name
     matching_client = None
-    logger.info(f'MCP action name: {action.name}')
     for client in mcp_clients:
         if action.name in [tool.name for tool in client.tools]:
             matching_client = client
