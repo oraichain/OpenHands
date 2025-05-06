@@ -1,10 +1,14 @@
 import asyncio
+import os
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Coroutine, Iterable, List
 
 GENERAL_TIMEOUT: int = 15
 EXECUTOR = ThreadPoolExecutor()
+SYNC_EXECUTOR = ThreadPoolExecutor(
+    max_workers=int(os.getenv('SYNC_EXECUTOR_MAX_WORKERS') or 1000)
+)
 
 
 async def call_sync_from_async(fn: Callable, *args, **kwargs):
@@ -14,7 +18,7 @@ async def call_sync_from_async(fn: Callable, *args, **kwargs):
     returned by this function is not cancellable
     """
     loop = asyncio.get_event_loop()
-    coro = loop.run_in_executor(None, lambda: fn(*args, **kwargs))
+    coro = loop.run_in_executor(SYNC_EXECUTOR, lambda: fn(*args, **kwargs))
     result = await coro
     return result
 
