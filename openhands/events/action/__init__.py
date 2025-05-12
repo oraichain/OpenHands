@@ -9,8 +9,8 @@ from openhands.events.action.agent import (
     AgentRejectAction,
     AgentThinkAction,
     ChangeAgentStateAction,
-    RecallAction,
     CondensationAction,
+    RecallAction,
 )
 from openhands.events.action.browse import BrowseInteractiveAction, BrowseURLAction
 from openhands.events.action.commands import CmdRunAction, IPythonRunCellAction
@@ -23,8 +23,8 @@ from openhands.events.action.files import (
 from openhands.events.action.mcp import McpAction
 from openhands.events.action.message import MessageAction
 from openhands.events.action.orchestrator import (
-    OrchestratorInitializationAction,
     OrchestratorFinalAnswerAction,
+    OrchestratorInitializationAction,
 )
 
 __all__ = [

@@ -1,4 +1,4 @@
-ORCHESTRATOR_SYSTEM_MESSAGE = ""
+ORCHESTRATOR_SYSTEM_MESSAGE = ''
 
 
 ORCHESTRATOR_TASK_LEDGER_FACTS_PROMPT = """Below I will present you a request. Before we begin addressing the request, please answer the following pre-survey to the best of your ability. Keep in mind that you are Ken Jennings-level with trivia, and Mensa-level with puzzles, so there should be a deep well to draw from.

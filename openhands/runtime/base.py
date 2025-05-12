@@ -60,8 +60,8 @@ from openhands.events.observation.a2a import (
     A2ASendTaskUpdateObservation,
 )
 from openhands.events.observation.orchestrator import (
-    OrchestratorInitializeObservation,
     OrchestratorFinalObservation,
+    OrchestratorInitializeObservation,
 )
 from openhands.events.serialization.action import ACTION_TYPE_TO_CLASS
 from openhands.integrations.provider import (

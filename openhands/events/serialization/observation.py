@@ -34,8 +34,8 @@ from openhands.events.observation.files import (
 from openhands.events.observation.mcp import MCPObservation
 from openhands.events.observation.observation import Observation
 from openhands.events.observation.orchestrator import (
-    OrchestratorInitializeObservation,
     OrchestratorFinalObservation,
+    OrchestratorInitializeObservation,
 )
 from openhands.events.observation.planner_mcp import (
     PlanObservation,

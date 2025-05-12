@@ -4,7 +4,7 @@ from enum import Enum
 class ActionType(str, Enum):
     MESSAGE = 'message'
     ORCHESTRATOR_INITIALIZATION = 'orchestrator_initialization'  # Indicates the orchestrator agent has completed initialization
- 
+
     START = 'start'
     """Starts a new development task OR send chat from the user. Only sent by the client.
     """

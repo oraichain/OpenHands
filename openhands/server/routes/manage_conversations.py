@@ -1,6 +1,7 @@
+import os
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import (
     APIRouter,
@@ -23,7 +24,6 @@ from openhands.integrations.provider import (
     PROVIDER_TOKEN_TYPE,
 )
 from openhands.integrations.service_types import Repository
-from openhands.runtime import get_runtime_cls
 from openhands.server.auth import (
     get_github_user_id,
     get_provider_tokens,
@@ -43,6 +43,7 @@ from openhands.server.shared import (
     file_store,
     s3_handler,
 )
+from openhands.server.thesis_auth import create_thread, delete_thread
 from openhands.server.types import LLMAuthenticationError, MissingSettingsError
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
 from openhands.storage.data_models.conversation_status import ConversationStatus
@@ -62,6 +63,9 @@ class InitSessionRequest(BaseModel):
     system_prompt: str | None = None
     user_prompt: str | None = None
     mcp_disable: dict[str, bool] | None = None
+    research_mode: str | None = None
+    space_id: int | None = None
+    thread_follow_up: int | None = None
 
 
 class ChangeVisibilityRequest(BaseModel):
@@ -87,6 +91,10 @@ async def _create_new_conversation(
     attach_convo_id: bool = False,
     mnemonic: str | None = None,
     mcp_disable: dict[str, bool] | None = None,
+    research_mode: str | None = None,
+    knowledge_base: list[dict] | None = None,
+    space_id: int | None = None,
+    thread_follow_up: int | None = None,
 ):
     logger.info(
         'Creating conversation',
@@ -94,7 +102,10 @@ async def _create_new_conversation(
     )
 
     running_conversations = await conversation_manager.get_running_agent_loops(user_id)
-    if len(running_conversations) >= config.max_concurrent_conversations:
+    if (
+        len(running_conversations) >= config.max_concurrent_conversations
+        and os.getenv('RUN_MODE') == 'PROD'
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'You have reached the maximum limit of {config.max_concurrent_conversations} concurrent conversations.',
@@ -168,6 +179,7 @@ async def _create_new_conversation(
         initial_message_action = MessageAction(
             content=user_msg or '',
             image_urls=image_urls or [],
+            mode=research_mode,
         )
 
     await conversation_manager.maybe_start_agent_loop(
@@ -181,6 +193,9 @@ async def _create_new_conversation(
         github_user_id=None,
         mnemonic=mnemonic,
         mcp_disable=mcp_disable,
+        knowledge_base=knowledge_base,
+        space_id=space_id,
+        thread_follow_up=thread_follow_up,
     )
     logger.info(f'Finished initializing conversation {conversation_id}')
 
@@ -205,8 +220,23 @@ async def new_conversation(request: Request, data: InitSessionRequest):
     user_prompt = data.user_prompt
     user_id = get_user_id(request)
     mnemonic = request.state.user.mnemonic
+    space_id = data.space_id
+    thread_follow_up = data.thread_follow_up
+    bearer_token = request.headers.get('Authorization')
+    x_device_id = request.headers.get('x-device-id')
+
     try:
-        # Create conversation with initial message
+        knowledge_base = None
+        # if space_id or thread_follow_up:
+        #     knowledge_base = await search_knowledge(
+        #         initial_user_msg, space_id, thread_follow_up, user_id
+        # )
+        # if knowledge and knowledge['data']['summary']:
+        #     initial_user_msg = (
+        #         f"Reference information:\n{knowledge['data']['summary']}\n\n"
+        #         f"Question:\n{initial_user_msg}"
+        #     )
+
         conversation_id = await _create_new_conversation(
             user_id,
             provider_tokens,
@@ -219,13 +249,32 @@ async def new_conversation(request: Request, data: InitSessionRequest):
             user_prompt=user_prompt,
             mnemonic=mnemonic,
             mcp_disable=data.mcp_disable,
+            research_mode=data.research_mode,
+            knowledge_base=knowledge_base,
+            space_id=space_id,
+            thread_follow_up=thread_follow_up,
         )
+
         if conversation_id and user_id is not None:
+            await create_thread(
+                space_id,
+                thread_follow_up,
+                conversation_id,
+                data.initial_user_msg,
+                bearer_token,
+                x_device_id,
+            )
+            metadata: dict[str, Any] = {}
+            metadata['hidden_prompt'] = True
+            if space_id is not None:
+                metadata['space_id'] = space_id
+            if thread_follow_up is not None:
+                metadata['thread_follow_up'] = thread_follow_up
             await conversation_module._update_conversation_visibility(
                 conversation_id,
                 False,
                 user_id,
-                {'hidden_prompt': True},
+                metadata,
                 '',
                 'available',
             )
@@ -269,11 +318,26 @@ async def search_conversations(
     page_id: str | None = None,
     limit: int = 20,
 ) -> ConversationInfoResultSet:
+    user_id = get_user_id(request)
     conversation_store = await ConversationStoreImpl.get_instance(
-        config, get_user_id(request), get_github_user_id(request)
+        config, user_id, get_github_user_id(request)
     )
-    conversation_metadata_result_set = await conversation_store.search(page_id, limit)
 
+    # get conversation visibility by user id
+    visible_conversations = (
+        await conversation_module._get_conversation_visibility_by_user_id(
+            user_id, 1, limit
+        )
+    )
+    if len(visible_conversations) == 0:
+        return ConversationInfoResultSet(results=[], next_page_id=None)
+    visible_conversation_ids = [
+        conversation['conversation_id'] for conversation in visible_conversations
+    ]
+
+    conversation_metadata_result_set = await conversation_store.search(
+        page_id, limit, filter_conversation_ids=visible_conversation_ids
+    )
     # Filter out conversations older than max_age
     now = datetime.now(timezone.utc)
     max_age = config.conversation_max_age_seconds
@@ -440,12 +504,20 @@ async def delete_conversation(
     is_running = await conversation_manager.is_agent_loop_running(conversation_id)
     if is_running:
         await conversation_manager.close_session(conversation_id)
-    runtime_cls = get_runtime_cls(config.runtime)
-    await runtime_cls.delete(conversation_id)
-    await conversation_store.delete_metadata(conversation_id)
 
-    # delete conversation from database
+    # disable delete conversation from runtime
+    # runtime_cls = get_runtime_cls(config.runtime)
+    # await runtime_cls.delete(conversation_id)
+    # await conversation_store.delete_metadata(conversation_id)
+
+    # delete conversation from databasedatab
+    await delete_thread(
+        conversation_id,
+        request.headers.get('Authorization'),
+        request.headers.get('x-device-id'),
+    )
     await conversation_module._delete_conversation(conversation_id, str(user_id))
+
     return True
 
 

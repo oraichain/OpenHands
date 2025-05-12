@@ -28,6 +28,17 @@ class ConversationModule:
             return 0 if value is None else value
         return 0
 
+    async def _get_conversation_by_id(self, conversation_id: str):
+        try:
+            query = Conversation.select().where(
+                Conversation.c.conversation_id == conversation_id
+            )
+            existing_record = await database.fetch_one(query)
+            return existing_record
+        except Exception as e:
+            logger.error(f'Error getting conversation by id: {str(e)}')
+            return None
+
     async def _update_research_view(self, conversation_id: str, ip_address: str = ''):
         try:
             await database.execute(
@@ -122,14 +133,25 @@ class ConversationModule:
             existing_record = await database.fetch_one(query)
             if not existing_record:
                 return 'Conversation not found', None
-            if existing_record.status and existing_record.status == 'deleted':
-                return 'Conversation deleted', None
+            # if existing_record.status and existing_record.status == 'deleted':
+            #     return 'Conversation deleted', None
             if not existing_record.published:
-                return 'Conversation not published', None
+                return 'Conversation not published', {
+                    'user_id': existing_record.user_id,
+                    'hidden_prompt': existing_record.configs.get('hidden_prompt', True),
+                    'space_id': existing_record.configs.get('space_id', None),
+                    'thread_follow_up': existing_record.configs.get(
+                        'thread_follow_up', None
+                    ),
+                }
             user_id = existing_record.user_id
             return None, {
                 'user_id': user_id,
                 'hidden_prompt': existing_record.configs.get('hidden_prompt', True),
+                'space_id': existing_record.configs.get('space_id', None),
+                'thread_follow_up': existing_record.configs.get(
+                    'thread_follow_up', None
+                ),
             }
         except Exception as e:
             logger.error(f'Error getting conversation visibility by id: {str(e)}')
@@ -285,17 +307,19 @@ class ConversationModule:
                         ResearchTrending.c.total_view_24h,
                         ResearchTrending.c.total_view_7d,
                         ResearchTrending.c.total_view_30d,
-                    ).select_from(
+                    )
+                    .select_from(
                         Conversation.outerjoin(
                             ResearchTrending,
                             Conversation.c.conversation_id
                             == ResearchTrending.c.conversation_id,
                         )
                     )
-                ).where(
-                    or_(
-                        Conversation.c.status != 'deleted',
-                        Conversation.c.status.is_(None),
+                    .where(
+                        or_(
+                            Conversation.c.status != 'deleted',
+                            Conversation.c.status.is_(None),
+                        )
                     )
                 )
             else:
@@ -362,6 +386,25 @@ class ConversationModule:
             }
         except Exception as e:
             logger.error(f'Error getting list conversations: {str(e)}')
+            return []
+
+    async def _get_conversation_visibility_by_user_id(
+        self, user_id: str | None, page: int = 1, limit: int = 10
+    ):
+        if not user_id:
+            return []
+        try:
+            offset = (page - 1) * limit
+            query = Conversation.select().where(Conversation.c.user_id == user_id)
+            query = query.where(
+                or_(Conversation.c.status != 'deleted', Conversation.c.status.is_(None))
+            )
+            query = query.offset(offset).limit(limit)
+            query = query.order_by(desc(Conversation.c))
+            items = await database.fetch_all(query)
+            return items
+        except Exception as e:
+            logger.error(f'Error getting conversation by user id: {str(e)}')
             return []
 
 

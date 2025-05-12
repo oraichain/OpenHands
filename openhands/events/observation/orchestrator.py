@@ -7,6 +7,7 @@ from openhands.events.observation.observation import Observation
 @dataclass
 class OrchestratorInitializeObservation(Observation):
     """Observation containing the full ledger prompt after orchestrator initialization."""
+
     task: str
     facts: str
     plan: str
@@ -19,9 +20,11 @@ class OrchestratorInitializeObservation(Observation):
     def message(self) -> str:
         return self.content
 
+
 @dataclass
 class OrchestratorFinalObservation(Observation):
     """Observation containing the final answer from the orchestrator."""
+
     task: str
     content: str
     observation: str = ObservationType.ORCHESTRATOR_FINAL_OBSERVATION

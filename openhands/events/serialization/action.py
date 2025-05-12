@@ -29,8 +29,8 @@ from openhands.events.action.files import (
 from openhands.events.action.mcp import McpAction
 from openhands.events.action.message import MessageAction
 from openhands.events.action.orchestrator import (
-    OrchestratorInitializationAction,
     OrchestratorFinalAnswerAction,
+    OrchestratorInitializationAction,
 )
 
 actions = (

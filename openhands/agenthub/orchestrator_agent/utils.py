@@ -7,6 +7,5 @@ def get_json_string_from_string(string: str) -> str:
     Returns:
         str: The JSON string.
     """
-    ledger_str = string[string.find('{'):string.rfind('}')+1]
+    ledger_str = string[string.find('{') : string.rfind('}') + 1]
     return ledger_str
-
