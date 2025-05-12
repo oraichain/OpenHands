@@ -296,3 +296,41 @@ async def webhook_rag_conversation(
     except httpx.RequestError as exc:
         logger.error(f'Failed to sync conversation to rag: {str(exc)}')
         return False
+
+
+async def delete_thread(
+    conversation_id: str,
+    bearer_token: str,
+    x_device_id: str | None = None,
+) -> bool:
+    url = f'/api/threads/delete-thread-by-conversation-id/{conversation_id}'
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': bearer_token,
+    }
+    if x_device_id:
+        headers['x-device-id'] = x_device_id
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=30.0,
+            base_url=os.getenv('THESIS_AUTH_SERVER_URL'),
+            headers={'Content-Type': 'application/json'},
+        ) as client:
+            response = await client.delete(url, headers=headers)
+
+        if response.status_code != 200:
+            logger.error(
+                f'Failed to delete thread: {response.status_code} - {response.text}'
+            )
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=response.json().get('error', 'Unknown error'),
+            )
+        return True
+    except httpx.RequestError as exc:
+        logger.error(f'Request error while deleting thread: {str(exc)}')
+        return False
+    except Exception:
+        logger.exception('Unexpected error while deleting thread')
+        return False
