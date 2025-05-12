@@ -1,7 +1,16 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Body, HTTPException, Request, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -32,6 +41,7 @@ from openhands.server.shared import (
     config,
     conversation_manager,
     file_store,
+    s3_handler,
 )
 from openhands.server.types import LLMAuthenticationError, MissingSettingsError
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
@@ -49,11 +59,14 @@ class InitSessionRequest(BaseModel):
     initial_user_msg: str | None = None
     image_urls: list[str] | None = None
     replay_json: str | None = None
+    system_prompt: str | None = None
+    user_prompt: str | None = None
+    mcp_disable: dict[str, bool] | None = None
 
 
 class ChangeVisibilityRequest(BaseModel):
-    is_published: bool = True
-    hidden_prompt: bool = True
+    is_published: bool
+    hidden_prompt: bool
 
 
 class ConversationVisibility(BaseModel):
@@ -69,7 +82,11 @@ async def _create_new_conversation(
     initial_user_msg: str | None,
     image_urls: list[str] | None,
     replay_json: str | None,
+    system_prompt: str | None = None,
+    user_prompt: str | None = None,
     attach_convo_id: bool = False,
+    mnemonic: str | None = None,
+    mcp_disable: dict[str, bool] | None = None,
 ):
     logger.info(
         'Creating conversation',
@@ -152,12 +169,18 @@ async def _create_new_conversation(
             content=user_msg or '',
             image_urls=image_urls or [],
         )
+
     await conversation_manager.maybe_start_agent_loop(
         conversation_id,
         conversation_init_data,
         user_id,
         initial_user_msg=initial_message_action,
         replay_json=replay_json,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        github_user_id=None,
+        mnemonic=mnemonic,
+        mcp_disable=mcp_disable,
     )
     logger.info(f'Finished initializing conversation {conversation_id}')
 
@@ -178,7 +201,10 @@ async def new_conversation(request: Request, data: InitSessionRequest):
     initial_user_msg = data.initial_user_msg
     image_urls = data.image_urls or []
     replay_json = data.replay_json
+    system_prompt = data.system_prompt
+    user_prompt = data.user_prompt
     user_id = get_user_id(request)
+    mnemonic = request.state.user.mnemonic
     try:
         # Create conversation with initial message
         conversation_id = await _create_new_conversation(
@@ -189,10 +215,19 @@ async def new_conversation(request: Request, data: InitSessionRequest):
             initial_user_msg,
             image_urls,
             replay_json,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            mnemonic=mnemonic,
+            mcp_disable=data.mcp_disable,
         )
         if conversation_id and user_id is not None:
             await conversation_module._update_conversation_visibility(
-                conversation_id, False, user_id, {'hidden_prompt': True}, ''
+                conversation_id,
+                False,
+                user_id,
+                {'hidden_prompt': True},
+                '',
+                'available',
             )
 
         return JSONResponse(
@@ -418,7 +453,9 @@ async def delete_conversation(
 async def change_visibility(
     conversation_id: str,
     request: Request,
-    data: ChangeVisibilityRequest,
+    is_published: bool = Form(...),
+    hidden_prompt: bool = Form(...),
+    file: Optional[UploadFile] = None,
 ) -> bool:
     user_id = get_user_id(request)
     conversation_store = await ConversationStoreImpl.get_instance(
@@ -427,12 +464,25 @@ async def change_visibility(
     metadata = await conversation_store.get_metadata(conversation_id)
     if not metadata:
         return False
+
+    # Handle file upload if provided
+    extra_data = {
+        'hidden_prompt': hidden_prompt,
+    }
+
+    if file and s3_handler is not None:
+        print('processing file:', file)
+        folder_path = f'conversations/{conversation_id}'
+        file_url = await s3_handler.upload_file(file, folder_path)
+        if file_url:
+            extra_data['thumbnail_url'] = file_url
+
     return await conversation_module._update_conversation_visibility(
         conversation_id,
-        data.is_published,
+        is_published,
         str(user_id),
-        {'hidden_prompt': data.hidden_prompt},
-        metadata.title,
+        extra_data,
+        metadata.title if metadata.title else '',
     )
 
 

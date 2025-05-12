@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Generator
 
 from litellm import ModelResponse
@@ -149,7 +150,7 @@ class ConversationMemory:
         return messages
 
     def process_initial_messages(
-        self, with_caching: bool = False, agent_infos=list | None
+        self, with_caching: bool = False, agent_infos: list | None = None
     ) -> list[Message]:
         """Create the initial messages for the conversation."""
         return [
@@ -158,7 +159,8 @@ class ConversationMemory:
                 content=[
                     TextContent(
                         text=self.prompt_manager.get_system_message(
-                            agent_infos=agent_infos
+                            agent_infos=agent_infos,
+                            CURRENT_DATE=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         ),
                         cache_prompt=with_caching,
                     )

@@ -1,3 +1,4 @@
+import json
 import os
 from types import MappingProxyType
 from urllib.parse import parse_qs
@@ -57,6 +58,7 @@ async def connect(connection_id: str, environ):
     system_prompt = query_params.get('system_prompt', [None])[0]
     user_prompt = query_params.get('user_prompt', [None])[0]
     mcp_disable = query_params.get('mcp_disable', [None])[0]
+    x_device_id = query_params.get('x-device-id', [None])[0]
     # providers_raw: list[str] = query_params.get('providers_set', [])
     # providers_set: list[ProviderType] = [ProviderType(p) for p in providers_raw]
 
@@ -65,6 +67,10 @@ async def connect(connection_id: str, environ):
     conversation_configs = None
     conversation_metadata_result_set: ConversationMetadata | None = None
     conversation_store: ConversationStore | None = None
+
+    if mcp_disable:
+        mcp_disable = json.loads(mcp_disable)
+
     if not conversation_id:
         logger.error('No conversation_id in query params')
         raise ConnectionRefusedError('No conversation_id in query params')
@@ -118,7 +124,7 @@ async def connect(connection_id: str, environ):
                 raise jwt.InvalidTokenError('No JWT token provided')
 
             user: ThesisUser | None = await get_user_detail_from_thesis_auth_server(
-                'Bearer ' + jwt_token
+                'Bearer ' + jwt_token, x_device_id
             )
             if not user:
                 logger.error(f'User not found in database: {user_id}')
@@ -135,7 +141,15 @@ async def connect(connection_id: str, environ):
                 raise ConnectionRefusedError('User not activated')
 
             # TODO: if the user is whitelisted, check if the conversation is belong to the user
-            if (
+            conversation_store = await ConversationStoreImpl.get_instance(
+                config, user_id, None
+            )
+            if not conversation_store:
+                raise ConnectionRefusedError('Conversation store not found')
+            conversation_metadata_result_set = await conversation_store.get_metadata(
+                conversation_id
+            )
+            if not conversation_metadata_result_set or (
                 conversation_metadata_result_set
                 and conversation_metadata_result_set.user_id != user_id
             ):
@@ -180,30 +194,49 @@ async def connect(connection_id: str, environ):
         raise ConnectionRefusedError('Failed to join conversation')
     async_store = AsyncEventStoreWrapper(event_stream, latest_event_id + 1)
     async for event in async_store:
-        logger.debug(f'oh_event: {event.__class__.__name__}')
-        if isinstance(
-            event,
-            (NullAction, NullObservation, RecallAction),
-        ):
-            continue
-        elif isinstance(event, AgentStateChangedObservation):
-            agent_state_changed = event
-        else:
-            event_dict = event_to_dict(event)
-            new_event_dict = {**event_dict, 'initialize_conversation': True}
-            if (
-                mode == 'shared'
-                and new_event_dict.get('source') == 'user'
-                and conversation_configs is not None
+        try:
+            logger.debug(f'oh_event: {event.__class__.__name__}')
+            if isinstance(
+                event,
+                (NullAction, NullObservation, RecallAction),
             ):
-                new_event_dict['hidden_prompt'] = conversation_configs['hidden_prompt']
-                if conversation_configs['hidden_prompt']:
-                    content = 'The creator of this prompt has chosen to keep it private, so it cannot be viewed by others unless its privacy settings are changed.'
-                    new_event_dict['args']['content'] = content
-                    new_event_dict['message'] = content
-            await sio.emit('oh_event', new_event_dict, to=connection_id)
+                continue
+            elif isinstance(event, AgentStateChangedObservation):
+                agent_state_changed = event
+            else:
+                event_dict = event_to_dict(event)
+                logger.info(
+                    f'Processing event: {event.__class__.__name__}, source: {event_dict.get("source")} in conversation {conversation_id}'
+                )
+
+                new_event_dict = {**event_dict, 'initialize_conversation': True}
+                if (
+                    mode == 'shared'
+                    and new_event_dict.get('source') == 'user'
+                    and conversation_configs is not None
+                ):
+                    hidden_prompt = conversation_configs.get('hidden_prompt', True)
+                    new_event_dict['hidden_prompt'] = hidden_prompt
+                    if hidden_prompt:
+                        content = 'The creator of this prompt has chosen to keep it private, so it cannot be viewed by others unless its privacy settings are changed.'
+                        new_event_dict.setdefault('args', {})['content'] = content
+                        new_event_dict['message'] = content
+                await sio.emit('oh_event', new_event_dict, to=connection_id)
+        except Exception as e:
+            logger.error(
+                f'Error emitting event {event.__class__.__name__}: {str(e)} {conversation_id}'
+            )
+            continue
+
     if agent_state_changed:
-        await sio.emit('oh_event', event_to_dict(agent_state_changed), to=connection_id)
+        try:
+            await sio.emit(
+                'oh_event', event_to_dict(agent_state_changed), to=connection_id
+            )
+        except Exception as e:
+            logger.error(
+                f'Error emitting agent state change: {str(e)} {conversation_id}'
+            )
     logger.info(f'Finished replaying event stream for conversation {conversation_id}')
 
 
