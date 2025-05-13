@@ -81,6 +81,7 @@ class OrchestratorAgent(Agent):
         workspace_mount_path_in_sandbox_store_in_session: bool = True,
         a2a_manager: A2AManager | None = None,
         max_stall: int = 3,
+        routing_llms: dict[str, LLM] | None = None,
     ) -> None:
         """Initializes a new instance of the OrchestratorAgent class.
 
@@ -96,6 +97,7 @@ class OrchestratorAgent(Agent):
             config,
             workspace_mount_path_in_sandbox_store_in_session,
             a2a_manager,
+            routing_llms=routing_llms,
         )
         self.tools = [
             LLMBasedFileEditTool,
