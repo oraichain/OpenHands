@@ -14,6 +14,7 @@ from openhands.events.action import MessageAction
 from openhands.events.event_store import EventStore
 from openhands.events.stream import EventStreamSubscriber, session_exists
 from openhands.server.config.server_config import ServerConfig
+from openhands.server.modules.conversation import conversation_module
 from openhands.server.monitoring import MonitoringListener
 from openhands.server.session.agent_session import WAIT_TIME_BEFORE_CLOSE
 from openhands.server.session.conversation import Conversation
@@ -88,10 +89,23 @@ class StandaloneConversationManager(ConversationManager):
                     f'Reusing detached conversation {sid}', extra={'session_id': sid}
                 )
                 return conversation
+            conversation_metadata = await conversation_module._get_conversation_by_id(
+                sid
+            )
+
+            research_mode = (
+                conversation_metadata.configs.get('research_mode', None)
+                if conversation_metadata
+                else None
+            )
 
             # Create new conversation if none exists
             c = Conversation(
-                sid, file_store=self.file_store, config=self.config, user_id=user_id
+                sid,
+                file_store=self.file_store,
+                config=self.config,
+                user_id=user_id,
+                research_mode=research_mode,
             )
             try:
                 await c.connect()
@@ -120,11 +134,17 @@ class StandaloneConversationManager(ConversationManager):
         system_prompt: str | None = None,
         user_prompt: str | None = None,
         mcp_disable: dict[str, bool] | None = None,
+        knowledge_base: list[dict] | None = None,
+        space_id: int | None = None,
+        thread_follow_up: int | None = None,
+        research_mode: str | None = None,
+        raw_followup_conversation_id: str | None = None,
     ) -> EventStore:
         logger.info(
             f'join_conversation:{sid}:{connection_id}',
             extra={'session_id': sid, 'user_id': user_id},
         )
+
         await self.sio.enter_room(connection_id, ROOM_KEY.format(sid=sid))
         self._local_connection_id_to_session_id[connection_id] = sid
 
@@ -137,6 +157,11 @@ class StandaloneConversationManager(ConversationManager):
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             mcp_disable=mcp_disable,
+            knowledge_base=knowledge_base,
+            space_id=space_id,
+            thread_follow_up=thread_follow_up,
+            research_mode=research_mode,
+            raw_followup_conversation_id=raw_followup_conversation_id,
         )
         if not event_stream:
             logger.error(
@@ -271,6 +296,11 @@ class StandaloneConversationManager(ConversationManager):
         system_prompt: str | None = None,
         user_prompt: str | None = None,
         mcp_disable: dict[str, bool] | None = None,
+        knowledge_base: list[dict] | None = None,
+        space_id: int | None = None,
+        thread_follow_up: int | None = None,
+        research_mode: str | None = None,
+        raw_followup_conversation_id: str | None = None,
     ) -> EventStore:
         logger.info(f'maybe_start_agent_loop:{sid}', extra={'session_id': sid})
         session: Session | None = None
@@ -309,6 +339,9 @@ class StandaloneConversationManager(ConversationManager):
                 config=self.config,
                 sio=self.sio,
                 user_id=user_id,
+                space_id=space_id,
+                thread_follow_up=thread_follow_up,
+                raw_followup_conversation_id=raw_followup_conversation_id,
             )
             self._local_agent_loops_by_sid[sid] = session
             asyncio.create_task(
@@ -320,6 +353,8 @@ class StandaloneConversationManager(ConversationManager):
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
                     mcp_disable=mcp_disable,
+                    knowledge_base=knowledge_base,
+                    research_mode=research_mode,
                 )
             )
             # This does not get added when resuming an existing conversation

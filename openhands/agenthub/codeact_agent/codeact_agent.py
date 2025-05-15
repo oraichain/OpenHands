@@ -1,15 +1,21 @@
+import json
 import os
 from collections import deque
 from typing import override
 
+from httpx import request
+
 import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
 from openhands.a2a.A2AManager import A2AManager
 from openhands.a2a.tool import ListRemoteAgents, SendTask
+from openhands.agenthub.codeact_agent.tools.finish import FinishTool
+from openhands.agenthub.codeact_agent.tools.think import ThinkTool
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import Message, TextContent
+from openhands.core.schema import ResearchMode
 from openhands.events.action import (
     Action,
     AgentFinishAction,
@@ -62,6 +68,7 @@ class CodeActAgent(Agent):
         config: AgentConfig,
         workspace_mount_path_in_sandbox_store_in_session: bool = True,
         a2a_manager: A2AManager | None = None,
+        routing_llms: dict[str, LLM] | None = None,
     ) -> None:
         """Initializes a new instance of the CodeActAgent class.
 
@@ -103,6 +110,7 @@ class CodeActAgent(Agent):
             logger.info(f'Condenser config: {self.config.condenser.llm_config}')
         self.condenser = Condenser.from_config(self.config.condenser)
         logger.info(f'Using condenser: {type(self.condenser)}')
+        self.routing_llms = routing_llms
 
     @override
     def set_system_prompt(self, system_prompt: str) -> None:
@@ -148,6 +156,7 @@ class CodeActAgent(Agent):
 
         # if we're done, go back
         latest_user_message = state.get_last_user_message()
+
         if latest_user_message and latest_user_message.content.strip() == '/exit':
             return AgentFinishAction()
 
@@ -166,27 +175,94 @@ class CodeActAgent(Agent):
         logger.info(
             f'Processing {len(condensed_history)} events from a total of {len(state.history)} events'
         )
+        research_mode = (
+            latest_user_message.mode if latest_user_message is not None else None
+        )
 
-        messages = self._get_messages(condensed_history)
+        messages = self._get_messages(condensed_history, research_mode=research_mode)
+
+        # process the user input and check chatmode
+
         params: dict = {
             'messages': self.llm.format_messages_for_llm(messages),
         }
-        params['tools'] = self.tools
-
-        if self.mcp_tools:
-            # Only add tools with unique names
-            existing_names = {tool['function']['name'] for tool in params['tools']}
-            unique_mcp_tools = [
-                tool
-                for tool in self.mcp_tools
-                if tool['function']['name'] not in existing_names
-            ]
-            params['tools'] += unique_mcp_tools
-
-        # log to litellm proxy if possible
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
-        response = self.llm.completion(**params)
+        # if chat mode, we need to use the search tools
+        params['tools'] = []
+
+        if research_mode is None or research_mode == ResearchMode.CHAT:
+            built_in_tools = codeact_function_calling.get_tools(
+                codeact_enable_browsing=False,
+                codeact_enable_jupyter=False,
+                codeact_enable_llm_editor=False,
+                llm=self.llm,
+            )
+            params['tools'] = built_in_tools + self.search_tools
+        elif research_mode == ResearchMode.FOLLOW_UP:
+            params['tools'] = [
+                ThinkTool,
+                FinishTool,
+            ]
+        else:
+            params['tools'] = self.tools
+            if self.mcp_tools:
+                # Only add tools with unique names
+                existing_names = {tool['function']['name'] for tool in params['tools']}
+                unique_mcp_tools = [
+                    tool
+                    for tool in self.mcp_tools
+                    if tool['function']['name'] not in existing_names
+                ]
+                params['tools'] += unique_mcp_tools
+        logger.debug(f'Messages: {messages}')
+        last_message = messages[-1]
+        response = None
+        if (
+            last_message.role == 'user'
+            and self.config.enable_llm_router
+            and self.config.llm_router_infer_url is not None
+            and self.routing_llms is not None
+            and self.routing_llms['simple'] is not None
+        ):
+            content = '\n'.join(
+                [
+                    msg.text
+                    for msg in last_message.content
+                    if isinstance(msg, TextContent)
+                ]
+            )
+            text_input = 'Prompt: ' + content
+            body = {
+                'inputs': [
+                    {
+                        'name': 'INPUT',
+                        'shape': [1, 1],
+                        'datatype': 'BYTES',
+                        'data': [text_input],
+                    }
+                ]
+            }
+            logger.debug(f'Body: {body}')
+            headers = {'Content-Type': 'application/json'}
+            result = request(
+                'POST',
+                self.config.llm_router_infer_url,
+                data=json.dumps(body),
+                headers=headers,
+            )
+            res = result.json()
+            logger.debug(f'Result from classifier: {res}')
+            complexity_score = res['outputs'][0]['data'][0]
+            logger.debug(f'Complexity score: {complexity_score}')
+            if complexity_score > 0.3:
+                response = self.llm.completion(**params)
+            else:
+                response = self.routing_llms['simple'].completion(**params)
+        else:
+            response = self.llm.completion(**params)
+
         logger.debug(f'Response from LLM: {response}')
+
         actions = codeact_function_calling.response_to_actions(
             response,
             state.session_id,
@@ -197,7 +273,9 @@ class CodeActAgent(Agent):
             self.pending_actions.append(action)
         return self.pending_actions.popleft()
 
-    def _get_messages(self, events: list[Event]) -> list[Message]:
+    def _get_messages(
+        self, events: list[Event], research_mode: str | None = None
+    ) -> list[Message]:
         """Constructs the message history for the LLM conversation.
 
         This method builds a structured conversation history by processing events from the state
@@ -234,11 +312,35 @@ class CodeActAgent(Agent):
         agent_infos = (
             self.a2a_manager.list_remote_agents() if self.a2a_manager else None
         )
-        # Use ConversationMemory to process initial messages
-        messages = self.conversation_memory.process_initial_messages(
-            with_caching=self.llm.is_caching_prompt_active(), agent_infos=agent_infos
-        )
+        convert_knowledge_to_list = [
+            self.knowledge_base[k] for k in self.knowledge_base
+        ]
 
+        # Use ConversationMemory to process initial messages
+        # switch mode and initial messages
+
+        messages = self.conversation_memory.process_initial_messages(
+            with_caching=self.llm.is_caching_prompt_active(),
+            agent_infos=agent_infos,
+            knowledge_base=convert_knowledge_to_list,
+        )
+        if research_mode == ResearchMode.FOLLOW_UP:
+            messages = self.conversation_memory.process_initial_followup_message(
+                with_caching=self.llm.is_caching_prompt_active(),
+                knowledge_base=convert_knowledge_to_list,
+            )
+        elif research_mode is None or research_mode == ResearchMode.CHAT:
+            messages = self.conversation_memory.process_initial_chatmode_message(
+                with_caching=self.llm.is_caching_prompt_active(),
+                search_tools=[
+                    {
+                        'name': tool['function']['name'],
+                        'description': tool['function']['description'],
+                    }
+                    for tool in self.search_tools
+                ],
+                knowledge_base=convert_knowledge_to_list,
+            )
         # Use ConversationMemory to process events
         messages = self.conversation_memory.process_events(
             condensed_history=events,

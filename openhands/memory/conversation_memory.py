@@ -147,8 +147,47 @@ class ConversationMemory:
         messages = list(ConversationMemory._filter_unmatched_tool_calls(messages))
         return messages
 
+    def process_initial_followup_message(
+        self, with_caching: bool = False, **kwargs
+    ) -> list[Message]:
+        return [
+            Message(
+                role='system',
+                content=[
+                    TextContent(
+                        text=self.prompt_manager.get_followup_mode_message(
+                            **kwargs,
+                            CURRENT_DATE=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        ),
+                        cache_prompt=with_caching,
+                    )
+                ],
+            )
+        ]
+
+    def process_initial_chatmode_message(
+        self, with_caching: bool = False, **kwargs
+    ) -> list[Message]:
+        return [
+            Message(
+                role='system',
+                content=[
+                    TextContent(
+                        text=self.prompt_manager.get_chat_mode_message(
+                            **kwargs,
+                            CURRENT_DATE=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        ),
+                        cache_prompt=with_caching,
+                    )
+                ],
+            )
+        ]
+
     def process_initial_messages(
-        self, with_caching: bool = False, agent_infos: list | None = None
+        self,
+        with_caching: bool = False,
+        agent_infos: list | None = None,
+        knowledge_base: list[dict] | None = None,
     ) -> list[Message]:
         """Create the initial messages for the conversation."""
         return [
@@ -159,6 +198,7 @@ class ConversationMemory:
                         text=self.prompt_manager.get_system_message(
                             agent_infos=agent_infos,
                             CURRENT_DATE=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            knowledge_base=knowledge_base,
                         ),
                         cache_prompt=with_caching,
                     )
@@ -268,6 +308,7 @@ class ConversationMemory:
                 action.tool_call_metadata = None
             if role not in ('user', 'system', 'assistant', 'tool'):
                 raise ValueError(f'Invalid role: {role}')
+
             return [
                 Message(
                     role=role,  # type: ignore[arg-type]

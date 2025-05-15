@@ -25,6 +25,7 @@ from openhands.core.config.extended_config import ExtendedConfig
 from openhands.core.config.llm_config import LLMConfig
 from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.config.sandbox_config import SandboxConfig
+from openhands.core.config.search_engine import SearchEngineConfig
 from openhands.core.config.security_config import SecurityConfig
 from openhands.storage import get_file_store
 from openhands.storage.files import FileStore
@@ -216,6 +217,39 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
             # Re-raise ValueError from MCPConfig.from_toml_section
             raise ValueError('Error in MCP sections in config.toml')
 
+    if 'search_engine' in toml_config:
+        try:
+            search_engine_mapping = SearchEngineConfig.from_toml_section(
+                toml_config['search_engine']
+            )
+
+            # We only use the base search engine config for now
+            cfg.dict_search_engine_config = search_engine_mapping
+
+            # Check for search engines with type "mcp_sse" and add them to the MCP config
+            for name, se_config in search_engine_mapping.items():
+                if se_config.type.startswith('mcp'):
+                    mode = se_config.type.split('_')[1] or 'sse'
+                    if (
+                        not hasattr(cfg, 'dict_mcp_config')
+                        or cfg.dict_mcp_config is None
+                    ):
+                        cfg.dict_mcp_config = {}
+
+                    cfg.dict_mcp_config[f'search_engine_{name}'] = MCPConfig(
+                        name=f'search_engine_{name}', url=se_config.url, mode=mode
+                    )
+                    logger.openhands_logger.debug(
+                        f'Added search engine {name} with type mcp_sse as MCP config'
+                    )
+        except (TypeError, KeyError, ValidationError) as e:
+            logger.openhands_logger.warning(
+                f'Cannot parse [search_engine] config from toml, values have not been applied.\nError: {e}'
+            )
+        except ValueError:
+            # Re-raise ValueError from SearchEngineConfig.from_toml_section
+            raise ValueError('Error in [search_engine] section in config.toml')
+
     # Process condenser section if present
     if 'condenser' in toml_config:
         try:
@@ -275,6 +309,7 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
         'sandbox',
         'condenser',
         'mcp',
+        'search_engine',
     }
     for key in toml_config:
         if key.lower() not in known_sections:
