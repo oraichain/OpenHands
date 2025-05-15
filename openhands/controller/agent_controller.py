@@ -107,6 +107,7 @@ class AgentController:
     space_id: int | None = None
     thread_follow_up: int | None = None
     user_id: str | None = None
+    raw_followup_conversation_id: str | None = None
 
     def __init__(
         self,
@@ -127,6 +128,7 @@ class AgentController:
         space_id: int | None = None,
         thread_follow_up: int | None = None,
         user_id: str | None = None,
+        raw_followup_conversation_id: str | None = None,
     ):
         """Initializes a new instance of the AgentController class.
 
@@ -184,6 +186,8 @@ class AgentController:
         self.space_id = space_id
         self.thread_follow_up = thread_follow_up
         self.user_id = user_id
+        self.raw_followup_conversation_id = raw_followup_conversation_id
+        print(f'raw_followup_conversation_id: {self.raw_followup_conversation_id}')
 
     async def close(self, set_stop_state=True) -> None:
         """Closes the agent controller, canceling any ongoing tasks and unsubscribing from the event stream.
@@ -538,6 +542,8 @@ class AgentController:
                 if is_first_user_message
                 else RecallType.KNOWLEDGE
             )
+            print(f'raw_followup_conversation_id: {self.raw_followup_conversation_id}')
+            print(f'self.thread_follow_up: {self.thread_follow_up}')
 
             # update new knowledge base with the user message
             if self.user_id and (self.space_id or self.thread_follow_up):
