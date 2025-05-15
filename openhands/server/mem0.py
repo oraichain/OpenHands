@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -23,6 +24,9 @@ class Mem0MetadataType(Enum):
 
 # Initialize with None, will be set by initialize_mem0
 client = None
+
+# Global variable to store the last sync timestamp per conversation
+_last_sync_timestamps: Dict[str, float] = {}
 
 
 def initialize_mem0(app_config: AppConfig) -> None:
@@ -147,6 +151,10 @@ async def process_single_event_for_mem0(
                 infer=True,
             )
             logger.info(f'Add mem0 result: {add_result}')
+
+            # Store the current timestamp as the last sync timestamp for this conversation
+            await update_last_sync_timestamp(conversation_id)
+
         except Exception as e:
             logger.error(f'Error adding to Mem0: {e}')
     return parsed_events
@@ -192,12 +200,32 @@ async def search_knowledge_mem0(
     return None
 
 
-async def get_last_sync_timestamp() -> Optional[float]:
+async def update_last_sync_timestamp(conversation_id: str) -> None:
     """
-    Get the timestamp of the last successful Mem0 synchronization.
+    Update the last sync timestamp for a conversation.
+
+    Args:
+        conversation_id: The ID of the conversation
+    """
+    current_time = time.time()
+    _last_sync_timestamps[conversation_id] = current_time
+    logger.debug(
+        f'Updated last sync timestamp for conversation {conversation_id}: {current_time}'
+    )
+
+
+async def get_last_sync_timestamp(
+    conversation_id: Optional[str] = None,
+) -> Optional[float]:
+    """
+    Get the timestamp of the last successful Mem0 synchronization for a conversation.
     Returns None if no synchronization has been done.
 
-    This can be used by condensers to determine which events to keep.
+    Args:
+        conversation_id: The ID of the conversation. If None, returns the latest timestamp across all conversations.
+
+    Returns:
+        The timestamp of the last synchronization or None if no synchronization has been done.
     """
     if client is None:
         logger.warning(
@@ -205,7 +233,23 @@ async def get_last_sync_timestamp() -> Optional[float]:
         )
         return None
 
-    # This is a placeholder. The actual implementation would depend on how
-    # you track synchronization timestamps in your application.
-    # You might store this in a database, file, or Mem0 itself.
-    return None
+    if not _last_sync_timestamps:
+        logger.info('No sync timestamps available yet.')
+        return None
+
+    if conversation_id:
+        # Return the timestamp for the specific conversation
+        timestamp = _last_sync_timestamps.get(conversation_id)
+        logger.debug(
+            f'Retrieved last sync timestamp for conversation {conversation_id}: {timestamp}'
+        )
+        return timestamp
+    else:
+        # Return the latest timestamp across all conversations
+        latest_timestamp = (
+            max(_last_sync_timestamps.values()) if _last_sync_timestamps else None
+        )
+        logger.debug(
+            f'Retrieved latest sync timestamp across all conversations: {latest_timestamp}'
+        )
+        return latest_timestamp
