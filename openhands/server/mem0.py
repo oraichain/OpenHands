@@ -22,11 +22,60 @@ class Mem0MetadataType(Enum):
     REPORT_FILE = 'report_file'
 
 
-# Initialize with None, will be set by initialize_mem0
-client = None
-
 # Global variable to store the last sync timestamp per conversation
 _last_sync_timestamps: Dict[str, float] = {}
+
+
+class Mem0Client:
+    """
+    Singleton wrapper for MemoryClient to ensure a single instance is used across the application.
+    Lazily initialized on first use.
+    """
+
+    _instance = None
+    _client = None
+    _initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Mem0Client, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        # Only initialize once
+        if not Mem0Client._initialized:
+            self._initialize_client()
+
+    def _initialize_client(self):
+        # This method is called by __init__ but shouldn't do anything
+        # The proper initialization happens through initialize_mem0
+        pass
+
+    @property
+    def client(self):
+        return Mem0Client._client
+
+    @property
+    def is_available(self) -> bool:
+        return Mem0Client._client is not None
+
+    def add(self, *args, **kwargs):
+        if not self.is_available:
+            logger.warning('MemoryClient not available. Skipping add operation.')
+            return None
+        return self.client.add(*args, **kwargs)
+
+    def search(self, *args, **kwargs):
+        if not self.is_available:
+            logger.warning('MemoryClient not available. Skipping search operation.')
+            return []
+        return self.client.search(*args, **kwargs)
+
+    def history(self, *args, **kwargs):
+        if not self.is_available:
+            logger.warning('MemoryClient not available. Skipping history operation.')
+            return []
+        return self.client.history(*args, **kwargs)
 
 
 def initialize_mem0(app_config: AppConfig) -> None:
@@ -35,16 +84,19 @@ def initialize_mem0(app_config: AppConfig) -> None:
     Args:
         app_config: The application configuration containing Mem0 settings
     """
-    global client
-
     # Try to get API key from config, fall back to environment variable if not found
     mem0_api_key = getattr(app_config, 'mem0_api_key', None) or os.getenv(
         'MEM0_API_KEY'
     )
 
     if mem0_api_key and MemoryClient is not None:
-        client = MemoryClient(api_key=mem0_api_key)
-        logger.info('Mem0 client initialized successfully')
+        try:
+            Mem0Client._client = MemoryClient(api_key=mem0_api_key)
+            Mem0Client._initialized = True
+            logger.info('Mem0 client initialized successfully')
+        except Exception as e:
+            logger.error(f'Failed to initialize MemoryClient: {e}')
+            Mem0Client._client = None
     else:
         if not mem0_api_key:
             logger.warning('No Mem0 API key found in config or environment variables')
@@ -136,7 +188,8 @@ async def process_single_event_for_mem0(
         # else:  # If you want to handle other agent cases, add here
         #     parsed_events.append({'role': 'assistant', 'content': content})
 
-    if client is None:
+    mem0_client = Mem0Client()
+    if not mem0_client.is_available:
         logger.warning('Mem0 client is not initialized. Skipping mem0 add.')
         return parsed_events
 
@@ -144,7 +197,7 @@ async def process_single_event_for_mem0(
     if parsed_events:
         try:
             add_result = await asyncio.to_thread(
-                client.add,
+                mem0_client.add,
                 agent_id=conversation_id,
                 messages=parsed_events,
                 metadata=metadata,
@@ -170,15 +223,18 @@ async def search_knowledge_mem0(
     Search mem0 for knowledge chunks related to the question and conversation.
     Tries both REPORT_FILE and FINISH_CONCLUSION types. Returns a list of knowledge dicts, each with a chunkId, or None if not found.
     """
-    if client is None:
+    mem0_client = Mem0Client()
+    if not mem0_client.is_available:
         logger.warning('Mem0 client is not initialized. Skipping mem0 search.')
         return None
 
+    agent_id = raw_followup_conversation_id
+
     for meta_type in [Mem0MetadataType.REPORT_FILE, Mem0MetadataType.FINISH_CONCLUSION]:
         try:
-            memories = client.search(
+            memories = mem0_client.search(
                 query=question,
-                agent_id=raw_followup_conversation_id,
+                agent_id=agent_id,
                 metadata={'type': meta_type.value},
                 infer=True,
                 top_k=10,
@@ -186,7 +242,7 @@ async def search_knowledge_mem0(
             )
             if memories:
                 memory_id = memories[0]['id']
-                histories = client.history(memory_id)
+                histories = mem0_client.history(memory_id)
                 if histories:
                     knowledge = histories[0]['input']
                     chunk_id = histories[0]['metadata'].get(
@@ -227,7 +283,8 @@ async def get_last_sync_timestamp(
     Returns:
         The timestamp of the last synchronization or None if no synchronization has been done.
     """
-    if client is None:
+    mem0_client = Mem0Client()
+    if not mem0_client.is_available:
         logger.warning(
             'Mem0 client is not initialized. Cannot get last sync timestamp.'
         )
