@@ -5,6 +5,7 @@ import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from openhands.core.config import AppConfig
 from openhands.core.logger import openhands_logger as logger
 
 # Import MemoryClient if not already imported
@@ -20,7 +21,31 @@ class Mem0MetadataType(Enum):
     REPORT_FILE = 'report_file'
 
 
-client = MemoryClient(api_key=os.getenv('MEM0_API_KEY'))
+# Initialize with None, will be set by initialize_mem0
+client = None
+
+
+def initialize_mem0(app_config: AppConfig) -> None:
+    """Initialize the Mem0 client with API key from config.
+
+    Args:
+        app_config: The application configuration containing Mem0 settings
+    """
+    global client
+
+    # Try to get API key from config, fall back to environment variable if not found
+    mem0_api_key = getattr(app_config, 'mem0_api_key', None) or os.getenv(
+        'MEM0_API_KEY'
+    )
+
+    if mem0_api_key and MemoryClient is not None:
+        client = MemoryClient(api_key=mem0_api_key)
+        logger.info('Mem0 client initialized successfully')
+    else:
+        if not mem0_api_key:
+            logger.warning('No Mem0 API key found in config or environment variables')
+        if MemoryClient is None:
+            logger.warning('MemoryClient is not available (mem0 package not installed)')
 
 
 def _extract_content_from_event(event: dict) -> Optional[str]:
@@ -107,20 +132,23 @@ async def process_single_event_for_mem0(
         # else:  # If you want to handle other agent cases, add here
         #     parsed_events.append({'role': 'assistant', 'content': content})
 
-    if MemoryClient is None:
-        logger.warning('MemoryClient is not available. Skipping mem0 add.')
+    if client is None:
+        logger.warning('Mem0 client is not initialized. Skipping mem0 add.')
         return parsed_events
 
-    logger.info(f'duongtd_parsed_events: {parsed_events}')
+    logger.info(f'Parsed events: {parsed_events}')
     if parsed_events:
-        add_result = await asyncio.to_thread(
-            client.add,
-            agent_id=conversation_id,
-            messages=parsed_events,
-            metadata=metadata,
-            infer=True,
-        )
-        print(f'duongtd_add_mem0_result: {add_result}')
+        try:
+            add_result = await asyncio.to_thread(
+                client.add,
+                agent_id=conversation_id,
+                messages=parsed_events,
+                metadata=metadata,
+                infer=True,
+            )
+            logger.info(f'Add mem0 result: {add_result}')
+        except Exception as e:
+            logger.error(f'Error adding to Mem0: {e}')
     return parsed_events
 
 
@@ -134,8 +162,8 @@ async def search_knowledge_mem0(
     Search mem0 for knowledge chunks related to the question and conversation.
     Tries both REPORT_FILE and FINISH_CONCLUSION types. Returns a list of knowledge dicts, each with a chunkId, or None if not found.
     """
-    if MemoryClient is None:
-        logger.warning('MemoryClient is not available. Skipping mem0 search.')
+    if client is None:
+        logger.warning('Mem0 client is not initialized. Skipping mem0 search.')
         return None
 
     for meta_type in [Mem0MetadataType.REPORT_FILE, Mem0MetadataType.FINISH_CONCLUSION]:
@@ -161,4 +189,23 @@ async def search_knowledge_mem0(
             logger.exception(
                 f'Unexpected error while searching knowledge for type {meta_type}'
             )
+    return None
+
+
+async def get_last_sync_timestamp() -> Optional[float]:
+    """
+    Get the timestamp of the last successful Mem0 synchronization.
+    Returns None if no synchronization has been done.
+
+    This can be used by condensers to determine which events to keep.
+    """
+    if client is None:
+        logger.warning(
+            'Mem0 client is not initialized. Cannot get last sync timestamp.'
+        )
+        return None
+
+    # This is a placeholder. The actual implementation would depend on how
+    # you track synchronization timestamps in your application.
+    # You might store this in a database, file, or Mem0 itself.
     return None

@@ -53,6 +53,7 @@ class AppConfig(BaseModel):
             input is read line by line. When enabled, input continues until /exit command.
         dict_mcp_config: dictionary of MCP configurations.
         condenser: Condenser configuration settings.
+        mem0_api_key: API key for Mem0 knowledge base service.
     """
 
     llms: dict[str, LLMConfig] = Field(default_factory=dict)
@@ -102,6 +103,7 @@ class AppConfig(BaseModel):
     )
     condenser: CondenserConfig = Field(default_factory=NoOpCondenserConfig)
     enable_microagents: bool = Field(default=True)
+    mem0_api_key: SecretStr | None = Field(default=None)
 
     defaults_dict: ClassVar[dict] = {}
 
