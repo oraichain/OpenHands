@@ -180,6 +180,8 @@ class CodeActAgent(Agent):
         )
 
         messages = self._get_messages(condensed_history, research_mode=research_mode)
+        if latest_user_message:
+            messages.extend(self._get_message_knowledge(state))
 
         # process the user input and check chatmode
 
@@ -273,6 +275,26 @@ class CodeActAgent(Agent):
             self.pending_actions.append(action)
         return self.pending_actions.popleft()
 
+    def _get_message_knowledge(self, state: State) -> list[Message]:
+        """Get the knowledge from the messages."""
+        latest_user_message = state.get_last_user_message()
+        if latest_user_message is None:
+            return []
+        if self.knowledge_base:
+            base_knowledge_text = '<KNOWLEDGE_BASE>\n'
+            # base_knowledge_text += f'Current BTC price: 10000\n'
+
+            for k in self.knowledge_base:
+                base_knowledge_text += f'{self.knowledge_base[k].get("content", "")}\n'
+            base_knowledge_text += f'</KNOWLEDGE_BASE>\nGiven above information, please answer the question:\n {latest_user_message.content}'
+            return [
+                Message(
+                    role='user',
+                    content=[TextContent(text=base_knowledge_text)],
+                )
+            ]
+        return []
+
     def _get_messages(
         self, events: list[Event], research_mode: str | None = None
     ) -> list[Message]:
@@ -312,9 +334,6 @@ class CodeActAgent(Agent):
         agent_infos = (
             self.a2a_manager.list_remote_agents() if self.a2a_manager else None
         )
-        convert_knowledge_to_list = [
-            self.knowledge_base[k] for k in self.knowledge_base
-        ]
 
         # Use ConversationMemory to process initial messages
         # switch mode and initial messages
@@ -322,12 +341,10 @@ class CodeActAgent(Agent):
         messages = self.conversation_memory.process_initial_messages(
             with_caching=self.llm.is_caching_prompt_active(),
             agent_infos=agent_infos,
-            knowledge_base=convert_knowledge_to_list,
         )
         if research_mode == ResearchMode.FOLLOW_UP:
             messages = self.conversation_memory.process_initial_followup_message(
                 with_caching=self.llm.is_caching_prompt_active(),
-                knowledge_base=convert_knowledge_to_list,
             )
         elif research_mode is None or research_mode == ResearchMode.CHAT:
             messages = self.conversation_memory.process_initial_chatmode_message(
@@ -339,7 +356,6 @@ class CodeActAgent(Agent):
                     }
                     for tool in self.search_tools
                 ],
-                knowledge_base=convert_knowledge_to_list,
             )
         # Use ConversationMemory to process events
         messages = self.conversation_memory.process_events(
