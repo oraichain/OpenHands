@@ -165,7 +165,6 @@ class Agent(ABC):
         Args:
         - knowledge_base (list[dict]): The knowledge base.
         """
-        print(f'Update agent knowledge base: {knowledge_base}')
         # update
         if knowledge_base:
             for k in knowledge_base:

@@ -316,8 +316,6 @@ class ConversationMemory:
             ]
         elif isinstance(action, MessageAction):
             role = 'user' if action.source == 'user' else 'assistant'
-            if role == 'user':
-                return []
             content = [TextContent(text=action.content or '')]
             if vision_is_active and action.image_urls:
                 content.append(ImageContent(image_urls=action.image_urls))

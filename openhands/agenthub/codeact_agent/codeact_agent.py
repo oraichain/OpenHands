@@ -9,7 +9,6 @@ import openhands.agenthub.codeact_agent.function_calling as codeact_function_cal
 from openhands.a2a.A2AManager import A2AManager
 from openhands.a2a.tool import ListRemoteAgents, SendTask
 from openhands.agenthub.codeact_agent.tools.finish import FinishTool
-from openhands.agenthub.codeact_agent.tools.think import ThinkTool
 from openhands.controller.agent import Agent
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig
@@ -180,8 +179,7 @@ class CodeActAgent(Agent):
         )
 
         messages = self._get_messages(condensed_history, research_mode=research_mode)
-        if latest_user_message:
-            messages.extend(self._get_message_knowledge(state))
+        messages.extend(self._get_message_knowledge(state))
 
         # process the user input and check chatmode
 
@@ -202,7 +200,6 @@ class CodeActAgent(Agent):
             params['tools'] = built_in_tools + self.search_tools
         elif research_mode == ResearchMode.FOLLOW_UP:
             params['tools'] = [
-                ThinkTool,
                 FinishTool,
             ]
         else:

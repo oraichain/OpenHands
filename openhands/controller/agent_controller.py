@@ -555,6 +555,7 @@ class AgentController:
                     self.raw_followup_conversation_id,
                     self.user_id,
                 )
+                print(f'knowledge_base: {knowledge_base}')
                 if knowledge_base:
                     self.agent.update_agent_knowledge_base(knowledge_base)
 
