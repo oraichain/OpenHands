@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 import threading
 import time
@@ -82,19 +81,39 @@ async def join_conversation(conversation_id: str, public_address: str):
             if event._source:
                 if 'llm_metrics' in data:
                     llm_metrics = data['llm_metrics']
-                    print('event data: ', json.dumps(data))
+                    # print('event data: ', json.dumps(data))
                     metrics = Metrics(model_name='default')
                     cost = llm_metrics.get('accumulated_cost', 0.0)
-                    metrics.add_cost(cost)
                     token_data = llm_metrics.get('accumulated_token_usage', {})
+                    added_cost = cost - usage_metrics.total_cost
+                    add_prompt_tokens = (
+                        token_data.get('prompt_tokens', 0)
+                        - usage_metrics.total_input_tokens
+                    )
+                    add_completion_tokens = (
+                        token_data.get('completion_tokens', 0)
+                        - usage_metrics.total_output_tokens
+                    )
+                    add_cache_read_tokens = (
+                        token_data.get('cache_read_tokens', 0)
+                        - usage_metrics.total_cache_read
+                    )
+                    add_cache_write_tokens = (
+                        token_data.get('cache_write_tokens', 0)
+                        - usage_metrics.total_cache_write
+                    )
+
+                    metrics.add_cost(added_cost)
                     metrics.add_token_usage(
-                        prompt_tokens=token_data.get('prompt_tokens', 0),
-                        completion_tokens=token_data.get('completion_tokens', 0),
-                        cache_read_tokens=token_data.get('cache_read_tokens', 0),
-                        cache_write_tokens=token_data.get('cache_write_tokens', 0),
+                        prompt_tokens=add_prompt_tokens,
+                        completion_tokens=add_completion_tokens,
+                        cache_read_tokens=add_cache_read_tokens,
+                        cache_write_tokens=add_cache_write_tokens,
                         response_id=token_data.get('response_id', ''),
                     )
                     event.llm_metrics = metrics
+                    print('added llm_metrics: ', llm_metrics)
+                    print('usage_metrics: ', usage_metrics)
 
                 # Display agent messages, mimicking MessageAction handling
                 if event.source == EventSource.AGENT and event.message:
@@ -192,7 +211,20 @@ if __name__ == '__main__':
         conversation_id = os.getenv('CONVERSATION_ID')
         if not conversation_id:
             new_conversation_response = create_conversation(
-                initial_user_msg='Hello, world!',
+                initial_user_msg="""
+    You are a Perpetual Whales Agent agent who is an expert analyst specializing in detecting whale trading patterns with years of experience understanding deeply crypto trading behavior, on-chain metrics, and derivatives markets, you have developed a keen understanding of whale trading strategies.
+
+    You can identify patterns in whale positions, analyze their portfolio changes over time, and evaluate the potential reasons behind their trading decisions. Your analysis helps traders decide whether to follow whale trading moves or not.
+
+    Here will be your task, please do it from step by step, one task is done you will able to move to next task. DO NOT use liquidity heatmap tool, function for analyzing:
+
+    - Fetching every whales on some markets
+    - Find trading patterns and strategies identified based on latest whales activity, histocial trading pnl
+    - Risk assessment of all current positions
+    - Analyze market trend based on 30 days of tokens
+    - Define short-term trades as many as possible that can be executed with safety scoring and entries, stop loss, take profit, concise description, bias including short-term or long-term trades. The entries should be closest to latest price, stop loss and take profit should be realistic which is not too far from entry.
+
+    Write report into a md file and remain the wallet address for checking instead of shorting it""",
                 image_urls=[],
                 selected_repository=None,
                 selected_branch=None,
