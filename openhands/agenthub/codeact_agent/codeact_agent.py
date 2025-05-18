@@ -21,6 +21,7 @@ from openhands.events.action import (
 )
 from openhands.events.event import Event
 from openhands.llm.llm import LLM
+from openhands.mcp.tool import MCPClientTool
 from openhands.memory.condenser import Condenser
 from openhands.memory.condenser.condenser import Condensation, View
 from openhands.memory.conversation_memory import ConversationMemory
@@ -110,6 +111,7 @@ class CodeActAgent(Agent):
         self.condenser = Condenser.from_config(self.config.condenser)
         logger.info(f'Using condenser: {type(self.condenser)}')
         self.routing_llms = routing_llms
+        self.has_added_session_id_to_messages = False
 
     @override
     def set_system_prompt(self, system_prompt: str) -> None:
@@ -133,6 +135,68 @@ class CodeActAgent(Agent):
         """Resets the CodeAct Agent."""
         super().reset()
         self.pending_actions.clear()
+
+    def _select_tools_based_on_mode(self, research_mode: str | None) -> list[dict]:
+        """Selects the tools based on the mode of the agent."""
+        selected_tools = []
+        pyodide_bash_tool = None
+        pyodide_editor_tool = None
+        if self.mcp_tools:
+            # This code searches through self.mcp_tools to find the first tool that has a function name matching 'pyodide_execute_bash'
+            # It uses Python's next() function with a generator expression to find the first matching tool
+            # If no matching tool is found, it returns None instead of raising a StopIteration exception
+            pyodide_bash_tool = next(
+                (
+                    tool
+                    for tool in self.mcp_tools
+                    if tool['function']['name'].replace(MCPClientTool.postfix(), '')
+                    == 'pyodide_execute_bash'
+                ),
+                None,
+            )
+            pyodide_editor_tool = next(
+                (
+                    tool
+                    for tool in self.mcp_tools
+                    if tool['function']['name'].replace(MCPClientTool.postfix(), '')
+                    == 'pyodide_str_replace_editor'
+                ),
+                None,
+            )
+
+        if research_mode is None or research_mode == ResearchMode.CHAT:
+            # enable pyodide tools if MCP tools are set
+            selected_tools = self.tools + self.search_tools
+            if self.mcp_tools and pyodide_bash_tool and pyodide_editor_tool:
+                selected_tools = (
+                    codeact_function_calling.get_simplified_tools()
+                    + [pyodide_bash_tool, pyodide_editor_tool]
+                    + self.search_tools
+                )
+
+        elif research_mode == ResearchMode.FOLLOW_UP:
+            selected_tools = [
+                # ThinkTool,
+                FinishTool
+            ]
+        else:
+            # Base tools selection
+            selected_tools = self.tools
+
+            # Add pyodide tools if available
+            if pyodide_bash_tool and pyodide_editor_tool:
+                selected_tools = codeact_function_calling.get_simplified_tools()
+
+            # Add unique MCP tools. No need to add pyodide tools here since they are already in the MCP tools
+            if self.mcp_tools:
+                existing_names = {tool['function']['name'] for tool in selected_tools}
+                unique_mcp_tools = [
+                    tool
+                    for tool in self.mcp_tools
+                    if tool['function']['name'] not in existing_names
+                ]
+                selected_tools.extend(unique_mcp_tools)
+        return selected_tools
 
     def step(self, state: State) -> Action:
         """Performs one step using the CodeAct Agent.
@@ -179,40 +243,23 @@ class CodeActAgent(Agent):
         )
 
         messages = self._get_messages(condensed_history, research_mode=research_mode)
-
-        # process the user input and check chatmode
+        # only add one time the session_id to the messages
+        if not self.has_added_session_id_to_messages:
+            session_id_message = Message(
+                role='user',
+                content=[
+                    TextContent(text=f'<session_id>{state.session_id}</session_id>')
+                ],
+            )
+            messages.append(session_id_message)
+            self.has_added_session_id_to_messages = True
 
         params: dict = {
             'messages': self.llm.format_messages_for_llm(messages),
         }
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         # if chat mode, we need to use the search tools
-        params['tools'] = []
-
-        if research_mode is None or research_mode == ResearchMode.CHAT:
-            built_in_tools = codeact_function_calling.get_tools(
-                codeact_enable_browsing=False,
-                codeact_enable_jupyter=False,
-                codeact_enable_llm_editor=False,
-                llm=self.llm,
-            )
-            params['tools'] = built_in_tools + self.search_tools
-        elif research_mode == ResearchMode.FOLLOW_UP:
-            params['tools'] = [
-                # ThinkTool,
-                FinishTool,
-            ]
-        else:
-            params['tools'] = self.tools
-            if self.mcp_tools:
-                # Only add tools with unique names
-                existing_names = {tool['function']['name'] for tool in params['tools']}
-                unique_mcp_tools = [
-                    tool
-                    for tool in self.mcp_tools
-                    if tool['function']['name'] not in existing_names
-                ]
-                params['tools'] += unique_mcp_tools
+        params['tools'] = self._select_tools_based_on_mode(research_mode)
         logger.debug(f'Messages: {messages}')
         last_message = messages[-1]
         response = None
