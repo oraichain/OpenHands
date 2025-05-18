@@ -14,7 +14,7 @@ from openhands.utils.tenacity_stop import stop_if_should_exit
 
 
 class PyodideRuntime(ActionExecutionClient):
-    """The PyodideRuntime class is an PyodideRuntime that utilizes Runloop Devbox as a runtime environment."""
+    """The PyodideRuntime class is an PyodideRuntime that utilizes Pyodide MCP as a runtime environment to execute bash and edit files."""
 
     def __init__(
         self,
@@ -57,8 +57,6 @@ class PyodideRuntime(ActionExecutionClient):
         self.api_url = pyodide_mcp_config.url.replace('/sse', '')
         logger.info(f'Container started. Server url: {self.api_url}')
 
-        # End Runloop connect
-        # NOTE: Copied from DockerRuntime
         logger.info('Waiting for client to become ready...')
         self.send_status_message('STATUS$WAITING_FOR_CLIENT')
         self._wait_until_alive()
