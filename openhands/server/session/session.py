@@ -175,7 +175,7 @@ class Session:
             await fetch_mcp_tools_from_config(
                 self.config.dict_mcp_config, sid=self.sid, mnemonic=mnemonic
             )
-            if research_mode == ResearchMode.FOLLOW_UP
+            if research_mode != ResearchMode.CHAT
             else []
         )
 
@@ -183,7 +183,7 @@ class Session:
             await fetch_search_tools_from_config(
                 self.config.dict_search_engine_config, sid=self.sid, mnemonic=mnemonic
             )
-            if research_mode == ResearchMode.FOLLOW_UP
+            if research_mode != ResearchMode.CHAT
             else []
         )
 

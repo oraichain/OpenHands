@@ -640,8 +640,11 @@ class Runtime(FileEditRuntimeMixin):
 
                     if isinstance(result, TaskStatusUpdateEvent):
                         logger.debug(
-                            f"""Task state: {result.status.state}\n
-                            Task message: {result.status.message}"""
+                            f"""
+                            Agent Name: {action.agent_name}
+                            Task Update Event: {result}
+                            Task Content: {result.model_dump_json()}
+                            """
                         )
                         yield A2ASendTaskUpdateObservation(
                             agent_name=action.agent_name,
