@@ -112,6 +112,7 @@ class CodeActAgent(Agent):
         logger.info(f'Using condenser: {type(self.condenser)}')
         self.routing_llms = routing_llms
         self.has_added_session_id_to_messages = False
+        self.search_tools: list[dict] = []
 
     @override
     def set_system_prompt(self, system_prompt: str) -> None:
@@ -135,6 +136,7 @@ class CodeActAgent(Agent):
         """Resets the CodeAct Agent."""
         super().reset()
         self.pending_actions.clear()
+        self.has_added_session_id_to_messages = False
 
     def _select_tools_based_on_mode(self, research_mode: str | None) -> list[dict]:
         """Selects the tools based on the mode of the agent."""

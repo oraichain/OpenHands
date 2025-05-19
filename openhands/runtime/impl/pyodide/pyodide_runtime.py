@@ -54,6 +54,9 @@ class PyodideRuntime(ActionExecutionClient):
         if pyodide_mcp_config is None:
             raise ValueError('Pyodide MCP config not found')
 
+        if not hasattr(pyodide_mcp_config, 'url') or not pyodide_mcp_config.url:
+            raise ValueError('Pyodide MCP URL not configured')
+
         self.api_url = pyodide_mcp_config.url.replace('/sse', '')
         logger.info(f'Container started. Server url: {self.api_url}')
 
@@ -72,7 +75,7 @@ class PyodideRuntime(ActionExecutionClient):
     def _wait_until_alive(self):
         super().check_if_alive()
 
-    def close(self, rm_all_containers: bool | None = True):
+    def close(self):
         super().close()
 
     @property
