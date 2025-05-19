@@ -231,9 +231,11 @@ def response_to_actions(
                 if 'pyodide' in original_action_name:
                     # we don't trust sessionId passed by the LLM. Always use the one from the session to get deterministic results
                     arguments['sessionId'] = sid
+                # Update the arguments string with the modified sessionId
+                updated_arguments_str = json.dumps(arguments)
                 action = McpAction(
                     name=original_action_name,
-                    arguments=tool_call.function.arguments,
+                    arguments=updated_arguments_str,
                 )
             # ================================================
             # A2A
