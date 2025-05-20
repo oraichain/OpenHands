@@ -212,7 +212,7 @@ class State:
 
     def to_llm_metadata(self, agent_name: str) -> dict:
         return {
-            'session_id': f'<session_id>{self.session_id}</session_id>',
+            'session_id': self.session_id,
             'trace_version': openhands.__version__,
             'tags': [
                 f'agent:{agent_name}',

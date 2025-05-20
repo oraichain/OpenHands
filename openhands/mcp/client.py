@@ -24,7 +24,6 @@ class MCPClient(BaseModel):
     tools: List[MCPClientTool] = Field(default_factory=list)
     tool_map: Dict[str, MCPClientTool] = Field(default_factory=dict)
     name: str = Field(default='')
-    url: str = Field(default='')
 
     class Config:
         arbitrary_types_allowed = True
