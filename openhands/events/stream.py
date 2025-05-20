@@ -1,5 +1,4 @@
 import asyncio
-import concurrent.futures
 import queue
 import threading
 import time
@@ -140,33 +139,11 @@ class EventStream(EventStore):
         ):
             loop = self._thread_loops[subscriber_id][callback_id]
             try:
-                # Check if loop is running before attempting to stop/close
                 if loop.is_running():
-                    # Only call stop if the loop is running
-                    if not loop.is_closed():
-                        # Use asyncio.run_coroutine_threadsafe to safely schedule loop closure
-                        # from a different thread if needed
-                        try:
-                            asyncio.run_coroutine_threadsafe(
-                                self._cancel_all_tasks(loop), loop
-                            ).result(timeout=3.0)
-                            # Give the loop time to process the cancellation
-                            time.sleep(0.1)
-                        except (concurrent.futures.TimeoutError, RuntimeError) as e:
-                            logger.warning(
-                                f'Error cancelling tasks in loop for {subscriber_id}/{callback_id}: {e}'
-                            )
-                            pass
-
-                # Now attempt to stop and close the loop
-                if not loop.is_closed():
+                    loop.call_soon_threadsafe(loop.stop)
+                else:
                     loop.stop()
-                    # Give the loop time to stop
-                    time.sleep(0.1)
-
-                    # Only close if it's stopped running
-                    if not loop.is_running():
-                        loop.close()
+                    loop.close()
             except Exception as e:
                 logger.warning(
                     f'Error closing loop for {subscriber_id}/{callback_id}: {e}'

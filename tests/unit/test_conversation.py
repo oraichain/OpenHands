@@ -60,39 +60,73 @@ async def test_search_conversations():
             with patch(
                 'openhands.server.routes.manage_conversations.conversation_manager'
             ) as mock_manager:
-
-                async def mock_get_running_agent_loops(*args, **kwargs):
-                    return set()
-
-                mock_manager.get_running_agent_loops = mock_get_running_agent_loops
                 with patch(
-                    'openhands.server.routes.manage_conversations.datetime'
-                ) as mock_datetime:
-                    mock_datetime.now.return_value = datetime.fromisoformat(
-                        '2025-01-01T00:00:00+00:00'
-                    )
-                    mock_datetime.fromisoformat = datetime.fromisoformat
-                    mock_datetime.timezone = timezone
-                    result_set = await search_conversations(
-                        MagicMock(state=MagicMock(github_token='', user_id='12345'))
-                    )
-                    expected = ConversationInfoResultSet(
-                        results=[
-                            ConversationInfo(
-                                conversation_id='some_conversation_id',
-                                title='Some Conversation',
-                                created_at=datetime.fromisoformat(
-                                    '2025-01-01T00:00:00+00:00'
-                                ),
-                                last_updated_at=datetime.fromisoformat(
-                                    '2025-01-01T00:01:00+00:00'
-                                ),
-                                status=ConversationStatus.STOPPED,
-                                selected_repository='foobar',
+                    'openhands.server.routes.manage_conversations.conversation_module'
+                ) as mock_conversation_module:
+                    with patch(
+                        'openhands.server.routes.manage_conversations.get_user_id'
+                    ) as mock_get_user_id:
+                        with patch(
+                            'openhands.server.routes.manage_conversations.get_github_user_id'
+                        ) as mock_get_github_user_id:
+                            # Mock user IDs
+                            mock_get_user_id.return_value = '12345'
+                            mock_get_github_user_id.return_value = None
+
+                            # Mock the visibility check with an async function
+                            async def mock_get_visibility(*args, **kwargs):
+                                return {
+                                    'items': [
+                                        {'conversation_id': 'some_conversation_id'}
+                                    ],
+                                    'total': 1,
+                                }
+
+                            mock_conversation_module._get_conversation_visibility_by_user_id = mock_get_visibility
+
+                            async def mock_get_running_agent_loops(*args, **kwargs):
+                                return set()
+
+                            mock_manager.get_running_agent_loops = (
+                                mock_get_running_agent_loops
                             )
-                        ]
-                    )
-                    assert result_set == expected
+                            with patch(
+                                'openhands.server.routes.manage_conversations.datetime'
+                            ) as mock_datetime:
+                                mock_datetime.now.return_value = datetime.fromisoformat(
+                                    '2025-01-01T00:00:00+00:00'
+                                )
+                                mock_datetime.fromisoformat = datetime.fromisoformat
+                                mock_datetime.timezone = timezone
+                                result_set = await search_conversations(
+                                    MagicMock(
+                                        state=MagicMock(
+                                            github_token='', user_id='12345'
+                                        )
+                                    ),
+                                    page_id=None,
+                                    limit=20,
+                                    page=1,
+                                )
+                                expected = ConversationInfoResultSet(
+                                    results=[
+                                        ConversationInfo(
+                                            conversation_id='some_conversation_id',
+                                            title='Some Conversation',
+                                            created_at=datetime.fromisoformat(
+                                                '2025-01-01T00:00:00+00:00'
+                                            ),
+                                            last_updated_at=datetime.fromisoformat(
+                                                '2025-01-01T00:01:00+00:00'
+                                            ),
+                                            status=ConversationStatus.STOPPED,
+                                            selected_repository='foobar',
+                                        )
+                                    ],
+                                    next_page_id=None,
+                                    total=1,
+                                )
+                                assert result_set == expected
 
 
 @pytest.mark.asyncio
@@ -152,11 +186,19 @@ async def test_update_conversation():
 async def test_delete_conversation():
     with _patch_store():
         with patch.object(DockerRuntime, 'delete', return_value=None):
-            await delete_conversation(
-                'some_conversation_id',
-                MagicMock(state=MagicMock(github_token='')),
-            )
-            conversation = await get_conversation(
-                'some_conversation_id', MagicMock(state=MagicMock(github_token=''))
-            )
-            assert conversation is None
+            # Mock the delete_thread function to prevent the headers.get() error
+            with patch(
+                'openhands.server.routes.manage_conversations.delete_thread',
+                return_value=None,
+            ):
+                mock_request = MagicMock()
+                # We don't need to worry about what headers.get returns now since the function is mocked
+
+                await delete_conversation(
+                    'some_conversation_id',
+                    mock_request,
+                )
+                conversation = await get_conversation(
+                    'some_conversation_id', MagicMock(state=MagicMock(github_token=''))
+                )
+                assert conversation is None

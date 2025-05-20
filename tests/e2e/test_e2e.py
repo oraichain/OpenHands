@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import threading
 import time
@@ -16,6 +17,7 @@ from openhands.core.cli import (
     shutdown,
     update_usage_metrics,
 )
+from openhands.core.schema.research import ResearchMode
 from openhands.events.event import Event, EventSource
 from openhands.llm.metrics import Metrics
 
@@ -32,11 +34,14 @@ async def join_conversation(conversation_id: str, public_address: str):
     usage_metrics = UsageMetrics()
     metrics_lock = threading.Lock()
     sid = conversation_id  # Use conversation_id as session_id for shutdown
+    metrics = Metrics(model_name='default')
 
     # Helper to run update_usage_metrics with lock
-    def update_metrics_with_lock(event, metrics):
+    def update_metrics_with_lock():
         with metrics_lock:
-            update_usage_metrics(event, metrics)
+            event = Event()
+            event.llm_metrics = metrics
+            update_usage_metrics(event, usage_metrics)
 
     # Create query string with parameters
     query_string = (
@@ -66,6 +71,7 @@ async def join_conversation(conversation_id: str, public_address: str):
         async def disconnect():
             display_message('Disconnected from server')
             # Run shutdown in executor to handle synchronous prompt_toolkit calls
+            update_metrics_with_lock()
             await asyncio.get_event_loop().run_in_executor(
                 None, lambda: shutdown(usage_metrics, sid)
             )
@@ -81,45 +87,23 @@ async def join_conversation(conversation_id: str, public_address: str):
             if event._source:
                 if 'llm_metrics' in data:
                     llm_metrics = data['llm_metrics']
-                    # print('event data: ', json.dumps(data))
-                    metrics = Metrics(model_name='default')
+                    print('event data: ', json.dumps(data))
+                    metrics.reset()
                     cost = llm_metrics.get('accumulated_cost', 0.0)
                     token_data = llm_metrics.get('accumulated_token_usage', {})
-                    added_cost = cost - usage_metrics.total_cost
-                    add_prompt_tokens = (
-                        token_data.get('prompt_tokens', 0)
-                        - usage_metrics.total_input_tokens
-                    )
-                    add_completion_tokens = (
-                        token_data.get('completion_tokens', 0)
-                        - usage_metrics.total_output_tokens
-                    )
-                    add_cache_read_tokens = (
-                        token_data.get('cache_read_tokens', 0)
-                        - usage_metrics.total_cache_read
-                    )
-                    add_cache_write_tokens = (
-                        token_data.get('cache_write_tokens', 0)
-                        - usage_metrics.total_cache_write
-                    )
-
-                    metrics.add_cost(added_cost)
+                    metrics.add_cost(cost)
                     metrics.add_token_usage(
-                        prompt_tokens=add_prompt_tokens,
-                        completion_tokens=add_completion_tokens,
-                        cache_read_tokens=add_cache_read_tokens,
-                        cache_write_tokens=add_cache_write_tokens,
+                        prompt_tokens=token_data.get('prompt_tokens', 0),
+                        completion_tokens=token_data.get('completion_tokens', 0),
+                        cache_read_tokens=token_data.get('cache_read_tokens', 0),
+                        cache_write_tokens=token_data.get('cache_write_tokens', 0),
                         response_id=token_data.get('response_id', ''),
                     )
-                    event.llm_metrics = metrics
-                    print('added llm_metrics: ', llm_metrics)
-                    print('usage_metrics: ', usage_metrics)
+                    print('llm_metrics: ', metrics)
 
                 # Display agent messages, mimicking MessageAction handling
                 if event.source == EventSource.AGENT and event.message:
                     display_message(event.message)
-                # Update usage metrics (synchronous, run in executor)
-                await asyncio.to_thread(update_metrics_with_lock, event, usage_metrics)
 
         # Start the CLI input loop in a separate task
         async def cli_input_loop():
@@ -157,11 +141,13 @@ async def join_conversation(conversation_id: str, public_address: str):
     except socketio.exceptions.ConnectionError as e:
         display_message(f'Connection failed: {e}')
         # Run shutdown to display metrics on connection failure
+        update_metrics_with_lock()
         await asyncio.get_event_loop().run_in_executor(
             None, lambda: shutdown(usage_metrics, sid)
         )
     except Exception as e:
         display_message(f'Error: {e}')
+        update_metrics_with_lock()
         # Run shutdown to display metrics on general error
         await asyncio.get_event_loop().run_in_executor(
             None, lambda: shutdown(usage_metrics, sid)
@@ -177,6 +163,7 @@ def create_conversation(
     public_address: Optional[str] = None,
     system_prompt: Optional[str] = None,
     user_prompt: Optional[str] = None,
+    research_mode: Optional[ResearchMode] = None,
 ) -> dict:
     payload = {
         'initial_user_msg': initial_user_msg,
@@ -186,6 +173,7 @@ def create_conversation(
         'replay_json': replay_json,
         'system_prompt': system_prompt,
         'user_prompt': user_prompt,
+        'research_mode': research_mode,
     }
     headers = {
         'Authorization': f'Bearer {public_address}',
@@ -211,26 +199,14 @@ if __name__ == '__main__':
         conversation_id = os.getenv('CONVERSATION_ID')
         if not conversation_id:
             new_conversation_response = create_conversation(
-                initial_user_msg="""
-    You are a Perpetual Whales Agent agent who is an expert analyst specializing in detecting whale trading patterns with years of experience understanding deeply crypto trading behavior, on-chain metrics, and derivatives markets, you have developed a keen understanding of whale trading strategies.
-
-    You can identify patterns in whale positions, analyze their portfolio changes over time, and evaluate the potential reasons behind their trading decisions. Your analysis helps traders decide whether to follow whale trading moves or not.
-
-    Here will be your task, please do it from step by step, one task is done you will able to move to next task. DO NOT use liquidity heatmap tool, function for analyzing:
-
-    - Fetching every whales on some markets
-    - Find trading patterns and strategies identified based on latest whales activity, histocial trading pnl
-    - Risk assessment of all current positions
-    - Analyze market trend based on 30 days of tokens
-    - Define short-term trades as many as possible that can be executed with safety scoring and entries, stop loss, take profit, concise description, bias including short-term or long-term trades. The entries should be closest to latest price, stop loss and take profit should be realistic which is not too far from entry.
-
-    Write report into a md file and remain the wallet address for checking instead of shorting it""",
+                initial_user_msg='Hello, world!',
                 image_urls=[],
                 selected_repository=None,
                 selected_branch=None,
                 replay_json=None,
                 public_address=public_address,
                 system_prompt=SYSTEM_PROMPT,
+                research_mode=ResearchMode.CHAT,
             )
             conversation_id = new_conversation_response['conversation_id']
         display_message(f'Conversation created with ID: {conversation_id}')

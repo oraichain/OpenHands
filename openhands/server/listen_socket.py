@@ -75,16 +75,17 @@ async def connect(connection_id: str, environ):
         logger.error('No conversation_id in query params')
         raise ConnectionRefusedError('No conversation_id in query params')
     mode = query_params.get('mode', [None])[0]
+    error, info = await conversation_module._get_conversation_visibility_info(
+        conversation_id
+    )
+    conversation_configs = info
+
     # check if conversation_id is shared
     if mode == 'shared':
-        error, info = await conversation_module._get_conversation_visibility_info(
-            conversation_id
-        )
         if error:
             raise ConnectionRefusedError(error)
         else:
             user_id = str(info['user_id'])
-            conversation_configs = info
             await conversation_module._update_research_view(
                 conversation_id, environ.get('REMOTE_ADDR', '')
             )
@@ -175,6 +176,24 @@ async def connect(connection_id: str, environ):
         )
 
     github_user_id = ''
+    space_id = (
+        conversation_configs.get('space_id', None) if conversation_configs else None
+    )
+    thread_follow_up = (
+        conversation_configs.get('thread_follow_up', None)
+        if conversation_configs
+        else None
+    )
+    research_mode = (
+        conversation_configs.get('research_mode', None)
+        if conversation_configs
+        else None
+    )
+    raw_followup_conversation_id = (
+        conversation_configs.get('raw_followup_conversation_id', None)
+        if conversation_configs
+        else None
+    )
     event_stream = await conversation_manager.join_conversation(
         conversation_id,
         connection_id,
@@ -185,6 +204,11 @@ async def connect(connection_id: str, environ):
         system_prompt,
         user_prompt,
         mcp_disable,
+        None,
+        space_id,
+        thread_follow_up,
+        research_mode,
+        raw_followup_conversation_id,
     )
     logger.info(
         f'Connected to conversation {conversation_id} with connection_id {connection_id}. Replaying event stream...'

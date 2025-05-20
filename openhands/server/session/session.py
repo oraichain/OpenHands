@@ -11,6 +11,7 @@ from openhands.core.config import AppConfig
 from openhands.core.config.condenser_config import LLMSummarizingCondenserConfig
 from openhands.core.logger import OpenHandsLoggerAdapter
 from openhands.core.schema import AgentState
+from openhands.core.schema.research import ResearchMode
 from openhands.events.action import MessageAction, NullAction
 from openhands.events.event import Event, EventSource
 from openhands.events.observation import (
@@ -23,6 +24,7 @@ from openhands.events.serialization import event_from_dict, event_to_dict
 from openhands.events.stream import EventStreamSubscriber
 from openhands.llm.llm import LLM
 from openhands.mcp import fetch_mcp_tools_from_config
+from openhands.mcp.utils import fetch_search_tools_from_config
 from openhands.server.session.agent_session import AgentSession
 from openhands.server.settings import Settings
 from openhands.storage.files import FileStore
@@ -41,6 +43,8 @@ class Session:
     file_store: FileStore
     user_id: str | None
     logger: LoggerAdapter
+    space_id: int | None
+    thread_follow_up: int | None
 
     def __init__(
         self,
@@ -49,6 +53,9 @@ class Session:
         file_store: FileStore,
         sio: socketio.AsyncServer | None,
         user_id: str | None = None,
+        space_id: int | None = None,
+        thread_follow_up: int | None = None,
+        raw_followup_conversation_id: str | None = None,
     ):
         self.sid = sid
         self.sio = sio
@@ -60,6 +67,9 @@ class Session:
             file_store,
             status_callback=self.queue_status_message,
             user_id=user_id,
+            space_id=space_id,
+            thread_follow_up=thread_follow_up,
+            raw_followup_conversation_id=raw_followup_conversation_id,
         )
         self.agent_session.event_stream.subscribe(
             EventStreamSubscriber.SERVER, self.on_event, self.sid
@@ -68,6 +78,9 @@ class Session:
         self.config = deepcopy(config)
         self.loop = asyncio.get_event_loop()
         self.user_id = user_id
+        self.space_id = space_id
+        self.thread_follow_up = thread_follow_up
+        self.raw_followup_conversation_id = raw_followup_conversation_id
 
     async def close(self):
         if self.sio:
@@ -90,6 +103,8 @@ class Session:
         system_prompt: str | None = None,
         user_prompt: str | None = None,
         mcp_disable: dict[str, bool] | None = None,
+        knowledge_base: list[dict] | None = None,
+        research_mode: str | None = None,
     ):
         start_time = time.time()
         self.agent_session.event_stream.add_event(
@@ -128,6 +143,13 @@ class Session:
         # TODO: override other LLM config & agent config groups (#2075)
 
         llm = self._create_llm(agent_cls)
+
+        routing_llms = {}
+        for config_name, routing_llm_config in self.config.llms.items():
+            routing_llms[config_name] = LLM(
+                config=routing_llm_config,
+            )
+
         agent_config = self.config.get_agent_config(agent_cls)
         self.logger.info(f'Enabling default condenser: {agent_config.condenser}')
         if settings.enable_default_condenser and agent_config.condenser.type == 'noop':
@@ -143,15 +165,27 @@ class Session:
                 if key in self.config.dict_mcp_config and mcp_disable[key]:
                     del self.config.dict_mcp_config[key]
 
-        mcp_tools = await fetch_mcp_tools_from_config(
-            self.config.dict_mcp_config, sid=self.sid, mnemonic=mnemonic
-        )
-
         workspace_mount_path_in_sandbox_store_in_session = (
             self.config.workspace_mount_path_in_sandbox_store_in_session
         )
         if self.config.runtime == 'local':
             workspace_mount_path_in_sandbox_store_in_session = False
+
+        mcp_tools = (
+            []
+            if research_mode == ResearchMode.FOLLOW_UP
+            else await fetch_mcp_tools_from_config(
+                self.config.dict_mcp_config, sid=self.sid, mnemonic=mnemonic
+            )
+        )
+
+        search_tools = (
+            []
+            if research_mode == ResearchMode.FOLLOW_UP
+            else await fetch_search_tools_from_config(
+                self.config.dict_search_engine_config, sid=self.sid, mnemonic=mnemonic
+            )
+        )
 
         a2a_manager: A2AManager = A2AManager(agent_config.a2a_server_urls)
         try:
@@ -164,8 +198,14 @@ class Session:
             agent_config,
             workspace_mount_path_in_sandbox_store_in_session,
             a2a_manager,
+            routing_llms=routing_llms,
         )
         agent.set_mcp_tools(mcp_tools)
+        agent.set_search_tools(search_tools)
+
+        # update some metadata of the agent
+        if knowledge_base:
+            agent.update_agent_knowledge_base(knowledge_base)
 
         if system_prompt:
             agent.set_system_prompt(system_prompt)
@@ -197,6 +237,7 @@ class Session:
                 initial_message=initial_message,
                 replay_json=replay_json,
                 mnemonic=mnemonic,
+                research_mode=research_mode,
             )
             end_time = time.time()
             total_time = end_time - start_time

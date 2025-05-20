@@ -36,6 +36,7 @@ Conversation = Table(
     Column('title', String, nullable=False),
     Column('short_description', String, nullable=False),
     Column('status', String, nullable=False, default='available'),
+    Column('created_at', DateTime, default=func.now(), nullable=False),
 )
 
 ResearchView = Table(
@@ -56,5 +57,18 @@ ResearchTrending = Table(
     Column('total_view_24h', Integer, nullable=False),
     Column('total_view_7d', Integer, nullable=False),
     Column('total_view_30d', Integer, nullable=False),
+    Column('created_at', DateTime, default=func.now(), nullable=False),
+)
+
+
+Mem0ConversationJob = Table(
+    'mem0_conversation_jobs',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('conversation_id', String, nullable=False),
+    Column('events', JSON, nullable=False),
+    Column('metadata', JSON, nullable=False),
+    Column('status', String, nullable=False, default='pending'),
+    Column('error', String, nullable=True),
     Column('created_at', DateTime, default=func.now(), nullable=False),
 )
