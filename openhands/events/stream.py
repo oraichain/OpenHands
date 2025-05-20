@@ -1,6 +1,7 @@
 import asyncio
 import queue
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
@@ -77,19 +78,40 @@ class EventStream(EventStore):
         self._thread_loops[subscriber_id][callback_id] = loop
 
     def close(self) -> None:
+        # Signal thread to stop processing new events
         self._stop_flag.set()
-        if self._queue_thread.is_alive():
-            self._queue_thread.join()
 
+        # Give a small buffer time for event processing to acknowledge stop flag
+        time.sleep(0.05)
+
+        # First unsubscribe all subscribers before joining the queue thread
         subscriber_ids = list(self._subscribers.keys())
         for subscriber_id in subscriber_ids:
             callback_ids = list(self._subscribers[subscriber_id].keys())
             for callback_id in callback_ids:
-                self._clean_up_subscriber(subscriber_id, callback_id)
+                try:
+                    self._clean_up_subscriber(subscriber_id, callback_id)
+                except Exception as e:
+                    logger.warning(
+                        f'Error cleaning up subscriber {subscriber_id}/{callback_id}: {e}'
+                    )
 
-        # Clear queue
-        while not self._queue.empty():
-            self._queue.get()
+        # Then join the queue thread
+        if self._queue_thread.is_alive():
+            try:
+                self._queue_thread.join(timeout=5.0)  # Add timeout to avoid hanging
+            except Exception as e:
+                logger.warning(f'Error joining queue thread: {e}')
+
+        # Clear queue after thread has stopped or timed out
+        try:
+            while not self._queue.empty():
+                try:
+                    self._queue.get_nowait()
+                except queue.Empty:
+                    break
+        except Exception as e:
+            logger.warning(f'Error clearing queue: {e}')
 
     def _clean_up_subscriber(self, subscriber_id: str, callback_id: str) -> None:
         if subscriber_id not in self._subscribers:
@@ -98,6 +120,19 @@ class EventStream(EventStore):
         if callback_id not in self._subscribers[subscriber_id]:
             logger.warning(f'Callback not found during cleanup: {callback_id}')
             return
+
+        # First shut down the thread pool to prevent new tasks
+        if (
+            subscriber_id in self._thread_pools
+            and callback_id in self._thread_pools[subscriber_id]
+        ):
+            pool = self._thread_pools[subscriber_id][callback_id]
+            pool.shutdown(
+                wait=True, cancel_futures=True
+            )  # Ensure all tasks finish or cancel
+            del self._thread_pools[subscriber_id][callback_id]
+
+        # Then safely handle the event loop
         if (
             subscriber_id in self._thread_loops
             and callback_id in self._thread_loops[subscriber_id]
@@ -115,15 +150,19 @@ class EventStream(EventStore):
                 )
             del self._thread_loops[subscriber_id][callback_id]
 
-        if (
-            subscriber_id in self._thread_pools
-            and callback_id in self._thread_pools[subscriber_id]
-        ):
-            pool = self._thread_pools[subscriber_id][callback_id]
-            pool.shutdown()
-            del self._thread_pools[subscriber_id][callback_id]
-
+        # Finally, remove the subscriber
         del self._subscribers[subscriber_id][callback_id]
+
+    async def _cancel_all_tasks(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Cancel all tasks running on the loop."""
+        tasks = [t for t in asyncio.all_tasks(loop=loop) if not t.done()]
+        if not tasks:
+            return
+
+        for task in tasks:
+            task.cancel()
+
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     def subscribe(
         self,
@@ -237,9 +276,22 @@ class EventStream(EventStore):
                 callbacks = self._subscribers[key]
                 for callback_id in callbacks:
                     callback = callbacks[callback_id]
-                    pool = self._thread_pools[key][callback_id]
-                    future = pool.submit(callback, event)
-                    future.add_done_callback(self._make_error_handler(callback_id, key))
+                    try:
+                        pool = self._thread_pools[key][callback_id]
+                        future = pool.submit(callback, event)
+                        future.add_done_callback(
+                            self._make_error_handler(callback_id, key)
+                        )
+                    except RuntimeError as e:
+                        # Pool might be shutdown during close() while we're still processing
+                        if 'cannot schedule new futures after shutdown' in str(e):
+                            logger.debug(
+                                f'Skipping event for {key}/{callback_id} as pool is shutting down'
+                            )
+                            continue
+                        else:
+                            # Re-raise other RuntimeErrors
+                            raise
 
     def _make_error_handler(
         self, callback_id: str, subscriber_id: str

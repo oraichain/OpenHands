@@ -1,6 +1,7 @@
 import gc
 import json
 import os
+import threading
 import time
 
 import psutil
@@ -8,7 +9,7 @@ import pytest
 from pytest import TempPathFactory
 
 from openhands.core.schema import ActionType, ObservationType
-from openhands.events import EventSource, EventStream
+from openhands.events import EventSource
 from openhands.events.action import (
     NullAction,
 )
@@ -26,6 +27,7 @@ from openhands.events.observation.files import (
     FileWriteObservation,
 )
 from openhands.events.serialization.event import event_to_dict
+from openhands.events.stream import EventStream, EventStreamSubscriber
 from openhands.storage import get_file_store
 from openhands.storage.locations import (
     get_conversation_event_filename,
@@ -531,3 +533,61 @@ def test_cache_page_with_missing_events(temp_dir: str):
         # If the delete operation fails, we'll just verify that the basic functionality works
         print(f'Note: Could not delete file {missing_filename}: {e}')
         assert len(initial_events) > 0, 'Should retrieve events successfully'
+
+
+def test_close_with_active_events(temp_dir: str):
+    """Test closing an EventStream while it's actively processing events.
+
+    This test simulates a race condition where events are being added and processed
+    while the EventStream is being closed, which previously caused
+    "Cannot close a running event loop" errors.
+    """
+    file_store = get_file_store('local', temp_dir)
+    event_stream = EventStream('close_test', file_store)
+
+    received_events = []
+    event_received = threading.Event()
+
+    # Define a subscriber that introduces a delay before completion
+    def slow_subscriber(event):
+        time.sleep(0.1)  # Simulate some processing time
+        received_events.append(event)
+        event_received.set()
+
+    # Add the subscriber
+    event_stream.subscribe(
+        EventStreamSubscriber.RUNTIME, slow_subscriber, 'slow_callback'
+    )
+
+    # Start adding events in a separate thread
+    def add_events():
+        for i in range(5):
+            time.sleep(0.05)  # Add a small delay between events``
+            event_stream.add_event(NullObservation(f'test{i}'), EventSource.AGENT)
+
+    # Start adding events
+    add_thread = threading.Thread(target=add_events)
+    add_thread.daemon = True
+    add_thread.start()
+
+    # Wait for at least one event to be received
+    event_received.wait(timeout=1.0)
+
+    # Now close the event stream while events are still being processed
+    # This should not raise "Cannot close a running event loop" error
+    event_stream.close()
+
+    # Wait for the add thread to finish
+    add_thread.join(timeout=2.0)
+
+    # We can't make strong assertions about how many events were processed
+    # since it depends on timing, but we should have received at least one
+    assert len(received_events) > 0, 'Should have received at least one event'
+    # Make sure the test event has the correct format
+    for i, event in enumerate(received_events):
+        assert isinstance(
+            event, NullObservation
+        ), f'Event {i} should be a NullObservation'
+        assert event.content.startswith(
+            'test'
+        ), f"Event {i} content should start with 'test'"
