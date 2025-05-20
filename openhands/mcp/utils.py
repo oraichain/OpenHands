@@ -62,7 +62,7 @@ async def create_mcp_clients(
         # check if the name in a search engine config
         if f'search_engine_{name}' in dict_mcp_config:
             continue
-        client = MCPClient(name=name, url=mcp_config.url)
+        client = MCPClient(name=name)
         try:
             await client.connect_sse(mcp_config.url, sid, mnemonic)
             # Only add the client to the list after a successful connection
