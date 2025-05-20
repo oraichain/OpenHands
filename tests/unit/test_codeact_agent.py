@@ -19,7 +19,6 @@ from openhands.agenthub.codeact_agent.tools.browser import (
     _BROWSER_TOOL_DESCRIPTION,
 )
 from openhands.agenthub.codeact_agent.tools.finish import FinishTool
-from openhands.agenthub.codeact_agent.tools.think import ThinkTool
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig, LLMConfig
 from openhands.core.exceptions import FunctionCallNotExistsError
@@ -457,10 +456,9 @@ def test_select_tools_based_on_mode_follow_up_mode(agent: CodeActAgent):
     # Test with FOLLOW_UP mode
     tools = agent._select_tools_based_on_mode(ResearchMode.FOLLOW_UP)
 
-    # Should only include ThinkTool and FinishTool
-    assert len(tools) == 2
-    assert tools[0] == ThinkTool
-    assert tools[1] == FinishTool
+    # Should only include FinishTool
+    assert len(tools) == 1
+    assert tools[0] == FinishTool
 
 
 def test_select_tools_based_on_mode_no_mcp_tools(agent: CodeActAgent):
