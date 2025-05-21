@@ -113,3 +113,66 @@ async def call_evaluation_endpoint(
         except Exception as e:
             log_func('error', f'Error calling evaluation endpoint: {str(e)}')
             await set_agent_state_func(AgentState.FINISHED)
+
+
+async def should_step_after_call_evaluation_endpoint(
+    session_id: str,
+    log_func: Callable[[str, str], None],
+    set_agent_state_func: Callable[[AgentState], Awaitable[None]],
+    add_event_func: Callable[[Any, str], None],
+    message_source: str,
+) -> bool:
+    """
+    Call the evaluation endpoint synchronously to check if the agent should proceed with finishing.
+
+    Args:
+        session_id: The ID of the current session
+        log_func: Function to log messages
+        set_agent_state_func: Function to set the agent state
+        add_event_func: Function to add an event to the event stream
+        message_source: The source identifier for the agent events
+
+    Returns:
+        bool: True if the agent should finish, False if it should continue
+    """
+    evaluation_endpoint = os.getenv('EVALUATION_ENDPOINT_URL')
+    if not evaluation_endpoint:
+        log_func('error', 'EVALUATION_ENDPOINT_URL not set')
+        return True
+
+    payload = {'session_id': session_id, 'action': 'should_step'}
+    log_func(
+        'info', f'Calling evaluation endpoint for validation: {evaluation_endpoint}'
+    )
+
+    headers = {'Content-Type': 'application/json'}
+
+    try:
+        from httpx import request
+
+        response = request(
+            method='POST',
+            url=evaluation_endpoint,
+            headers=headers,
+            json=payload,
+            timeout=5.0,
+        )
+
+        log_func('info', f'Evaluation endpoint response: {response.status_code}')
+
+        try:
+            response_data = response.json()
+            log_data = _json_serialize(response_data)
+            log_func('info', f'Evaluation validation response: {log_data}')
+
+            should_proceed = response_data.get('result', True)
+            log_func('info', f'Should proceed with finish action: {should_proceed}')
+
+            return should_proceed
+
+        except Exception as e:
+            log_func('error', f'Failed to parse JSON response: {str(e)}')
+            return True
+    except Exception as e:
+        log_func('error', f'Failed to call evaluation endpoint: {str(e)}')
+        return True

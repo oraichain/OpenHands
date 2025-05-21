@@ -38,7 +38,7 @@ from openhands.core.exceptions import (
 from openhands.core.logger import LOG_ALL_EVENTS
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.schema import AgentState
-from openhands.evaluation import call_evaluation_endpoint
+from openhands.evaluation import should_step_after_call_evaluation_endpoint
 from openhands.events import (
     EventSource,
     EventStream,
@@ -461,34 +461,6 @@ class AgentController:
             self.state.outputs = action.outputs
             self.state.metrics.merge(self.state.local_metrics)
 
-            try:
-
-                def log_wrapper(level, message):
-                    self.log(level, message)
-
-                async def set_state_wrapper(agent_state: AgentState):
-                    await self.set_agent_state_to(agent_state)
-
-                def add_event_wrapper(event, source):
-                    self.event_stream.add_event(event, source)
-
-                print('Outputs: ', action.outputs)
-
-                await call_evaluation_endpoint(
-                    session_id=self.id,
-                    log_func=log_wrapper,
-                    set_agent_state_func=set_state_wrapper,
-                    add_event_func=add_event_wrapper,
-                    message_source=EventSource.AGENT,
-                )
-
-            except Exception as e:
-                self.log(
-                    'error', f'Failed to set up evaluation endpoint call: {str(e)}'
-                )
-            finally:
-                await self.set_agent_state_to(AgentState.FINISHED)
-
         elif isinstance(action, AgentRejectAction):
             self.state.outputs = action.outputs
             self.state.metrics.merge(self.state.local_metrics)
@@ -867,6 +839,60 @@ class AgentController:
                 if action is None:
                     raise LLMNoActionError('No action was returned')
                 action._source = EventSource.AGENT  # type: ignore [attr-defined]
+
+                if isinstance(action, AgentFinishAction):
+                    print('AgentFinishAction', action)
+                    finish_message = action.final_thought
+                    await self.set_agent_state_to(AgentState.RUNNING)
+                    self.log(
+                        'info',
+                        'Intercepted AgentFinishAction before pushing to event stream',
+                    )
+                    try:
+
+                        def log_wrapper(level, message):
+                            self.log(level, message)
+
+                        async def set_state_wrapper(agent_state: AgentState):
+                            await self.set_agent_state_to(agent_state)
+
+                        def add_event_wrapper(event, source):
+                            self.event_stream.add_event(event, source)
+
+                        should_proceed = (
+                            await should_step_after_call_evaluation_endpoint(
+                                session_id=self.id,
+                                log_func=log_wrapper,
+                                set_agent_state_func=set_state_wrapper,
+                                add_event_func=add_event_wrapper,
+                                message_source=EventSource.AGENT,
+                            )
+                        )
+
+                        if not should_proceed:
+                            self.event_stream.add_event(
+                                MessageAction(content=finish_message), EventSource.AGENT
+                            )
+                            reason = 'I think there might be some issue with the facts presented in the report. Would you like me to check again?'
+
+                            self.event_stream.add_event(
+                                MessageAction(
+                                    content=reason,
+                                    wait_for_response=True,
+                                ),
+                                EventSource.AGENT,
+                            )
+                            await self.set_agent_state_to(
+                                AgentState.AWAITING_USER_INPUT
+                            )
+                            action = NullAction()
+                        else:
+                            await self.set_agent_state_to(AgentState.FINISHED)
+                    except Exception as e:
+                        self.log(
+                            'error', f'Failed during finish action intercept: {str(e)}'
+                        )
+
             except (
                 LLMMalformedActionError,
                 LLMNoActionError,
