@@ -144,6 +144,7 @@ class CodeActAgent(Agent):
         selected_tools = []
         pyodide_bash_tool = None
         pyodide_editor_tool = None
+        pyodide_python_tool = None
         if self.mcp_tools:
             # This code searches through self.mcp_tools to find the first tool that has a function name matching 'pyodide_execute_bash'
             # It uses Python's next() function with a generator expression to find the first matching tool
@@ -166,14 +167,28 @@ class CodeActAgent(Agent):
                 ),
                 None,
             )
+            pyodide_python_tool = next(
+                (
+                    tool
+                    for tool in self.mcp_tools
+                    if tool['function']['name'].replace(MCPClientTool.postfix(), '')
+                    == 'pyodide_execute_python'
+                ),
+                None,
+            )
 
         if research_mode is None or research_mode == ResearchMode.CHAT:
             # enable pyodide tools if MCP tools are set
             selected_tools = self.tools + self.search_tools
-            if self.mcp_tools and pyodide_bash_tool and pyodide_editor_tool:
+            if (
+                self.mcp_tools
+                and pyodide_bash_tool
+                and pyodide_editor_tool
+                and pyodide_python_tool
+            ):
                 selected_tools = (
                     codeact_function_calling.get_simplified_tools()
-                    + [pyodide_bash_tool, pyodide_editor_tool]
+                    + [pyodide_bash_tool, pyodide_editor_tool, pyodide_python_tool]
                     + self.search_tools
                 )
 
@@ -184,7 +199,7 @@ class CodeActAgent(Agent):
             selected_tools = self.tools
 
             # Add pyodide tools if available
-            if pyodide_bash_tool and pyodide_editor_tool:
+            if pyodide_bash_tool and pyodide_editor_tool and pyodide_python_tool:
                 selected_tools = codeact_function_calling.get_simplified_tools()
 
             # Add unique MCP tools. No need to add pyodide tools here since they are already in the MCP tools

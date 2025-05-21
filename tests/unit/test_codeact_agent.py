@@ -425,6 +425,12 @@ def test_select_tools_based_on_mode_chat_mode(agent: CodeActAgent):
                 'description': 'Edit file',
             }
         },
+        {
+            'function': {
+                'name': 'pyodide_execute_python_mcp_tool_call',
+                'description': 'Execute python code',
+            }
+        },
     ]
 
     # Mock search tools
@@ -580,6 +586,12 @@ def test_select_tools_based_on_mode_none_mode(agent: CodeActAgent):
             'function': {
                 'name': 'pyodide_str_replace_editor_mcp_tool_call',
                 'description': 'Edit file',
+            }
+        },
+        {
+            'function': {
+                'name': 'pyodide_execute_python_mcp_tool_call',
+                'description': 'Execute python code',
             }
         },
     ]
