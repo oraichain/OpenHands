@@ -10,6 +10,7 @@ from openhands.runtime.impl.action_execution.action_execution_client import (
     ActionExecutionClient,
 )
 from openhands.runtime.plugins import PluginRequirement
+from openhands.utils.http_session import HttpSession
 from openhands.utils.tenacity_stop import stop_if_should_exit
 
 
@@ -20,7 +21,7 @@ class PyodideRuntime(ActionExecutionClient):
         self,
         config: AppConfig,
         event_stream: EventStream,
-        sid: str = 'default',
+        sid: str = "default",
         plugins: list[PluginRequirement] | None = None,
         env_vars: dict[str, str] | None = None,
         status_callback: Callable | None = None,
@@ -29,10 +30,6 @@ class PyodideRuntime(ActionExecutionClient):
         a2a_manager: A2AManager | None = None,
         mnemonic: str | None = None,
     ):
-        self.config = config
-        self.status_callback = status_callback
-        self.sid = sid
-
         super().__init__(
             config,
             event_stream,
@@ -45,27 +42,43 @@ class PyodideRuntime(ActionExecutionClient):
             a2a_manager=a2a_manager,
             mnemonic=mnemonic,
         )
+        self.config = config
+        self.status_callback = status_callback
+        self.sid = sid
+        self.session = HttpSession(
+            headers={
+                "session_id": self.sid,
+            }
+        )
 
     def _get_action_execution_server_host(self):
         return self.api_url
 
     async def connect(self):
-        pyodide_mcp_config = self.config.dict_mcp_config['pyodide']
+        pyodide_mcp_config = self.config.dict_mcp_config["pyodide"]
         if pyodide_mcp_config is None:
-            raise ValueError('Pyodide MCP config not found')
+            raise ValueError("Pyodide MCP config not found")
 
-        if not hasattr(pyodide_mcp_config, 'url') or not pyodide_mcp_config.url:
-            raise ValueError('Pyodide MCP URL not configured')
+        if not hasattr(pyodide_mcp_config, "url") or not pyodide_mcp_config.url:
+            raise ValueError("Pyodide MCP URL not configured")
 
-        self.api_url = pyodide_mcp_config.url.replace('/sse', '')
-        logger.info(f'Container started. Server url: {self.api_url}')
+        self.api_url = pyodide_mcp_config.url.replace("/sse", "")
+        logger.info(f"Container started. Server url: {self.api_url}")
 
-        logger.info('Waiting for client to become ready...')
-        self.send_status_message('STATUS$WAITING_FOR_CLIENT')
+        logger.info("Waiting for client to become ready...")
+        self.send_status_message("STATUS$WAITING_FOR_CLIENT")
         self._wait_until_alive()
 
-        logger.info('Pyodide initialized')
-        self.send_status_message(' ')
+        self._send_action_server_request(
+            "POST",
+            f"{self._get_action_execution_server_host()}/connect",
+            json={
+                "session_id": self.sid,
+            },
+        )
+
+        logger.info("Pyodide initialized")
+        self.send_status_message(" ")
 
     @tenacity.retry(
         stop=tenacity.stop_after_delay(120) | stop_if_should_exit(),
