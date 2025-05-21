@@ -460,7 +460,9 @@ class AgentController:
         elif isinstance(action, AgentFinishAction):
             self.state.outputs = action.outputs
             self.state.metrics.merge(self.state.local_metrics)
+            await self.set_agent_state_to(AgentState.FINISHED)
 
+            # TODO: add a new event to the event stream sync rag job
         elif isinstance(action, AgentRejectAction):
             self.state.outputs = action.outputs
             self.state.metrics.merge(self.state.local_metrics)
@@ -853,19 +855,10 @@ class AgentController:
                         def log_wrapper(level, message):
                             self.log(level, message)
 
-                        async def set_state_wrapper(agent_state: AgentState):
-                            await self.set_agent_state_to(agent_state)
-
-                        def add_event_wrapper(event, source):
-                            self.event_stream.add_event(event, source)
-
                         should_proceed = (
                             await should_step_after_call_evaluation_endpoint(
                                 session_id=self.id,
                                 log_func=log_wrapper,
-                                set_agent_state_func=set_state_wrapper,
-                                add_event_func=add_event_wrapper,
-                                message_source=EventSource.AGENT,
                             )
                         )
 
