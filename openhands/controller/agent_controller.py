@@ -25,7 +25,7 @@ from openhands.controller.agent import Agent
 from openhands.controller.replay import ReplayManager
 from openhands.controller.state.state import State, TrafficControlState
 from openhands.controller.stuck import StuckDetector
-from openhands.core.config import AgentConfig, LLMConfig
+from openhands.core.config import AgentConfig, LLMConfig, load_app_config
 from openhands.core.exceptions import (
     AgentStuckInLoopError,
     FunctionCallNotExistsError,
@@ -842,7 +842,8 @@ class AgentController:
                     raise LLMNoActionError('No action was returned')
                 action._source = EventSource.AGENT  # type: ignore [attr-defined]
 
-                if isinstance(action, AgentFinishAction):
+                config = load_app_config()
+                if config.enable_evaluation and isinstance(action, AgentFinishAction):
                     print('AgentFinishAction', action)
                     finish_message = action.final_thought
                     await self.set_agent_state_to(AgentState.RUNNING)
@@ -855,22 +856,21 @@ class AgentController:
                         def log_wrapper(level, message):
                             self.log(level, message)
 
-                        should_proceed = (
-                            await should_step_after_call_evaluation_endpoint(
-                                session_id=self.id,
-                                log_func=log_wrapper,
-                            )
+                        (
+                            should_proceed,
+                            reason,
+                        ) = await should_step_after_call_evaluation_endpoint(
+                            session_id=self.id,
+                            log_func=log_wrapper,
                         )
 
                         if not should_proceed:
-                            self.event_stream.add_event(
-                                MessageAction(content=finish_message), EventSource.AGENT
-                            )
-                            reason = 'I think there might be some issue with the facts presented in the report. Would you like me to check again?'
-
+                            # reason = 'I think there might be some issue with the facts presented in the report. Would you like me to check again?'
+                            content = f'{finish_message}'
+                            content += f'\n\n{reason}'
                             self.event_stream.add_event(
                                 MessageAction(
-                                    content=reason,
+                                    content=content,
                                     wait_for_response=True,
                                 ),
                                 EventSource.AGENT,
@@ -879,8 +879,7 @@ class AgentController:
                                 AgentState.AWAITING_USER_INPUT
                             )
                             action = NullAction()
-                        else:
-                            await self.set_agent_state_to(AgentState.FINISHED)
+
                     except Exception as e:
                         self.log(
                             'error', f'Failed during finish action intercept: {str(e)}'
