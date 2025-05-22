@@ -3,11 +3,14 @@ import time
 from enum import IntEnum
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.schema.research import ResearchMode
+
+load_dotenv()
 
 
 class UserStatus(IntEnum):
@@ -262,7 +265,7 @@ async def search_knowledge(
     try:
         async with httpx.AsyncClient(
             timeout=30.0,
-            base_url=os.getenv('THESIS_AUTH_SERVER_URL'),
+            base_url=os.getenv('THESIS_AUTH_SERVER_URL', ''),
             headers={'Content-Type': 'application/json'},
         ) as client:
             response = await client.post(url, headers=headers, json=payload)
@@ -300,7 +303,7 @@ async def webhook_rag_conversation(
     }
     try:
         async with httpx.AsyncClient(
-            base_url=os.getenv('THESIS_AUTH_SERVER_URL'),
+            base_url=os.getenv('THESIS_AUTH_SERVER_URL', ''),
             timeout=30.0,
         ) as client:
             response = await client.post(url, headers=headers, json=payload)
