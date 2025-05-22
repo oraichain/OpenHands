@@ -27,7 +27,7 @@ from openhands.controller.agent import Agent
 from openhands.controller.replay import ReplayManager
 from openhands.controller.state.state import State, TrafficControlState
 from openhands.controller.stuck import StuckDetector
-from openhands.core.config import AgentConfig, LLMConfig
+from openhands.core.config import AgentConfig, LLMConfig, load_app_config
 from openhands.core.exceptions import (
     AgentStuckInLoopError,
     FunctionCallNotExistsError,
@@ -40,6 +40,7 @@ from openhands.core.exceptions import (
 from openhands.core.logger import LOG_ALL_EVENTS
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.schema import AgentState
+from openhands.evaluation import should_step_after_call_evaluation_endpoint
 from openhands.events import (
     EventSource,
     EventStream,
@@ -71,10 +72,15 @@ from openhands.events.observation.a2a import (
     A2ASendTaskArtifactObservation,
     A2ASendTaskUpdateObservation,
 )
-from openhands.events.serialization.event import event_to_trajectory, truncate_content
+from openhands.events.serialization.event import (
+    event_to_dict,
+    event_to_trajectory,
+    truncate_content,
+)
 from openhands.llm.llm import LLM
 from openhands.llm.metrics import Metrics
-from openhands.server.thesis_auth import search_knowledge, webhook_rag_conversation
+from openhands.server.mem0 import process_single_event_for_mem0, search_knowledge_mem0
+from openhands.server.thesis_auth import webhook_rag_conversation
 
 # note: RESUME is only available on web GUI
 TRAFFIC_CONTROL_REMINDER = (
@@ -420,6 +426,8 @@ class AgentController:
         if self.should_step(event):
             self.step()
 
+        # Retrieve conversation and embedding mem0
+        await process_single_event_for_mem0(self.id, event_to_dict(event))
         # sync rag when the agent is finished or waiting for user input
         if (
             self.state.agent_state
@@ -428,6 +436,7 @@ class AgentController:
         ):
             logger.info(f'webhook_rag_conversation: Update rag {self.id}')
             await webhook_rag_conversation(self.id)
+
             self._rag_synced = True
         if self.state.agent_state == AgentState.RUNNING:
             self._rag_synced = False
@@ -547,8 +556,11 @@ class AgentController:
 
             # update new knowledge base with the user message
             if self.user_id and (self.space_id or self.thread_follow_up):
-                knowledge_base = await search_knowledge(
-                    action.content, self.space_id, self.thread_follow_up, self.user_id
+                knowledge_base = await search_knowledge_mem0(
+                    action.content,
+                    self.space_id,
+                    self.raw_followup_conversation_id,
+                    self.user_id,
                 )
                 if knowledge_base:
                     self.agent.update_agent_knowledge_base(knowledge_base)
@@ -835,6 +847,50 @@ class AgentController:
                 if action is None:
                     raise LLMNoActionError('No action was returned')
                 action._source = EventSource.AGENT  # type: ignore [attr-defined]
+
+                config = load_app_config()
+                if config.enable_evaluation and isinstance(action, AgentFinishAction):
+                    print('AgentFinishAction', action)
+                    finish_message = action.final_thought
+                    await self.set_agent_state_to(AgentState.RUNNING)
+                    self.log(
+                        'info',
+                        'Intercepted AgentFinishAction before pushing to event stream',
+                    )
+                    try:
+
+                        def log_wrapper(level, message):
+                            self.log(level, message)
+
+                        (
+                            should_proceed,
+                            reason,
+                        ) = await should_step_after_call_evaluation_endpoint(
+                            session_id=self.id,
+                            log_func=log_wrapper,
+                        )
+
+                        if not should_proceed:
+                            # reason = 'I think there might be some issue with the facts presented in the report. Would you like me to check again?'
+                            content = f'{finish_message}'
+                            content += f'\n\n{reason}'
+                            self.event_stream.add_event(
+                                MessageAction(
+                                    content=content,
+                                    wait_for_response=True,
+                                ),
+                                EventSource.AGENT,
+                            )
+                            await self.set_agent_state_to(
+                                AgentState.AWAITING_USER_INPUT
+                            )
+                            action = NullAction()
+
+                    except Exception as e:
+                        self.log(
+                            'error', f'Failed during finish action intercept: {str(e)}'
+                        )
+
             except (
                 LLMMalformedActionError,
                 LLMNoActionError,

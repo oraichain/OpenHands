@@ -157,7 +157,10 @@ class ConversationMemory:
                 role='system',
                 content=[
                     TextContent(
-                        text=self.prompt_manager.get_followup_mode_message(**kwargs),
+                        text=self.prompt_manager.get_followup_mode_message(
+                            **kwargs,
+                            CURRENT_DATE=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        ),
                         cache_prompt=with_caching,
                     )
                 ],
@@ -172,7 +175,10 @@ class ConversationMemory:
                 role='system',
                 content=[
                     TextContent(
-                        text=self.prompt_manager.get_chat_mode_message(**kwargs),
+                        text=self.prompt_manager.get_chat_mode_message(
+                            **kwargs,
+                            CURRENT_DATE=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        ),
                         cache_prompt=with_caching,
                     )
                 ],
