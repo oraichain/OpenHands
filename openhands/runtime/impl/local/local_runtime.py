@@ -13,6 +13,7 @@ import httpx
 import tenacity
 
 import openhands
+from openhands.a2a.A2AManager import A2AManager
 from openhands.core.config import AppConfig
 from openhands.core.exceptions import AgentRuntimeDisconnectedError
 from openhands.core.logger import openhands_logger as logger
@@ -105,6 +106,8 @@ class LocalRuntime(ActionExecutionClient):
         status_callback: Callable | None = None,
         attach_to_existing: bool = False,
         headless_mode: bool = True,
+        mnemonic: str | None = None,
+        a2a_manager: A2AManager | None = None,
     ):
         self.config = config
         self._user_id = os.getuid()
@@ -172,6 +175,8 @@ class LocalRuntime(ActionExecutionClient):
             status_callback,
             attach_to_existing,
             headless_mode,
+            a2a_manager=a2a_manager,
+            mnemonic=mnemonic,
         )
 
     def _get_action_execution_server_host(self):
