@@ -65,6 +65,7 @@ from openhands.events.observation import (
     ErrorObservation,
     NullObservation,
     Observation,
+    ReportVerificationObservation,
 )
 from openhands.events.observation.a2a import (
     A2ASendTaskArtifactObservation,
@@ -879,6 +880,14 @@ class AgentController:
                                 AgentState.AWAITING_USER_INPUT
                             )
                             action = NullAction()
+
+                            self.event_stream.add_event(
+                                ReportVerificationObservation(
+                                    result=False,
+                                    content=reason,
+                                ),
+                                EventSource.ENVIRONMENT,
+                            )
 
                     except Exception as e:
                         self.log(
