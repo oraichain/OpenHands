@@ -48,6 +48,7 @@ class PyodideRuntime(ActionExecutionClient):
         self.session = HttpSession(
             headers={
                 "session_id": self.sid,
+                "user_id": self.user_id if self.user_id else self.event_stream.user_id,
             }
         )
 
