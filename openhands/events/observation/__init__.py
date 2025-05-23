@@ -27,8 +27,14 @@ from openhands.events.observation.files import (
     FileReadObservation,
     FileWriteObservation,
 )
+from openhands.events.observation.mcp import MCPObservation
 from openhands.events.observation.observation import Observation
+from openhands.events.observation.orchestrator import (
+    OrchestratorFinalObservation,
+    OrchestratorInitializeObservation,
+)
 from openhands.events.observation.planner_mcp import PlanObservation
+from openhands.events.observation.playwright_mcp import BrowserMCPObservation
 from openhands.events.observation.reject import UserRejectObservation
 from openhands.events.observation.success import SuccessObservation
 
@@ -58,4 +64,6 @@ __all__ = [
     'A2ASendTaskArtifactObservation',
     'A2ASendTaskUpdateObservation',
     'A2ASendTaskResponseObservation',
+    'OrchestratorInitializeObservation',
+    'OrchestratorFinalObservation',
 ]

@@ -35,12 +35,14 @@ from openhands.events.action import (
     FileReadAction,
     FileWriteAction,
     IPythonRunCellAction,
+    OrchestratorFinalAnswerAction,
 )
 from openhands.events.action.a2a_action import (
     A2AListRemoteAgentsAction,
     A2ASendTaskAction,
 )
 from openhands.events.action.mcp import McpAction
+from openhands.events.action.orchestrator import OrchestratorInitializationAction
 from openhands.events.event import Event
 from openhands.events.observation import (
     AgentThinkObservation,
@@ -56,6 +58,10 @@ from openhands.events.observation.a2a import (
     A2ASendTaskArtifactObservation,
     A2ASendTaskResponseObservation,
     A2ASendTaskUpdateObservation,
+)
+from openhands.events.observation.orchestrator import (
+    OrchestratorFinalObservation,
+    OrchestratorInitializeObservation,
 )
 from openhands.events.serialization.action import ACTION_TYPE_TO_CLASS
 from openhands.integrations.provider import (
@@ -302,17 +308,40 @@ class Runtime(FileEditRuntimeMixin):
         assert event.timeout is not None
         try:
             await self._export_latest_git_provider_tokens(event)
-            if isinstance(event, McpAction):
+            observation: Observation = NullObservation('')
+            # Handle OrchestratorInitializationAction specially
+            if isinstance(event, OrchestratorInitializationAction):
+                # Create and add the observation
+                observation = OrchestratorInitializeObservation(
+                    task=event.task,
+                    facts=event.facts,
+                    plan=event.plan,
+                    team=event.team,
+                    full_ledger=event.full_ledger,
+                    content=event.full_ledger,
+                )
+                self.event_stream.add_event(observation, EventSource.AGENT)
+                return
+            elif isinstance(event, OrchestratorFinalAnswerAction):
+                # Create and add the final observation
+                observation = OrchestratorFinalObservation(
+                    task=event.task,
+                    content=event.reason,
+                )
+                self.event_stream.add_event(observation, EventSource.AGENT)
+                return
+            elif isinstance(event, McpAction):
                 # we don't call call_tool_mcp impl directly because there can be other action ActionExecutionClient
                 logger.debug(f'Calling call_tool_mcp with event: {event}')
-                observation: Observation = await getattr(self, McpAction.action)(event)
+                observation = await getattr(self, McpAction.action)(event)
             elif isinstance(event, A2AListRemoteAgentsAction) or isinstance(
                 event, A2ASendTaskAction
             ):
                 async for observation in self.call_a2a(event):
                     if observation is not None:
                         observation._cause = event.id  # type: ignore[attr-defined]
-                        observation.tool_call_metadata = event.tool_call_metadata
+                        if event.tool_call_metadata is not None:
+                            observation.tool_call_metadata = event.tool_call_metadata
                         self.event_stream.add_event(observation, EventSource.AGENT)
                 return
             else:
@@ -330,7 +359,8 @@ class Runtime(FileEditRuntimeMixin):
             return
 
         observation._cause = event.id  # type: ignore[attr-defined]
-        observation.tool_call_metadata = event.tool_call_metadata
+        if event.tool_call_metadata is not None:
+            observation.tool_call_metadata = event.tool_call_metadata
 
         # this might be unnecessary, since source should be set by the event stream when we're here
         source = event.source if event.source else EventSource.AGENT
@@ -609,6 +639,13 @@ class Runtime(FileEditRuntimeMixin):
                     result = task_response.result
 
                     if isinstance(result, TaskStatusUpdateEvent):
+                        logger.debug(
+                            f"""
+                            Agent Name: {action.agent_name}
+                            Task Update Event: {result}
+                            Task Content: {result.model_dump_json()}
+                            """
+                        )
                         yield A2ASendTaskUpdateObservation(
                             agent_name=action.agent_name,
                             task_update_event=result,
