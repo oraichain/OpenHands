@@ -291,6 +291,7 @@ def get_tools(
     codeact_enable_llm_editor: bool = False,
     codeact_enable_jupyter: bool = False,
     llm: LLM | None = None,
+    enable_pyodide_bash: bool = False,
 ) -> list[ChatCompletionToolParam]:
     SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
 
@@ -301,11 +302,17 @@ def get_tools(
             for model_substr in SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS
         )
 
-    tools = [
-        create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
-        ThinkTool,
-        FinishTool,
-    ]
+    if not enable_pyodide_bash:
+        tools = [
+            create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
+            ThinkTool,
+            FinishTool,
+        ]
+    else:
+        tools = [
+            ThinkTool,
+            FinishTool,
+        ]
     if codeact_enable_browsing:
         tools.append(WebReadTool)
         tools.append(BrowserTool)
@@ -320,7 +327,3 @@ def get_tools(
             )
         )
     return tools
-
-
-def get_simplified_tools() -> list[ChatCompletionToolParam]:
-    return [ThinkTool, FinishTool]
