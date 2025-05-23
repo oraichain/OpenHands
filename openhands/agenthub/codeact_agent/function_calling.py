@@ -227,9 +227,15 @@ def response_to_actions(
                     MCPClientTool.postfix(), ''
                 )
                 logger.info(f'Original action name: {original_action_name}')
+                arguments = json.loads(tool_call.function.arguments)
+                if 'pyodide' in original_action_name:
+                    # we don't trust sessionId passed by the LLM. Always use the one from the session to get deterministic results
+                    arguments['sessionId'] = sid
+                # Update the arguments string with the modified sessionId
+                updated_arguments_str = json.dumps(arguments)
                 action = McpAction(
                     name=original_action_name,
-                    arguments=tool_call.function.arguments,
+                    arguments=updated_arguments_str,
                 )
             # ================================================
             # A2A
@@ -285,6 +291,7 @@ def get_tools(
     codeact_enable_llm_editor: bool = False,
     codeact_enable_jupyter: bool = False,
     llm: LLM | None = None,
+    enable_pyodide_bash: bool = False,
 ) -> list[ChatCompletionToolParam]:
     SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
 
@@ -295,11 +302,17 @@ def get_tools(
             for model_substr in SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS
         )
 
-    tools = [
-        create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
-        ThinkTool,
-        FinishTool,
-    ]
+    if not enable_pyodide_bash:
+        tools = [
+            create_cmd_run_tool(use_simplified_description=use_simplified_tool_desc),
+            ThinkTool,
+            FinishTool,
+        ]
+    else:
+        tools = [
+            ThinkTool,
+            FinishTool,
+        ]
     if codeact_enable_browsing:
         tools.append(WebReadTool)
         tools.append(BrowserTool)
