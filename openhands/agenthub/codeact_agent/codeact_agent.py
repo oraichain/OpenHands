@@ -141,27 +141,27 @@ class CodeActAgent(Agent):
     def _select_tools_based_on_mode(self, research_mode: str | None) -> list[dict]:
         """Selects the tools based on the mode of the agent."""
         selected_tools = []
-        pyodide_bash_tool = None
-        pyodide_editor_tool = None
+        # pyodide_bash_tool = None
+        pyodide_filesystem_manager_tool = None
         if self.mcp_tools:
             # This code searches through self.mcp_tools to find the first tool that has a function name matching 'pyodide_execute_bash'
             # It uses Python's next() function with a generator expression to find the first matching tool
             # If no matching tool is found, it returns None instead of raising a StopIteration exception
-            pyodide_bash_tool = next(
+            # pyodide_bash_tool = next(
+            #     (
+            #         tool
+            #         for tool in self.mcp_tools
+            #         if tool['function']['name'].replace(MCPClientTool.postfix(), '')
+            #         == 'pyodide_execute_bash'
+            #     ),
+            #     None,
+            # )
+            pyodide_filesystem_manager_tool = next(
                 (
                     tool
                     for tool in self.mcp_tools
                     if tool['function']['name'].replace(MCPClientTool.postfix(), '')
-                    == 'pyodide_execute_bash'
-                ),
-                None,
-            )
-            pyodide_editor_tool = next(
-                (
-                    tool
-                    for tool in self.mcp_tools
-                    if tool['function']['name'].replace(MCPClientTool.postfix(), '')
-                    == 'pyodide_str_replace_editor'
+                    == 'filesystem_manager'
                 ),
                 None,
             )
@@ -169,10 +169,10 @@ class CodeActAgent(Agent):
         if research_mode is None or research_mode == ResearchMode.CHAT:
             # enable pyodide tools if MCP tools are set
             selected_tools = self.tools + self.search_tools
-            if self.mcp_tools and pyodide_bash_tool and pyodide_editor_tool:
+            if self.mcp_tools and pyodide_filesystem_manager_tool:
                 selected_tools = (
-                    codeact_function_calling.get_simplified_tools()
-                    + [pyodide_bash_tool, pyodide_editor_tool]
+                    codeact_function_calling.get_tools(enable_pyodide_bash=True)
+                    + [pyodide_filesystem_manager_tool]
                     + self.search_tools
                 )
 
@@ -186,8 +186,10 @@ class CodeActAgent(Agent):
             selected_tools = self.tools
 
             # Add pyodide tools if available
-            if pyodide_bash_tool and pyodide_editor_tool:
-                selected_tools = codeact_function_calling.get_simplified_tools()
+            if pyodide_filesystem_manager_tool:
+                selected_tools = codeact_function_calling.get_tools(
+                    enable_pyodide_bash=True
+                )
 
             # Add unique MCP tools. No need to add pyodide tools here since they are already in the MCP tools
             if self.mcp_tools:

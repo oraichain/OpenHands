@@ -21,7 +21,7 @@ class PyodideRuntime(ActionExecutionClient):
         self,
         config: AppConfig,
         event_stream: EventStream,
-        sid: str = "default",
+        sid: str = 'default',
         plugins: list[PluginRequirement] | None = None,
         env_vars: dict[str, str] | None = None,
         status_callback: Callable | None = None,
@@ -45,10 +45,11 @@ class PyodideRuntime(ActionExecutionClient):
         self.config = config
         self.status_callback = status_callback
         self.sid = sid
+        user_id = self.user_id if self.user_id else self.event_stream.user_id
         self.session = HttpSession(
             headers={
-                "session_id": self.sid,
-                "user_id": self.user_id if self.user_id else self.event_stream.user_id,
+                'session_id': self.sid,
+                'user_id': user_id if user_id else '',
             }
         )
 
@@ -56,30 +57,27 @@ class PyodideRuntime(ActionExecutionClient):
         return self.api_url
 
     async def connect(self):
-        pyodide_mcp_config = self.config.dict_mcp_config["pyodide"]
+        pyodide_mcp_config = self.config.dict_mcp_config['pyodide']
         if pyodide_mcp_config is None:
-            raise ValueError("Pyodide MCP config not found")
+            raise ValueError('Pyodide MCP config not found')
 
-        if not hasattr(pyodide_mcp_config, "url") or not pyodide_mcp_config.url:
-            raise ValueError("Pyodide MCP URL not configured")
+        if not hasattr(pyodide_mcp_config, 'url') or not pyodide_mcp_config.url:
+            raise ValueError('Pyodide MCP URL not configured')
 
-        self.api_url = pyodide_mcp_config.url.replace("/sse", "")
-        logger.info(f"Container started. Server url: {self.api_url}")
+        self.api_url = pyodide_mcp_config.url.replace('/sse', '')
+        logger.info(f'Container started. Server url: {self.api_url}')
 
-        logger.info("Waiting for client to become ready...")
-        self.send_status_message("STATUS$WAITING_FOR_CLIENT")
+        logger.info('Waiting for client to become ready...')
+        self.send_status_message('STATUS$WAITING_FOR_CLIENT')
         self._wait_until_alive()
 
         self._send_action_server_request(
-            "POST",
-            f"{self._get_action_execution_server_host()}/connect",
-            json={
-                "session_id": self.sid,
-            },
+            'POST',
+            f'{self._get_action_execution_server_host()}/connect',
         )
 
-        logger.info("Pyodide initialized")
-        self.send_status_message(" ")
+        logger.info('Pyodide initialized')
+        self.send_status_message(' ')
 
     @tenacity.retry(
         stop=tenacity.stop_after_delay(120) | stop_if_should_exit(),
