@@ -496,9 +496,9 @@ def test_select_tools_based_on_mode_missing_pyodide_tools(agent: CodeActAgent):
     # Test with CHAT mode
     tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
 
-    # Should fall back to base tools since not all pyodide tools are present
+    # Should not fall back to base tools since there are pyodide tools present
     tool_names = [tool['function']['name'] for tool in tools]
-    assert 'pyodide_execute_bash_mcp_tool_call' not in tool_names
+    assert 'pyodide_execute_bash_mcp_tool_call' in tool_names
 
 
 def test_select_tools_based_on_mode_other_mode(agent: CodeActAgent):

@@ -21,7 +21,6 @@ from openhands.events.action import (
 )
 from openhands.events.event import Event
 from openhands.llm.llm import LLM
-from openhands.mcp.tool import MCPClientTool
 from openhands.memory.condenser import Condenser
 from openhands.memory.condenser.condenser import Condensation, View
 from openhands.memory.conversation_memory import ConversationMemory
@@ -142,37 +141,19 @@ class CodeActAgent(Agent):
         """Selects the tools based on the mode of the agent."""
         selected_tools = []
         # pyodide_bash_tool = None
-        pyodide_filesystem_manager_tool = None
+        pyodide_filesystem_manager_tools = []
         if self.mcp_tools:
-            # This code searches through self.mcp_tools to find the first tool that has a function name matching 'pyodide_execute_bash'
-            # It uses Python's next() function with a generator expression to find the first matching tool
-            # If no matching tool is found, it returns None instead of raising a StopIteration exception
-            # pyodide_bash_tool = next(
-            #     (
-            #         tool
-            #         for tool in self.mcp_tools
-            #         if tool['function']['name'].replace(MCPClientTool.postfix(), '')
-            #         == 'pyodide_execute_bash'
-            #     ),
-            #     None,
-            # )
-            pyodide_filesystem_manager_tool = next(
-                (
-                    tool
-                    for tool in self.mcp_tools
-                    if tool['function']['name'].replace(MCPClientTool.postfix(), '')
-                    == 'filesystem_manager'
-                ),
-                None,
-            )
+            pyodide_filesystem_manager_tools = [
+                tool for tool in self.mcp_tools if 'pyodide' in tool['function']['name']
+            ]
 
         if research_mode is None or research_mode == ResearchMode.CHAT:
             # enable pyodide tools if MCP tools are set
             selected_tools = self.tools + self.search_tools
-            if self.mcp_tools and pyodide_filesystem_manager_tool:
+            if self.mcp_tools and pyodide_filesystem_manager_tools:
                 selected_tools = (
                     codeact_function_calling.get_tools(enable_pyodide_bash=True)
-                    + [pyodide_filesystem_manager_tool]
+                    + pyodide_filesystem_manager_tools
                     + self.search_tools
                 )
 
@@ -186,7 +167,7 @@ class CodeActAgent(Agent):
             selected_tools = self.tools
 
             # Add pyodide tools if available
-            if pyodide_filesystem_manager_tool:
+            if pyodide_filesystem_manager_tools:
                 selected_tools = codeact_function_calling.get_tools(
                     enable_pyodide_bash=True
                 )
@@ -200,6 +181,7 @@ class CodeActAgent(Agent):
                     if tool['function']['name'] not in existing_names
                 ]
                 selected_tools.extend(unique_mcp_tools)
+        logger.debug(f'Selected tools: {selected_tools}')
         return selected_tools
 
     def step(self, state: State) -> Action:
