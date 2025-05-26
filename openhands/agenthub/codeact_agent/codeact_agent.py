@@ -168,8 +168,9 @@ class CodeActAgent(Agent):
 
             # Add pyodide tools if available
             if pyodide_filesystem_manager_tools:
-                selected_tools = codeact_function_calling.get_tools(
-                    enable_pyodide_bash=True
+                selected_tools = (
+                    codeact_function_calling.get_tools(enable_pyodide_bash=True)
+                    + self.search_tools
                 )
 
             # Add unique MCP tools. No need to add pyodide tools here since they are already in the MCP tools
