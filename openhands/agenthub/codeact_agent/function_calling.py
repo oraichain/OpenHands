@@ -145,7 +145,11 @@ def response_to_actions(
                     and sid not in path
                     and workspace_mount_path_in_sandbox_store_in_session
                 ):
-                    path = f"{path.rsplit('/', 1)[0]}/{sid}/{path.rsplit('/', 1)[1]}"
+                    path = put_session_id_in_path(path, sid)
+                    if path == '':
+                        raise FunctionCallValidationError(
+                            f'Invalid path: {path}. Original path: {arguments["path"]}. Please provide a valid path.'
+                        )
 
                 action = FileEditAction(
                     path=path,
@@ -171,7 +175,11 @@ def response_to_actions(
                     and sid not in path
                     and workspace_mount_path_in_sandbox_store_in_session
                 ):
-                    path = f"{path.rsplit('/', 1)[0]}/{sid}/{path.rsplit('/', 1)[1]}"
+                    path = put_session_id_in_path(path, sid)
+                    if path == '':
+                        raise FunctionCallValidationError(
+                            f'Invalid path: {path}. Original path: {arguments["path"]}. Please provide a valid path.'
+                        )
                 command = arguments['command']
                 other_kwargs = {
                     k: v for k, v in arguments.items() if k not in ['command', 'path']
@@ -327,3 +335,14 @@ def get_tools(
             )
         )
     return tools
+
+
+def put_session_id_in_path(path: str, sid: str) -> str:
+    # Split the path at '/workspace' and handle the remaining part
+    if path.startswith('/workspace'):
+        # Remove '/workspace' from the start and get the rest of the path
+        remaining_path = path[len('/workspace') :] if path != '/workspace' else ''
+        # Construct the new path with sid inserted after /workspace
+        path = f'/workspace/{sid}{remaining_path}'
+        return path
+    return ''
