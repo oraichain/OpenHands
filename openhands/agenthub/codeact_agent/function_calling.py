@@ -172,6 +172,7 @@ def response_to_actions(
                 path = arguments['path']
                 if (
                     sid is not None
+                    and sid != ''
                     and sid not in path
                     and workspace_mount_path_in_sandbox_store_in_session
                 ):
@@ -338,11 +339,29 @@ def get_tools(
 
 
 def put_session_id_in_path(path: str, sid: str) -> str:
-    # Split the path at '/workspace' and handle the remaining part
-    if path.startswith('/workspace'):
-        # Remove '/workspace' from the start and get the rest of the path
-        remaining_path = path[len('/workspace') :] if path != '/workspace' else ''
-        # Construct the new path with sid inserted after /workspace
-        path = f'/workspace/{sid}{remaining_path}'
-        return path
+    # Check if path starts with '/workspace' or '/workspace/'
+    if not sid:
+        return ''
+    if path == '/workspace' or path.startswith('/workspace/'):
+        # Manually clean . and .. without resolving above /workspace
+        parts = path.split('/')
+        cleaned_parts = ['/workspace']
+        for part in parts[2:]:  # Skip ['', 'workspace']
+            if part and part not in ('.', '..'):
+                cleaned_parts.append(part)
+        cleaned_path = '/'.join(cleaned_parts)
+        # Strip '/workspace' and get remaining path
+        remaining_path = (
+            cleaned_path[len('/workspace') :] if cleaned_path != '/workspace' else ''
+        )
+        # Handle empty sid case
+        if not sid:
+            return cleaned_path.rstrip('/')
+        # Construct path with sid, adding '/' only if remaining_path exists
+        result = (
+            f'/workspace/{sid}/{remaining_path.lstrip("/")}'
+            if remaining_path
+            else f'/workspace/{sid}'
+        )
+        return result.rstrip('/')
     return ''
