@@ -92,10 +92,10 @@ class CodeActAgent(Agent):
             codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
             llm=self.llm,
         )
-        # Add A2A tools if A2A server URLs are provided
-        if self.config.a2a_server_urls:
-            built_in_tools.append(ListRemoteAgents)
-            built_in_tools.append(SendTask)
+        # # Add A2A tools if A2A server URLs are provided
+        # if self.config.a2a_server_urls:
+        #     built_in_tools.append(ListRemoteAgents)
+        #     built_in_tools.append(SendTask)
 
         self.tools = built_in_tools
 
@@ -182,6 +182,12 @@ class CodeActAgent(Agent):
                 ]
                 selected_tools.extend(unique_mcp_tools)
         logger.debug(f'Selected tools: {selected_tools}')
+
+        # Add A2A tools if A2A server URLs are provided
+        if self.config.a2a_server_urls:
+            selected_tools.append(ListRemoteAgents)
+            selected_tools.append(SendTask)
+
         return selected_tools
 
     def step(self, state: State) -> Action:
