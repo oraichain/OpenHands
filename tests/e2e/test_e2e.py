@@ -226,7 +226,7 @@ if __name__ == '__main__':
                 replay_json=None,
                 public_address=public_address,
                 system_prompt=SYSTEM_PROMPT,
-                research_mode=ResearchMode.DEEP_RESEARCH,
+                research_mode=ResearchMode.CHAT,
             )
             conversation_id = new_conversation_response['conversation_id']
         display_message(f'Conversation created with ID: {conversation_id}')
