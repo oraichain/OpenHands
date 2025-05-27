@@ -949,7 +949,13 @@ class AgentController:
             self._prepare_metrics_for_frontend(action)
 
             self.event_stream.add_event(action, action._source)  # type: ignore [attr-defined]
-
+            self.event_stream.add_event(
+                ReportVerificationObservation(
+                    result=True,
+                    content='',
+                ),
+                EventSource.ENVIRONMENT,
+            )
         await self.update_state_after_step()
 
         log_level = 'info' if LOG_ALL_EVENTS else 'debug'
