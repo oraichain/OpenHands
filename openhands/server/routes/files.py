@@ -1,7 +1,9 @@
 import base64
 import os
+import re
 
 import aiofiles  # type: ignore
+import httpx
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse
 from pathspec import PathSpec
@@ -110,28 +112,96 @@ async def select_file(file: str, request: Request):
     """
     runtime: Runtime = request.state.conversation.runtime
 
-    file = os.path.join(
+    file_path = os.path.join(
         runtime.config.workspace_mount_path_in_sandbox + '/' + runtime.sid, file
     )
-    read_action = FileReadAction(file)
+    read_action = FileReadAction(file_path)
     try:
         observation = await call_sync_from_async(runtime.run_action, read_action)
     except AgentRuntimeUnavailableError as e:
-        logger.error(f'Error opening file {file}: {e}')
+        logger.error(f'Error opening file {file_path}: {e}')
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={'error': f'Error opening file: {e}'},
         )
 
+    async def fetch_image_base64(image_path: str) -> str:
+        # Compose the API URL for select-file
+        # Extract conversation_id from the request.url.path
+        try:
+            conversation_id = request.url.path.split('/')[3]
+        except Exception:
+            conversation_id = ''
+        # Compose the URL
+        api_url = f'{request.base_url}api/conversations/{conversation_id}/select-file?file={image_path}'
+        headers = dict(request.headers)
+        # Remove host header to avoid issues
+        headers.pop('host', None)
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(api_url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get('code', '')
+            return ''
+
     if isinstance(observation, FileReadObservation):
         content = observation.content
-        return {'code': content}
+        if file.lower().endswith('.md'):
+            # Find all markdown image links ![alt](src) and <img src="src">
+            md_img_pattern = r'!\[[^\]]*\]\(([^)]+)\)'
+            html_img_pattern = r'<img[^>]+src=["\']([^"\'>]+)["\']'
+            matches = re.findall(md_img_pattern, content) + re.findall(
+                html_img_pattern, content
+            )
+            # Only process static paths (not http/https)
+            replacements = {}
+            for img_src in matches:
+                if img_src.startswith('http://') or img_src.startswith('https://'):
+                    continue
+                # Normalize path relative to the md file
+                img_path = os.path.normpath(
+                    os.path.join(os.path.dirname(file), img_src)
+                )
+                base64_data = await fetch_image_base64(img_path)
+                if base64_data:
+                    # Check if base64_data already has data URL prefix
+                    if base64_data.startswith('data:'):
+                        data_url = base64_data
+                    else:
+                        # Guess mime type from extension
+                        ext = os.path.splitext(img_src)[1].lower()
+                        if ext == '.png':
+                            mime = 'image/png'
+                        elif ext in ['.jpg', '.jpeg']:
+                            mime = 'image/jpeg'
+                        elif ext == '.gif':
+                            mime = 'image/gif'
+                        else:
+                            mime = 'application/octet-stream'
+                        data_url = f'data:{mime};base64,{base64_data}'
+                    replacements[img_src] = data_url
+            # Replace in markdown
+            for src, data_url in replacements.items():
+                # Replace in both markdown and html img tags
+                content = re.sub(
+                    r'(!\[[^\]]*\]\()' + re.escape(src) + r'(\))',
+                    r'\1' + data_url + r'\2',
+                    content,
+                )
+                content = re.sub(
+                    r'(<img[^>]+src=["\'])' + re.escape(src) + r'(["\'])',
+                    r'\1' + data_url + r'\2',
+                    content,
+                )
+            return {'code': content}
+        else:
+            return {'code': content}
     elif isinstance(observation, ErrorObservation):
-        logger.error(f'Error opening file {file}: {observation}')
+        logger.error(f'Error opening file {file_path}: {observation}')
 
         if 'ERROR_BINARY_FILE' in observation.message:
             try:
-                async with aiofiles.open(file, 'rb') as f:
+                async with aiofiles.open(file_path, 'rb') as f:
                     binary_data = await f.read()
                     base64_encoded = base64.b64encode(binary_data).decode('utf-8')
                     return {'code': base64_encoded}
