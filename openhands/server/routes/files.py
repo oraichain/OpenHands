@@ -11,8 +11,10 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse
 from pathspec import PathSpec
 from pathspec.patterns import GitWildMatchPattern
+from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
+from openhands.core.config import load_app_config
 from openhands.core.exceptions import AgentRuntimeUnavailableError
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import (
@@ -26,9 +28,17 @@ from openhands.runtime.base import Runtime
 from openhands.server.file_config import (
     FILES_TO_IGNORE,
 )
+from openhands.server.shared import (
+    s3_handler,
+)
 from openhands.utils.async_utils import call_sync_from_async
 
 app = APIRouter(prefix='/api/conversations/{conversation_id}')
+config_app = load_app_config()
+
+
+class UploadFileRequest(BaseModel):
+    file: str
 
 
 @app.get('/list-files')
@@ -122,9 +132,8 @@ async def select_file(file: str, request: Request):
     """
     runtime: Runtime = request.state.conversation.runtime
 
-    file = os.path.join(
-        runtime.config.workspace_mount_path_in_sandbox + '/' + runtime.sid, file
-    )
+    workspace_path = runtime.config.workspace_mount_path_in_sandbox or ''
+    file = os.path.join(workspace_path + '/' + runtime.sid, file)
     read_action = FileReadAction(file)
     try:
         observation = await call_sync_from_async(runtime.run_action, read_action)
@@ -143,7 +152,11 @@ async def select_file(file: str, request: Request):
 
         if 'ERROR_BINARY_FILE' in observation.message:
             try:
-                async with aiofiles.open(file, 'rb') as f:
+                workspace_base = config_app.workspace_base or ''
+                openhand_file_path = os.path.join(
+                    workspace_base + '/' + runtime.sid, file
+                )
+                async with aiofiles.open(openhand_file_path, 'rb') as f:
                     binary_data = await f.read()
                     base64_encoded = base64.b64encode(binary_data).decode('utf-8')
                     return {'code': base64_encoded}
@@ -161,6 +174,37 @@ async def select_file(file: str, request: Request):
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={'error': f'Error opening file: {observation}'},
+    )
+
+
+@app.post('/upload-image-file')
+async def uploadImageFile(request: Request, data: UploadFileRequest):
+    runtime: Runtime = request.state.conversation.runtime
+    file = data.file
+    file_parts = file.split('.')
+    if len(file_parts) < 2:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={'error': 'Invalid file type'},
+        )
+    ext = file_parts[-1]
+    if ext not in ['png', 'jpg', 'jpeg', 'gif', 'webp']:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={'error': 'Invalid file type'},
+        )
+
+    workspace_base = config_app.workspace_base or ''
+    file_path = os.path.join(workspace_base + '/' + runtime.sid, file)
+
+    async with aiofiles.open(file_path, 'rb') as f:
+        file_content = await f.read()
+        folder_path = f'workspace/{runtime.sid}'
+        s3_url = await s3_handler.upload_raw_file(file_content, folder_path, file)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={'message': 'File uploaded successfully', 'url': s3_url},
     )
 
 
