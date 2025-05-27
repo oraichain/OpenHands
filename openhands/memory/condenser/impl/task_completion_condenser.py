@@ -48,7 +48,14 @@ class TaskCompletionCondenser(Condenser):
         if (
             event.source == EventSource.AGENT
             and hasattr(event, 'observation')
-            and event.observation == ObservationType.EDIT  # file edit observation
+            and event.observation == ObservationType.EDIT
+        ):
+            return True
+
+        if (
+            event.source == EventSource.AGENT
+            and hasattr(event, 'action')
+            and event.action == ActionType.EDIT
         ):
             return True
 
