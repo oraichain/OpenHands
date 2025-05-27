@@ -91,7 +91,7 @@ async def list_files(request: Request, path: str | None = None):
 
 
 @app.get('/select-file')
-async def select_file(file: str, request: Request):
+async def select_file(file: str, request: Request, is_base64_in_md: bool = True):
     """Retrieve the content of a specified file.
 
     To select a file:
@@ -103,6 +103,7 @@ async def select_file(file: str, request: Request):
         file (str): The path of the file to be retrieved.
             Expect path to be absolute inside the runtime.
         request (Request): The incoming request object.
+        is_base64_in_md (bool, optional): Whether to convert base64. Defaults to True.
 
     Returns:
         dict: A dictionary containing the file content.
@@ -147,6 +148,8 @@ async def select_file(file: str, request: Request):
     if isinstance(observation, FileReadObservation):
         content = observation.content
         if file.lower().endswith('.md'):
+            if not is_base64_in_md:
+                return {'code': content}
             # Find all markdown image links ![alt](src) and <img src="src">
             md_img_pattern = r'!\[[^\]]*\]\(([^)]+)\)'
             html_img_pattern = r'<img[^>]+src=["\']([^"\'>]+)["\']'
