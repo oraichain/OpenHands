@@ -96,9 +96,9 @@ IMPORTANT: This is extra knowledge you can use for reasoning and answering user 
 
 {% if agent_infos %}
 <A2A_INFO>
-1. If the tasks relate to an A2A agent's description, prioritize calling the agent to solve the task.
-2. When send task to an agent, you must preserve the user's message that detected the task and forward it to the agent.
-3. After receiving the result from the agent, think step by step and decide if the result needs additional calls to the A2A agents or additional tool calling to solve the task.
+1. If a task relates to an A2A agent's description, prioritize calling the agent to solve it.
+2. When send a task to an agent, you must preserve the user's message that detected the task and forward it to the agent.
+3. After receiving the result from the agent, think step by step and decide if the result needs additional calls to the A2A agents or additional tools to solve the task.
 4. The list of agents available to you to send tasks to:
 Agents:
 {% for agent_info in agent_infos %}
