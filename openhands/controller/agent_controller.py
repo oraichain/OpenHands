@@ -866,7 +866,6 @@ class AgentController:
                         )
 
                         if not should_proceed:
-                            # reason = 'I think there might be some issue with the facts presented in the report. Would you like me to check again?'
                             content = f'{finish_message}'
                             content += f'\n\n{reason}'
                             self.event_stream.add_event(
@@ -949,13 +948,7 @@ class AgentController:
             self._prepare_metrics_for_frontend(action)
 
             self.event_stream.add_event(action, action._source)  # type: ignore [attr-defined]
-            self.event_stream.add_event(
-                ReportVerificationObservation(
-                    result=True,
-                    content='',
-                ),
-                EventSource.ENVIRONMENT,
-            )
+
         await self.update_state_after_step()
 
         log_level = 'info' if LOG_ALL_EVENTS else 'debug'
