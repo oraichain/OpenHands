@@ -1,24 +1,44 @@
 import base64
 import os
-import re
 
 import aiofiles  # type: ignore
-import httpx
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Request,
+    status,
+)
 from fastapi.responses import FileResponse, JSONResponse
 from pathspec import PathSpec
 from pathspec.patterns import GitWildMatchPattern
+from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
+from openhands.core.config import load_app_config
 from openhands.core.exceptions import AgentRuntimeUnavailableError
 from openhands.core.logger import openhands_logger as logger
-from openhands.events.action import FileReadAction
-from openhands.events.observation import ErrorObservation, FileReadObservation
+from openhands.events.action import (
+    FileReadAction,
+)
+from openhands.events.observation import (
+    ErrorObservation,
+    FileReadObservation,
+)
 from openhands.runtime.base import Runtime
-from openhands.server.file_config import FILES_TO_IGNORE
+from openhands.server.file_config import (
+    FILES_TO_IGNORE,
+)
+from openhands.server.shared import (
+    s3_handler,
+)
 from openhands.utils.async_utils import call_sync_from_async
 
 app = APIRouter(prefix='/api/conversations/{conversation_id}')
+config_app = load_app_config()
+
+
+class UploadFileRequest(BaseModel):
+    file: str
 
 
 @app.get('/list-files')
@@ -91,7 +111,7 @@ async def list_files(request: Request, path: str | None = None):
 
 
 @app.get('/select-file')
-async def select_file(file: str, request: Request, is_base64_in_md: bool = True):
+async def select_file(file: str, request: Request):
     """Retrieve the content of a specified file.
 
     To select a file:
@@ -103,7 +123,6 @@ async def select_file(file: str, request: Request, is_base64_in_md: bool = True)
         file (str): The path of the file to be retrieved.
             Expect path to be absolute inside the runtime.
         request (Request): The incoming request object.
-        is_base64_in_md (bool, optional): Whether to convert base64. Defaults to True.
 
     Returns:
         dict: A dictionary containing the file content.
@@ -113,98 +132,31 @@ async def select_file(file: str, request: Request, is_base64_in_md: bool = True)
     """
     runtime: Runtime = request.state.conversation.runtime
 
-    file_path = os.path.join(
-        runtime.config.workspace_mount_path_in_sandbox + '/' + runtime.sid, file
-    )
-    read_action = FileReadAction(file_path)
+    workspace_path = runtime.config.workspace_mount_path_in_sandbox or ''
+    file = os.path.join(workspace_path + '/' + runtime.sid, file)
+    read_action = FileReadAction(file)
     try:
         observation = await call_sync_from_async(runtime.run_action, read_action)
     except AgentRuntimeUnavailableError as e:
-        logger.error(f'Error opening file {file_path}: {e}')
+        logger.error(f'Error opening file {file}: {e}')
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={'error': f'Error opening file: {e}'},
         )
 
-    async def fetch_image_base64(image_path: str) -> str:
-        # Compose the API URL for select-file
-        # Extract conversation_id from the request.url.path
-        try:
-            conversation_id = request.url.path.split('/')[3]
-        except Exception:
-            conversation_id = ''
-        # Compose the URL
-        api_url = f'{request.base_url}api/conversations/{conversation_id}/select-file?file={image_path}'
-        headers = dict(request.headers)
-        # Remove host header to avoid issues
-        headers.pop('host', None)
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(api_url, headers=headers)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get('code', '')
-            return ''
-
     if isinstance(observation, FileReadObservation):
         content = observation.content
-        if file.lower().endswith('.md'):
-            if not is_base64_in_md:
-                return {'code': content}
-            # Find all markdown image links ![alt](src) and <img src="src">
-            md_img_pattern = r'!\[[^\]]*\]\(([^)]+)\)'
-            html_img_pattern = r'<img[^>]+src=["\']([^"\'>]+)["\']'
-            matches = re.findall(md_img_pattern, content) + re.findall(
-                html_img_pattern, content
-            )
-            # Only process static paths (not http/https)
-            replacements = {}
-            for img_src in matches:
-                if img_src.startswith('http://') or img_src.startswith('https://'):
-                    continue
-                # Normalize path relative to the md file
-                img_path = os.path.normpath(
-                    os.path.join(os.path.dirname(file), img_src)
-                )
-                base64_data = await fetch_image_base64(img_path)
-                if base64_data:
-                    # Check if base64_data already has data URL prefix
-                    if base64_data.startswith('data:'):
-                        data_url = base64_data
-                    else:
-                        # Guess mime type from extension
-                        ext = os.path.splitext(img_src)[1].lower()
-                        if ext == '.png':
-                            mime = 'image/png'
-                        elif ext in ['.jpg', '.jpeg']:
-                            mime = 'image/jpeg'
-                        elif ext == '.gif':
-                            mime = 'image/gif'
-                        else:
-                            mime = 'application/octet-stream'
-                        data_url = f'data:{mime};base64,{base64_data}'
-                    replacements[img_src] = data_url
-            # Replace in markdown
-            for src, data_url in replacements.items():
-                # Replace in both markdown and html img tags
-                content = re.sub(
-                    r'(!\[[^\]]*\]\()' + re.escape(src) + r'(\))',
-                    r'\1' + data_url + r'\2',
-                    content,
-                )
-                content = re.sub(
-                    r'(<img[^>]+src=["\'])' + re.escape(src) + r'(["\'])',
-                    r'\1' + data_url + r'\2',
-                    content,
-                )
-            return {'code': content}
-        else:
-            return {'code': content}
+        return {'code': content}
     elif isinstance(observation, ErrorObservation):
-        logger.error(f'Error opening file {file_path}: {observation}')
+        logger.error(f'Error opening file {file}: {observation}')
 
         if 'ERROR_BINARY_FILE' in observation.message:
             try:
-                async with aiofiles.open(file_path, 'rb') as f:
+                workspace_base = config_app.workspace_base or ''
+                openhand_file_path = os.path.join(
+                    workspace_base + '/' + runtime.sid, file
+                )
+                async with aiofiles.open(openhand_file_path, 'rb') as f:
                     binary_data = await f.read()
                     base64_encoded = base64.b64encode(binary_data).decode('utf-8')
                     return {'code': base64_encoded}
@@ -222,6 +174,37 @@ async def select_file(file: str, request: Request, is_base64_in_md: bool = True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={'error': f'Error opening file: {observation}'},
+    )
+
+
+@app.post('/upload-image-file')
+async def uploadImageFile(request: Request, data: UploadFileRequest):
+    runtime: Runtime = request.state.conversation.runtime
+    file = data.file
+    file_parts = file.split('.')
+    if len(file_parts) < 2:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={'error': 'Invalid file type'},
+        )
+    ext = file_parts[-1]
+    if ext not in ['png', 'jpg', 'jpeg', 'gif', 'webp']:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={'error': 'Invalid file type'},
+        )
+
+    workspace_base = config_app.workspace_base or ''
+    file_path = os.path.join(workspace_base + '/' + runtime.sid, file)
+
+    async with aiofiles.open(file_path, 'rb') as f:
+        file_content = await f.read()
+        folder_path = f'workspace/{runtime.sid}'
+        s3_url = await s3_handler.upload_raw_file(file_content, folder_path, file)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={'message': 'File uploaded successfully', 'url': s3_url},
     )
 
 

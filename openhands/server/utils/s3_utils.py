@@ -21,6 +21,25 @@ class S3Handler:
         )
         self.bucket_name = os.getenv('S3_BUCKET')
 
+    async def upload_raw_file(
+        self, file_content: bytes, folder_path: str, filename: str
+    ):
+        try:
+            s3_key = f'{folder_path}/{filename}' if folder_path else filename
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=file_content,
+            )
+            s3_url = f'https://{self.bucket_name}.s3.amazonaws.com/{s3_key}'
+            return s3_url
+        except ClientError as e:
+            logger.error(f'Error uploading file to S3: {str(e)}')
+            return None
+        except Exception as e:
+            logger.error(f'Unexpected error uploading to S3: {str(e)}')
+            return None
+
     async def upload_file(
         self, file: UploadFile, folder_path: str, filename: Optional[str] = None
     ):
