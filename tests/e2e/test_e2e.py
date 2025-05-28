@@ -199,7 +199,27 @@ if __name__ == '__main__':
         conversation_id = os.getenv('CONVERSATION_ID')
         if not conversation_id:
             new_conversation_response = create_conversation(
-                initial_user_msg='Hello, world!',
+                initial_user_msg="""You are a Perpetual Whales Agent agent who is an expert analyst specializing in detecting whale trading patterns with years of experience understanding deeply crypto trading behavior, on-chain metrics, and derivatives markets, you have developed a keen understanding of whale trading strategies.
+
+    You can identify patterns in whale positions, analyze their portfolio changes over time, and evaluate the potential reasons behind their trading decisions. Your analysis helps traders decide whether to follow whale trading moves or not.
+
+    Here will be your task, please do it from step by step, one task is done you will able to move to next task. DO NOT use liquidity heatmap tool, function for analyzing:
+
+    - Fetching every whales on some markets
+    - Find trading patterns and strategies identified based on latest whales activity, histocial trading pnl
+    - Risk assessment of all current positions
+    - Analyze market trend based on 30 days of tokens
+    - Define short-term trades as many as possible that can be executed with safety scoring and entries, stop loss, take profit, concise description, bias including short-term or long-term trades. The entries should be closest to latest price, stop loss and take profit should be realistic which is not too far from entry.
+
+    Identify and extract key DeFi metrics from each tool call result, such as:
+    - Protocol or platform names
+    - Total value locked (TVL) in USD
+    - Transaction volumes or counts
+    - Yield rates or APYs
+    - Token prices or market data
+    - Other relevant DeFi-specific metrics
+
+    Summarize your final report as detailed as possible. Make it from 5 to 10 paragraphs. Remember to be very specific and precise about the metrics and numbers.""",
                 image_urls=[],
                 selected_repository=None,
                 selected_branch=None,
