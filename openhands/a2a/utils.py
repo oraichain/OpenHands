@@ -1,9 +1,9 @@
 import yaml
 
-from openhands.a2a.common.types import Part
+from openhands.a2a.common.types import DataPart, Part
 
 
-def convert_parts(parts: list[Part]) -> list[str]:
+def convert_parts(parts: list[Part]) -> list[str | DataPart]:
     rval = []
     for p in parts:
         rval.append(convert_part(p))
@@ -31,18 +31,15 @@ def convert_part(part: Part):
         except Exception as e:
             # Fallback to original data if YAML conversion fails
             return f'Error converting to YAML: {str(e)}\nOriginal data: {part.data}'
-    #   elif part.type == "file":
+    # elif part.type == "file":
     #     # Repackage A2A FilePart to google.genai Blob
     #     # Currently not considering plain text as files
     #     file_id = part.file.name
     #     file_bytes = base64.b64decode(part.file.bytes)
-    #     file_part = types.Part(
-    #       inline_data=types.Blob(
+    #     file_part = Part(
+    #       inline_data=Blob(
     #         mime_type=part.file.mimeType,
     #         data=file_bytes))
-    #     tool_context.save_artifact(file_id, file_part)
-    #     tool_context.actions.skip_summarization = True
-    #     tool_context.actions.escalate = True
     #     return DataPart(data = {"artifact-file-id": file_id})
     else:
         return f'Unknown type: {part.type}'
