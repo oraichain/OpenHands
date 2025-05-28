@@ -228,9 +228,19 @@ async def uploadImageFile(request: Request, data: UploadFileRequest):
     if isinstance(observation, FileReadObservation):
         file_content = observation.content
         try:
-            image_raw_data = safe_base64_decode(file_content)
+            # Handle different content formats
+            if file_content.startswith('data:image/'):
+                # Data URL format: "data:image/png;base64,iVBORw0KGgo..."
+                base64_part = (
+                    file_content.split(',', 1)[1]
+                    if ',' in file_content
+                    else file_content
+                )
+                image_raw_data = safe_base64_decode(base64_part)
+            else:
+                # Try to decode as plain base64
+                image_raw_data = safe_base64_decode(file_content)
 
-            logger.info(f'Image raw data size: {len(image_raw_data)} bytes')
         except ValueError as e:
             logger.error(f'Error decoding base64 content: {e}')
             return JSONResponse(
