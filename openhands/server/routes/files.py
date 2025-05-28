@@ -159,6 +159,7 @@ async def select_file(file: str, request: Request):
                 async with aiofiles.open(openhand_file_path, 'rb') as f:
                     binary_data = await f.read()
                     base64_encoded = base64.b64encode(binary_data).decode('utf-8')
+                    logger.info(f'base64_encoded: {base64_encoded}')
                     return {'code': base64_encoded}
             except Exception as e:
                 return JSONResponse(
@@ -179,7 +180,6 @@ async def select_file(file: str, request: Request):
 
 @app.post('/upload-image-file')
 async def uploadImageFile(request: Request, data: UploadFileRequest):
-    runtime: Runtime = request.state.conversation.runtime
     file = data.file
     file_parts = file.split('.')
     if len(file_parts) < 2:
@@ -193,19 +193,46 @@ async def uploadImageFile(request: Request, data: UploadFileRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             content={'error': 'Invalid file type'},
         )
+    runtime: Runtime = request.state.conversation.runtime
+    workspace_path = runtime.config.workspace_mount_path_in_sandbox or ''
+    file = os.path.join(workspace_path + '/' + runtime.sid, file)
+    read_action = FileReadAction(file)
+    image_raw_data: bytes | None = None
+    try:
+        observation = await call_sync_from_async(runtime.run_action, read_action)
+    except AgentRuntimeUnavailableError as e:
+        logger.error(f'Error opening file {file}: {e}')
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={'error': f'Error opening file: {e}'},
+        )
+    if isinstance(observation, FileReadObservation):
+        file_content = observation.content
+        image_raw_data = base64.b64decode(file_content)
+    elif isinstance(observation, ErrorObservation):
+        logger.error(f'Error opening file {file}: {observation}')
 
-    workspace_base = config_app.workspace_base or ''
-    file_path = os.path.join(workspace_base + '/' + runtime.sid, file)
-
-    async with aiofiles.open(file_path, 'rb') as f:
-        file_content = await f.read()
+        if 'ERROR_BINARY_FILE' in observation.message:
+            try:
+                workspace_base = config_app.workspace_base or ''
+                openhand_file_path = os.path.join(
+                    workspace_base + '/' + runtime.sid, file
+                )
+                async with aiofiles.open(openhand_file_path, 'rb') as f:
+                    binary_data = await f.read()
+                    image_raw_data = binary_data
+            except Exception as e:
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={'error': f'Error reading binary file: {e}'},
+                )
+    if image_raw_data:
         folder_path = f'workspace/{runtime.sid}'
-        s3_url = await s3_handler.upload_raw_file(file_content, folder_path, file)
-
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={'message': 'File uploaded successfully', 'url': s3_url},
-    )
+        s3_url = await s3_handler.upload_raw_file(image_raw_data, folder_path, file)
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={'message': 'File uploaded successfully', 'url': s3_url},
+        )
 
 
 @app.get('/zip-directory')
