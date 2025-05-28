@@ -9,6 +9,7 @@ from openhands.core.config.search_engine import SearchEngineConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.schema.observation import ObservationType
 from openhands.events.action.mcp import McpAction
+from openhands.events.observation.commands import IPythonRunCellObservation
 from openhands.events.observation.error import ErrorObservation
 from openhands.events.observation.mcp import MCPObservation
 from openhands.events.observation.observation import Observation
@@ -31,7 +32,7 @@ def convert_mcp_clients_to_tools(mcp_clients: list[MCPClient] | None) -> list[di
         List of dicts of tools ready to be used by CodeActAgent
     """
     if mcp_clients is None:
-        logger.warning('mcp_clients is None, returning empty list')
+        logger.warning("mcp_clients is None, returning empty list")
         return []
 
     all_mcp_tools = []
@@ -43,7 +44,7 @@ def convert_mcp_clients_to_tools(mcp_clients: list[MCPClient] | None) -> list[di
                 mcp_tools = tool.to_param()
                 all_mcp_tools.append(mcp_tools)
     except Exception as e:
-        logger.error(f'Error in convert_mcp_clients_to_tools: {e}')
+        logger.error(f"Error in convert_mcp_clients_to_tools: {e}")
         return []
     return all_mcp_tools
 
@@ -57,24 +58,24 @@ async def create_mcp_clients(
     # Initialize SSE connections
     for name, mcp_config in dict_mcp_config.items():
         logger.info(
-            f'Initializing MCP {name} agent for {mcp_config.url} with {mcp_config.mode} connection...'
+            f"Initializing MCP {name} agent for {mcp_config.url} with {mcp_config.mode} connection..."
         )
         # check if the name in a search engine config
-        if f'search_engine_{name}' in dict_mcp_config:
+        if f"search_engine_{name}" in dict_mcp_config:
             continue
         client = MCPClient(name=name)
         try:
             await client.connect_sse(mcp_config.url, sid, mnemonic)
             # Only add the client to the list after a successful connection
             mcp_clients.append(client)
-            logger.info(f'Connected to MCP server {mcp_config.url} via SSE')
+            logger.info(f"Connected to MCP server {mcp_config.url} via SSE")
         except Exception as e:
-            logger.error(f'Failed to connect to {mcp_config.url}: {str(e)}')
+            logger.error(f"Failed to connect to {mcp_config.url}: {str(e)}")
             try:
                 await client.disconnect()
             except Exception as disconnect_error:
                 logger.error(
-                    f'Error during disconnect after failed connection: {str(disconnect_error)}'
+                    f"Error during disconnect after failed connection: {str(disconnect_error)}"
                 )
 
     return mcp_clients
@@ -94,7 +95,7 @@ async def fetch_mcp_tools_from_config(
     mcp_clients = []
     mcp_tools = []
     try:
-        logger.debug(f'Creating MCP clients with config: {dict_mcp_config}')
+        logger.debug(f"Creating MCP clients with config: {dict_mcp_config}")
         mcp_clients = await create_mcp_clients(
             dict_mcp_config,
             sid=sid,
@@ -102,7 +103,7 @@ async def fetch_mcp_tools_from_config(
         )
 
         if not mcp_clients:
-            logger.warning('No MCP clients were successfully connected')
+            logger.warning("No MCP clients were successfully connected")
             return []
 
         mcp_tools = convert_mcp_clients_to_tools(mcp_clients)
@@ -112,9 +113,9 @@ async def fetch_mcp_tools_from_config(
             try:
                 await mcp_client.disconnect()
             except Exception as disconnect_error:
-                logger.error(f'Error disconnecting MCP client: {str(disconnect_error)}')
+                logger.error(f"Error disconnecting MCP client: {str(disconnect_error)}")
     except Exception as e:
-        logger.error(f'Error fetching MCP tools: {str(e)}')
+        logger.error(f"Error fetching MCP tools: {str(e)}")
         return []
 
     # logger.debug(f'MCP tools: {mcp_tools}')
@@ -132,10 +133,10 @@ async def fetch_search_tools_from_config(
     search_tools = []
     try:
         for name, search_engine_config in dict_search_engine_config.items():
-            if search_engine_config.type.startswith('mcp'):
-                mcp_mode = search_engine_config.type.split('_')[1]
+            if search_engine_config.type.startswith("mcp"):
+                mcp_mode = search_engine_config.type.split("_")[1]
                 dict_mcp_config = {}
-                dict_mcp_config[f'search_engine_{name}'] = MCPConfig(
+                dict_mcp_config[f"search_engine_{name}"] = MCPConfig(
                     url=search_engine_config.url,
                     mode=mcp_mode,
                 )
@@ -149,12 +150,12 @@ async def fetch_search_tools_from_config(
                     tools = [
                         tool
                         for tool in tools
-                        if tool['name'] in search_engine_config.tools
+                        if tool["name"] in search_engine_config.tools
                     ]
                 search_tools += tools
         return search_tools
     except Exception as e:
-        logger.error(f'Error fetching search tools: {str(e)}')
+        logger.error(f"Error fetching search tools: {str(e)}")
         return []
 
 
@@ -169,24 +170,24 @@ async def call_tool_mcp(mcp_clients: list[MCPClient], action: McpAction) -> Obse
         The observation from the MCP server
     """
     if not mcp_clients:
-        raise ValueError('No MCP clients found')
-    logger.info(f'MCP action received: {action}')
+        raise ValueError("No MCP clients found")
+    logger.info(f"MCP action received: {action}")
     # Find the MCP agent that has the matching tool name
     matching_client = None
-    logger.info(f'MCP action name: {action.name}')
+    logger.info(f"MCP action name: {action.name}")
     for client in mcp_clients:
         if action.name in [tool.name for tool in client.tools]:
             matching_client = client
             break
     if matching_client is None:
-        raise ValueError(f'No matching MCP agent found for tool name: {action.name}')
+        raise ValueError(f"No matching MCP agent found for tool name: {action.name}")
     args_dict = json.loads(action.arguments) if action.arguments else {}
     try:
         response = await matching_client.call_tool(action.name, args_dict)
 
         if response.isError:
-            return ErrorObservation(f'MCP {action.name} failed: {response.content}')
-        logger.debug(f'MCP response: {response}')
+            return ErrorObservation(f"MCP {action.name} failed: {response.content}")
+        logger.debug(f"MCP response: {response}")
 
         # special case for browser screenshot of playwright_mcp
         if (
@@ -196,17 +197,19 @@ async def call_tool_mcp(mcp_clients: list[MCPClient], action: McpAction) -> Obse
         ):
             return process_browser_mcp_response(action, response)
         if (
-            action.name == 'create_plan'
-            or action.name == 'update_plan'
-            or action.name == 'get_current_plan'
+            action.name == "create_plan"
+            or action.name == "update_plan"
+            or action.name == "get_current_plan"
         ):
             # Handle the case where the response is not empty
             return planner_mcp_plan(action, response)
+        if action.name == "pyodide_execute_python" and len(response.content) > 0:
+            return pyodide_mcp_response(action, response)
 
-        return MCPObservation(content=f'{response.content[0].text}')
+        return MCPObservation(content=f"{response.content[0].text}")
     except Exception as e:
-        logger.error(f'Error calling tool {action.name}: {e}')
-        return ErrorObservation(f'MCP {action.name} failed: {e}')
+        logger.error(f"Error calling tool {action.name}: {e}")
+        return ErrorObservation(f"MCP {action.name} failed: {e}")
 
 
 def extract_page_url(browser_content: str) -> str | Any:
@@ -217,9 +220,9 @@ def extract_page_url(browser_content: str) -> str | Any:
     # - Page URL:      - Matches the literal string
     # \s+              - Matches one or more whitespace characters after the colon
     # (https?://[^\s]+) - Captures the URL (starts with http/https, followed by non-whitespace chars)
-    pattern = re.compile(r'^\s*- Page URL:\s+(https?://[^\s]+)', re.MULTILINE)
+    pattern = re.compile(r"^\s*- Page URL:\s+(https?://[^\s]+)", re.MULTILINE)
     match = pattern.search(browser_content)
-    page_url = ''
+    page_url = ""
     if match:
         page_url = match.group(1)  # group(1) is the captured URL
     return page_url
@@ -236,40 +239,50 @@ def process_browser_mcp_response(
 
     # logger.debug(f'image_content: {image_content}')
     # logger.debug(f'text_content: {text_content}')
-    url = extract_page_url(text_content.text) if text_content else ''
+    url = extract_page_url(text_content.text) if text_content else ""
 
     # logger.debug(f'Screenshot content: {screenshot_content}')
     return BrowserMCPObservation(
-        content=f'{text_content.text}',
+        content=f"{text_content.text}",
         url=url,
         trigger_by_action=action.name,
-        screenshot=f'data:image/png;base64,{image_content.data}'
+        screenshot=f"data:image/png;base64,{image_content.data}"
         if image_content is not None
-        else '',
+        else "",
     )
 
 
 def planner_mcp_plan(_: McpAction, response: CallToolResult) -> Observation:
-    logger.info(f'Planner MCP response: {response.content}')
+    logger.info(f"Planner MCP response: {response.content}")
     if len(response.content) == 0 or not isinstance(response.content[0], TextContent):
         return ErrorObservation(
-            f'Planner MCP response is empty or not text content: {response.content}'
+            f"Planner MCP response is empty or not text content: {response.content}"
         )
 
     resonpse_dict = json.loads(response.content[0].text)
     observation = PlanObservation(
-        plan_id=resonpse_dict['plan_id'],
+        plan_id=resonpse_dict["plan_id"],
         tasks=[
             {
-                'content': task['content'],
-                'status': task['status'],
-                'result': task['result'],
+                "content": task["content"],
+                "status": task["status"],
+                "result": task["result"],
             }
-            for task in resonpse_dict['tasks']
+            for task in resonpse_dict["tasks"]
         ],
-        title=resonpse_dict['title'],
-        content=resonpse_dict['title'],
+        title=resonpse_dict["title"],
+        content=resonpse_dict["title"],
     )
 
-    logger.info(f'Planner MCP observation: {observation}')
+    logger.info(f"Planner MCP observation: {observation}")
     return observation
+
+
+def pyodide_mcp_response(action: McpAction, response: CallToolResult) -> Observation:
+    code = response.content[0].text
+    content = response.content[1].text
+    if len(response.content) == 0 or not isinstance(response.content[0], TextContent):
+        return ErrorObservation(
+            f"Pyodide MCP response is empty or not text content: {response.content}"
+        )
+    return IPythonRunCellObservation(code=code, content=content)
