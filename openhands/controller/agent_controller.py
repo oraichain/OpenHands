@@ -871,6 +871,7 @@ class AgentController:
                         (
                             should_proceed,
                             reason,
+                            file_path,
                         ) = await should_step_after_call_evaluation_endpoint(
                             session_id=self.id,
                             log_func=log_wrapper,
@@ -895,6 +896,7 @@ class AgentController:
                                 ReportVerificationObservation(
                                     result=False,
                                     content=reason,
+                                    file_path=file_path,
                                 ),
                                 EventSource.ENVIRONMENT,
                             )
