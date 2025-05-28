@@ -65,6 +65,7 @@ from openhands.events.observation import (
     ErrorObservation,
     NullObservation,
     Observation,
+    ReportVerificationObservation,
 )
 from openhands.events.observation.a2a import (
     A2ASendTaskArtifactObservation,
@@ -860,13 +861,13 @@ class AgentController:
                         (
                             should_proceed,
                             reason,
+                            file_path,
                         ) = await should_step_after_call_evaluation_endpoint(
                             session_id=self.id,
                             log_func=log_wrapper,
                         )
 
                         if not should_proceed:
-                            # reason = 'I think there might be some issue with the facts presented in the report. Would you like me to check again?'
                             content = f'{finish_message}'
                             content += f'\n\n{reason}'
                             self.event_stream.add_event(
@@ -880,6 +881,15 @@ class AgentController:
                                 AgentState.AWAITING_USER_INPUT
                             )
                             action = NullAction()
+
+                            self.event_stream.add_event(
+                                ReportVerificationObservation(
+                                    result=False,
+                                    content=reason,
+                                    file_path=file_path,
+                                ),
+                                EventSource.ENVIRONMENT,
+                            )
 
                     except Exception as e:
                         self.log(
