@@ -184,7 +184,7 @@ class CodeActAgent(Agent):
         logger.debug(f'Selected tools: {selected_tools}')
 
         # Add A2A tools if A2A server URLs are provided
-        if self.config.a2a_server_urls:
+        if self.config.a2a_server_urls and research_mode == ResearchMode.DEEP_RESEARCH:
             selected_tools.append(ListRemoteAgents)
             selected_tools.append(SendTask)
 
