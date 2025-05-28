@@ -3,6 +3,7 @@ from typing import Generator
 
 from litellm import ModelResponse
 
+from openhands.a2a.task_event_handler import TaskEventHandler
 from openhands.core.config.agent_config import AgentConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.message import ImageContent, Message, TextContent
@@ -32,10 +33,15 @@ from openhands.events.observation import (
     AgentThinkObservation,
     BrowserOutputObservation,
     CmdOutputObservation,
+    ErrorObservation,
     FileEditObservation,
     FileReadObservation,
     IPythonRunCellObservation,
+    Observation,
+    OrchestratorFinalObservation,
+    OrchestratorInitializeObservation,
     PlanObservation,
+    RecallObservation,
     UserRejectObservation,
 )
 from openhands.events.observation.a2a import (
@@ -45,11 +51,8 @@ from openhands.events.observation.a2a import (
 )
 from openhands.events.observation.agent import (
     MicroagentKnowledge,
-    RecallObservation,
 )
-from openhands.events.observation.error import ErrorObservation
 from openhands.events.observation.mcp import MCPObservation
-from openhands.events.observation.observation import Observation
 from openhands.events.observation.playwright_mcp import (
     BrowserMCPObservation,
 )
@@ -229,6 +232,8 @@ class ConversationMemory:
                 - AgentFinishAction: For ending the interaction
                 - MessageAction: For sending messages
                 - McpAction: For interacting with the MCP server
+                - A2AListRemoteAgentsAction: For listing remote agents
+                - A2ASendTaskAction: For sending a task to a remote agent
             pending_tool_call_action_messages: Dictionary mapping response IDs to their corresponding messages.
                 Used in function calling mode to track tool calls that are waiting for their results.
 
@@ -260,6 +265,16 @@ class ConversationMemory:
             ),
         ) or (isinstance(action, CmdRunAction) and action.source == 'agent'):
             tool_metadata = action.tool_call_metadata
+            if tool_metadata is None and isinstance(action, A2ASendTaskAction):
+                logger.info(
+                    f'A2ASendTaskAction tool_metadata is None task_message: {action.task_message}'
+                )
+                return [
+                    Message(
+                        role='assistant',
+                        content=[TextContent(text=action.task_message)],
+                    )
+                ]
             assert tool_metadata is not None, (
                 'Tool call metadata should NOT be None when function calling is enabled. Action: '
                 + str(action)
@@ -605,9 +620,24 @@ class ConversationMemory:
             text = truncate_content(obs.content, max_message_chars)
             message = Message(role='user', content=[TextContent(text=text)])
         elif isinstance(obs, A2ASendTaskUpdateObservation):
-            return []
+            task_update_content = TaskEventHandler.handle_observation(obs)
+            if not task_update_content:
+                return []
+            return [
+                Message(
+                    role='user',
+                    content=task_update_content,
+                )
+            ]
         elif isinstance(obs, A2ASendTaskArtifactObservation):
             text = self.prompt_manager.build_a2a_info(obs)
+            message = Message(role='user', content=[TextContent(text=text)])
+        elif isinstance(obs, OrchestratorInitializeObservation):
+            # The full ledger contains the task, facts, plan and team info in a formatted way
+            text = truncate_content(obs.full_ledger, max_message_chars)
+            message = Message(role='user', content=[TextContent(text=text)])
+        elif isinstance(obs, OrchestratorFinalObservation):
+            text = truncate_content(obs.content, max_message_chars)
             message = Message(role='user', content=[TextContent(text=text)])
         else:
             # If an observation message is not returned, it will cause an error
