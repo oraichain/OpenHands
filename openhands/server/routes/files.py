@@ -229,6 +229,8 @@ async def uploadImageFile(request: Request, data: UploadFileRequest):
         file_content = observation.content
         try:
             image_raw_data = safe_base64_decode(file_content)
+
+            logger.info(f'Image raw data size: {len(image_raw_data)} bytes')
         except ValueError as e:
             logger.error(f'Error decoding base64 content: {e}')
             return JSONResponse(
