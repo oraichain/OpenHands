@@ -33,6 +33,26 @@ from openhands.server.shared import (
 )
 from openhands.utils.async_utils import call_sync_from_async
 
+
+def safe_base64_decode(data: str) -> bytes:
+    try:
+        # Remove any whitespace and newlines
+        data = data.strip().replace('\n', '').replace('\r', '')
+
+        # Add padding if necessary
+        missing_padding = len(data) % 4
+        if missing_padding:
+            data += '=' * (4 - missing_padding)
+
+        return base64.b64decode(data)
+    except Exception as e:
+        raise ValueError(f'Invalid base64 data: {e}')
+
+
+def safe_base64_encode(data: bytes) -> str:
+    return base64.b64encode(data).decode('utf-8')
+
+
 app = APIRouter(prefix='/api/conversations/{conversation_id}')
 config_app = load_app_config()
 
@@ -158,8 +178,7 @@ async def select_file(file: str, request: Request):
                 )
                 async with aiofiles.open(openhand_file_path, 'rb') as f:
                     binary_data = await f.read()
-                    base64_encoded = base64.b64encode(binary_data).decode('utf-8')
-                    logger.info(f'base64_encoded: {base64_encoded}')
+                    base64_encoded = safe_base64_encode(binary_data)
                     return {'code': base64_encoded}
             except Exception as e:
                 return JSONResponse(
@@ -195,8 +214,8 @@ async def uploadImageFile(request: Request, data: UploadFileRequest):
         )
     runtime: Runtime = request.state.conversation.runtime
     workspace_path = runtime.config.workspace_mount_path_in_sandbox or ''
-    file = os.path.join(workspace_path + '/' + runtime.sid, file)
-    read_action = FileReadAction(file)
+    file_path = os.path.join(workspace_path + '/' + runtime.sid, file)
+    read_action = FileReadAction(file_path)
     image_raw_data: bytes | None = None
     try:
         observation = await call_sync_from_async(runtime.run_action, read_action)
@@ -208,7 +227,14 @@ async def uploadImageFile(request: Request, data: UploadFileRequest):
         )
     if isinstance(observation, FileReadObservation):
         file_content = observation.content
-        image_raw_data = base64.b64decode(file_content)
+        try:
+            image_raw_data = safe_base64_decode(file_content)
+        except ValueError as e:
+            logger.error(f'Error decoding base64 content: {e}')
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={'error': f'Invalid base64 content: {e}'},
+            )
     elif isinstance(observation, ErrorObservation):
         logger.error(f'Error opening file {file}: {observation}')
 
@@ -226,12 +252,23 @@ async def uploadImageFile(request: Request, data: UploadFileRequest):
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={'error': f'Error reading binary file: {e}'},
                 )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={'error': f'Error opening file: {observation}'},
+            )
+
     if image_raw_data:
         folder_path = f'workspace/{runtime.sid}'
         s3_url = await s3_handler.upload_raw_file(image_raw_data, folder_path, file)
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={'message': 'File uploaded successfully', 'url': s3_url},
+        )
+    else:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={'error': 'Failed to read image data'},
         )
 
 
