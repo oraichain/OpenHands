@@ -179,9 +179,6 @@ async def select_file(file: str, request: Request):
                 async with aiofiles.open(openhand_file_path, 'rb') as f:
                     binary_data = await f.read()
                     base64_encoded = safe_base64_encode(binary_data)
-                    logger.info(
-                        f'base64_encoded: {base64_encoded[:100]}...'
-                    )  # Log only first 100 chars
                     return {'code': base64_encoded}
             except Exception as e:
                 return JSONResponse(
