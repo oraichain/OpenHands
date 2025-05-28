@@ -110,8 +110,8 @@ class CodeActAgent(Agent):
         self.condenser = Condenser.from_config(self.config.condenser)
         logger.info(f"Using condenser: {type(self.condenser)}")
         self.routing_llms = routing_llms
-        self.has_added_session_id_to_messages = False
         self.search_tools: list[dict] = []
+        self.session_id: str | None = None
 
     @override
     def set_system_prompt(self, system_prompt: str) -> None:
@@ -135,7 +135,6 @@ class CodeActAgent(Agent):
         """Resets the CodeAct Agent."""
         super().reset()
         self.pending_actions.clear()
-        self.has_added_session_id_to_messages = False
 
     def _select_tools_based_on_mode(self, research_mode: str | None) -> list[dict]:
         """Selects the tools based on the mode of the agent."""
@@ -206,6 +205,8 @@ class CodeActAgent(Agent):
         - MessageAction(content) - Message action to run (e.g. ask for clarification)
         - AgentFinishAction() - end the interaction
         """
+        if self.session_id is None:
+            self.session_id = state.session_id
         # Continue with pending actions if any
         if self.pending_actions:
             return self.pending_actions.popleft()
@@ -236,16 +237,6 @@ class CodeActAgent(Agent):
         )
 
         messages = self._get_messages(condensed_history, research_mode=research_mode)
-        # only add one time the session_id to the messages
-        if not self.has_added_session_id_to_messages:
-            session_id_message = Message(
-                role="user",
-                content=[
-                    TextContent(text=f"<session_id>{state.session_id}</session_id>")
-                ],
-            )
-            messages.append(session_id_message)
-            self.has_added_session_id_to_messages = True
 
         params: dict = {
             "messages": self.llm.format_messages_for_llm(messages),
@@ -414,7 +405,9 @@ class CodeActAgent(Agent):
             if msg.role == "user" and not is_first_message_handled:
                 is_first_message_handled = True
                 # compose the first user message with examples
-                self.prompt_manager.add_examples_to_initial_message(msg)
+                self.prompt_manager.add_examples_to_initial_message(
+                    msg, self.session_id
+                )
 
             elif msg.role == "user":
                 # Add double newline between consecutive user messages
