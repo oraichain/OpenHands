@@ -14,7 +14,8 @@ class ReportVerificationObservation(Observation):
     """
 
     result: bool
+    file_path: str
     observation: ObservationType = ObservationType.REPORT_VERIFICATION
 
     def __str__(self) -> str:
-        return f'**ReportVerificationObservation**\n{self.result}\n{self.content}'
+        return f'**ReportVerificationObservation**\n{self.result}\n{self.content}\n{self.file_path}'
