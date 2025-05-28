@@ -79,7 +79,7 @@ from openhands.events.serialization.event import (
 from openhands.llm.llm import LLM
 from openhands.llm.metrics import Metrics
 from openhands.server.mem0 import process_single_event_for_mem0, search_knowledge_mem0
-from openhands.server.thesis_auth import webhook_rag_conversation
+from openhands.server.thesis_auth import search_knowledge, webhook_rag_conversation
 
 # note: RESUME is only available on web GUI
 TRAFFIC_CONTROL_REMINDER = (
@@ -551,7 +551,7 @@ class AgentController:
             print(f'self.thread_follow_up: {self.thread_follow_up}')
 
             # update new knowledge base with the user message
-            if self.user_id and (self.space_id or self.thread_follow_up):
+            if self.user_id and self.raw_followup_conversation_id:
                 knowledge_base = await search_knowledge_mem0(
                     action.content,
                     self.space_id,
@@ -560,6 +560,16 @@ class AgentController:
                 )
                 if knowledge_base:
                     self.agent.update_agent_knowledge_base(knowledge_base)
+
+            if self.user_id and self.space_id:
+                knowledge_space = await search_knowledge(
+                    action.content,
+                    self.space_id,
+                    None,
+                    self.user_id,
+                )
+                if knowledge_space:
+                    self.agent.update_agent_knowledge_base(knowledge_space)
 
             recall_action = RecallAction(query=action.content, recall_type=recall_type)
             self._pending_action = recall_action
