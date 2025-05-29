@@ -14,8 +14,12 @@ class ReportVerificationObservation(Observation):
     """
 
     result: bool
-    file_path: str
+    file_path: str | None = None
     observation: ObservationType = ObservationType.REPORT_VERIFICATION
+
+    @property
+    def message(self) -> str:
+        return ''
 
     def __str__(self) -> str:
         return f'**ReportVerificationObservation**\n{self.result}\n{self.content}\n{self.file_path}'

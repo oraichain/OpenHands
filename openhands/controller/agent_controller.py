@@ -878,6 +878,14 @@ class AgentController:
                         )
 
                         if not should_proceed:
+                            self.event_stream.add_event(
+                                ReportVerificationObservation(
+                                    result=False,
+                                    content=reason,
+                                    file_path=file_path,
+                                ),
+                                EventSource.AGENT,
+                            )
                             content = f'{finish_message}'
                             content += f'\n\n{reason}'
                             self.event_stream.add_event(
@@ -891,15 +899,6 @@ class AgentController:
                                 AgentState.AWAITING_USER_INPUT
                             )
                             action = NullAction()
-
-                            self.event_stream.add_event(
-                                ReportVerificationObservation(
-                                    result=False,
-                                    content=reason,
-                                    file_path=file_path,
-                                ),
-                                EventSource.ENVIRONMENT,
-                            )
 
                     except Exception as e:
                         self.log(
