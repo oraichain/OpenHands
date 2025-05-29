@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from openhands.core.config.condenser_config import BrowserOutputCondenserConfig
 from openhands.events.event import Event
-from openhands.events.observation import BrowserOutputObservation
 from openhands.events.observation.agent import AgentCondensationObservation
+from openhands.events.observation.playwright_mcp import BrowserMCPObservation
 from openhands.memory.condenser.condenser import Condensation, Condenser, View
 
 
@@ -23,7 +23,7 @@ class BrowserOutputCondenser(Condenser):
         cnt: int = 0
         for event in reversed(view):
             if (
-                isinstance(event, BrowserOutputObservation)
+                isinstance(event, BrowserMCPObservation)
                 and cnt >= self.attention_window
             ):
                 results.append(
@@ -33,7 +33,7 @@ class BrowserOutputCondenser(Condenser):
                 )
             else:
                 results.append(event)
-                if isinstance(event, BrowserOutputObservation):
+                if isinstance(event, BrowserMCPObservation):
                     cnt += 1
 
         return View(events=list(reversed(results)))
