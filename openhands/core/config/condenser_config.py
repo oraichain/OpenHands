@@ -172,6 +172,28 @@ class TaskCompletionCondenserConfig(BaseModel):
     model_config = {'extra': 'forbid'}
 
 
+class TaskCompletionBrowserCondenserConfig(BaseModel):
+    """Configuration for TaskCompletionBrowserCondenser."""
+
+    type: Literal['task_completion_browser'] = Field('task_completion_browser')
+
+    # TaskCompletionCondenser settings
+    keep_first: int = Field(
+        default=1,
+        description='The number of initial events to always keep (typically task description).',
+        ge=0,
+    )
+
+    # BrowserOutputCondenser settings
+    browser_attention_window: int = Field(
+        default=1,
+        description='Number of most recent browser observations to keep in full detail.',
+        ge=1,
+    )
+
+    model_config = {'extra': 'forbid'}
+
+
 # Type alias for convenience
 CondenserConfig = (
     NoOpCondenserConfig
@@ -183,6 +205,7 @@ CondenserConfig = (
     | LLMAttentionCondenserConfig
     | StructuredSummaryCondenserConfig
     | TaskCompletionCondenserConfig
+    | TaskCompletionBrowserCondenserConfig
 )
 
 
@@ -287,6 +310,7 @@ def create_condenser_config(condenser_type: str, data: dict) -> CondenserConfig:
         'llm_attention': LLMAttentionCondenserConfig,
         'structured': StructuredSummaryCondenserConfig,
         'task_completion': TaskCompletionCondenserConfig,
+        'task_completion_browser': TaskCompletionBrowserCondenserConfig,
     }
 
     if condenser_type not in condenser_classes:
