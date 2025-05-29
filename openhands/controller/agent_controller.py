@@ -873,7 +873,7 @@ class AgentController:
                                     content=reason,
                                     file_path=file_path,
                                 ),
-                                EventSource.ENVIRONMENT,
+                                EventSource.AGENT,
                             )
                             content = f'{finish_message}'
                             content += f'\n\n{reason}'
