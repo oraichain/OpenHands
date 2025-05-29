@@ -83,7 +83,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.metadata.outputs.tags }}
-            latest
+            ${{ vars.DOCKER_IMAGE_NAME }}:latest
           # Optional: Add cache settings for faster builds
           cache-from: type=registry,ref=${{ vars.DOCKER_IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ vars.DOCKER_IMAGE_NAME }}:buildcache,mode=max
