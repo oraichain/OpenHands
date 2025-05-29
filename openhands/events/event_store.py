@@ -32,6 +32,10 @@ class _CachePage:
         if not self.events:
             return None
         local_index = global_index - self.start
+
+        # Check if local_index is within bounds to handle deleted events
+        if local_index < 0 or local_index >= len(self.events):
+            return None
         return event_from_dict(self.events[local_index])
 
 
