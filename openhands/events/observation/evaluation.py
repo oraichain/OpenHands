@@ -14,7 +14,7 @@ class ReportVerificationObservation(Observation):
     """
 
     result: bool
-    file_path: str
+    file_path: str | None = None
     observation: ObservationType = ObservationType.REPORT_VERIFICATION
 
     def __str__(self) -> str:
