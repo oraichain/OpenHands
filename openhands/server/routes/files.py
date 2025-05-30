@@ -30,6 +30,7 @@ from openhands.server.file_config import (
 )
 from openhands.server.shared import (
     s3_handler,
+    imagen
 )
 from openhands.utils.async_utils import call_sync_from_async
 
@@ -237,10 +238,12 @@ async def uploadImageFile(request: Request, data: UploadFileRequest):
                     if ',' in file_content
                     else file_content
                 )
+                base64_part = imagen.annotate_branding_into_base64_image(base64_part)
                 image_raw_data = safe_base64_decode(base64_part)
             else:
                 # Try to decode as plain base64
-                image_raw_data = safe_base64_decode(file_content)
+                base64_part = imagen.annotate_branding_into_base64_image(file_content)
+                image_raw_data = safe_base64_decode(base64_part)
 
         except ValueError as e:
             logger.error(f'Error decoding base64 content: {e}')
