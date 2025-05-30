@@ -10,12 +10,13 @@ from openhands.server.conversation_manager.conversation_manager import (
     ConversationManager,
 )
 from openhands.server.monitoring import MonitoringListener
+from openhands.server.utils.imagen import Imagen
 from openhands.server.utils.s3_utils import S3Handler
 from openhands.storage import get_file_store
 from openhands.storage.conversation.conversation_store import ConversationStore
 from openhands.storage.settings.settings_store import SettingsStore
 from openhands.utils.import_utils import get_impl
-from openhands.server.utils.imagen import Imagen
+
 load_dotenv()
 
 config = load_app_config()
@@ -74,4 +75,3 @@ def get_s3_handler():
 
 
 s3_handler = get_s3_handler()
-
