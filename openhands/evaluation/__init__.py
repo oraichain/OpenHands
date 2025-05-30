@@ -67,7 +67,7 @@ async def should_step_after_call_evaluation_endpoint(
             url=evaluation_endpoint,
             headers=headers,
             json=payload,
-            timeout=5.0,
+            timeout=60.0,
         )
 
         log_func('info', f'Evaluation endpoint response: {response.status_code}')
