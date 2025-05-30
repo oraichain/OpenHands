@@ -15,12 +15,13 @@ from openhands.storage import get_file_store
 from openhands.storage.conversation.conversation_store import ConversationStore
 from openhands.storage.settings.settings_store import SettingsStore
 from openhands.utils.import_utils import get_impl
-
+from openhands.server.utils.imagen import Imagen
 load_dotenv()
 
 config = load_app_config()
 server_config = load_server_config()
 file_store = get_file_store(config.file_store, config.file_store_path)
+imagen = Imagen()
 
 client_manager = None
 # redis_host = os.environ.get('REDIS_HOST')
@@ -73,3 +74,4 @@ def get_s3_handler():
 
 
 s3_handler = get_s3_handler()
+
