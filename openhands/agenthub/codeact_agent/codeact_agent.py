@@ -1,5 +1,6 @@
 import json
 import os
+from copy import deepcopy
 from collections import deque
 from typing import override
 
@@ -138,20 +139,39 @@ class CodeActAgent(Agent):
         if research_mode == ResearchMode.FOLLOW_UP:
             selected_tools = [FinishTool]
         elif research_mode == ResearchMode.DEEP_RESEARCH:
-            selected_tools = self.tools.copy() + self.search_tools + self.mcp_tools
+            # Start with built-in tools
+            selected_tools = deepcopy(self.tools)
+
             if self.config.a2a_server_urls:
                 selected_tools.extend([ListRemoteAgents, SendTask])
 
-            if self.mcp_tools:
-                existing_names = {tool["function"]["name"] for tool in selected_tools}
-                unique_mcp_tools = [
-                    tool
-                    for tool in self.mcp_tools
-                    if tool["function"]["name"] not in existing_names
-                ]
-                selected_tools.extend(unique_mcp_tools)
+            # Add search tools, avoiding duplicates
+            existing_names = {tool["function"]["name"] for tool in selected_tools}
+            unique_search_tools = [
+                tool
+                for tool in self.search_tools
+                if tool["function"]["name"] not in existing_names
+            ]
+            selected_tools.extend(unique_search_tools)
+
+            # Add MCP tools, avoiding duplicates
+            existing_names = {tool["function"]["name"] for tool in selected_tools}
+            unique_mcp_tools = [
+                tool
+                for tool in self.mcp_tools
+                if tool["function"]["name"] not in existing_names
+            ]
+            selected_tools.extend(unique_mcp_tools)
         else:
-            selected_tools = self.tools.copy() + self.search_tools
+            # For other modes, combine tools and search_tools with deduplication
+            selected_tools = deepcopy(self.tools)
+            existing_names = {tool["function"]["name"] for tool in selected_tools}
+            unique_search_tools = [
+                tool
+                for tool in self.search_tools
+                if tool["function"]["name"] not in existing_names
+            ]
+            selected_tools.extend(unique_search_tools)
 
         logger.debug(f"Selected tools: {selected_tools}")
         return selected_tools
