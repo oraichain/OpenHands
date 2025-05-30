@@ -135,24 +135,10 @@ class CodeActAgent(Agent):
 
     def _select_tools_based_on_mode(self, research_mode: str | None) -> list[dict]:
         """Selects the tools based on the mode of the agent."""
-
-        # Helper function to get base tools with optional pyodide support
-        def get_base_tools_with_pyodide():
-            return self.tools.copy()
-
-        # Select tools based on research mode
         if research_mode == ResearchMode.FOLLOW_UP:
-            # FOLLOW_UP mode: Only finish tool
             selected_tools = [FinishTool]
-
-        elif research_mode is None or research_mode == ResearchMode.CHAT:
-            # CHAT mode: Base tools + search tools + MCP tools
-            selected_tools = get_base_tools_with_pyodide() + self.search_tools
-
         elif research_mode == ResearchMode.DEEP_RESEARCH:
-            # DEEP_RESEARCH mode: Base tools + search tools + MCP tools + A2A tools (if configured)
-            selected_tools = get_base_tools_with_pyodide() + self.search_tools
-            # Add A2A tools if configured for DEEP_RESEARCH mode
+            selected_tools = self.tools.copy() + self.search_tools + self.mcp_tools
             if self.config.a2a_server_urls:
                 selected_tools.extend([ListRemoteAgents, SendTask])
 
@@ -165,8 +151,7 @@ class CodeActAgent(Agent):
                 ]
                 selected_tools.extend(unique_mcp_tools)
         else:
-            # Default case: treat as CHAT mode
-            selected_tools = get_base_tools_with_pyodide() + self.search_tools
+            selected_tools = self.tools.copy() + self.search_tools
 
         logger.debug(f"Selected tools: {selected_tools}")
         return selected_tools
