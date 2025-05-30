@@ -72,6 +72,7 @@ from openhands.events.observation.a2a import (
     A2ASendTaskArtifactObservation,
     A2ASendTaskUpdateObservation,
 )
+from openhands.events.observation.credit import CreditErrorObservation
 from openhands.events.serialization.event import (
     event_to_dict,
     event_to_trajectory,
@@ -548,7 +549,7 @@ class AgentController:
                 logger.info(f'check_credit: {check_credit}')
                 if check_credit and not check_credit.get('data'):
                     self.event_stream.add_event(
-                        ErrorObservation(
+                        CreditErrorObservation(
                             content=check_credit.get(
                                 'msg', 'Feature credit check failed'
                             )
