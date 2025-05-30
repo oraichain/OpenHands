@@ -28,10 +28,7 @@ from openhands.runtime.base import Runtime
 from openhands.server.file_config import (
     FILES_TO_IGNORE,
 )
-from openhands.server.shared import (
-    s3_handler,
-    imagen
-)
+from openhands.server.shared import imagen, s3_handler
 from openhands.utils.async_utils import call_sync_from_async
 
 
