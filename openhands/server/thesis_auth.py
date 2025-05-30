@@ -410,7 +410,9 @@ async def get_thread_by_id(
         return None
 
 
-async def check_feature_credit(user_id: str, feature_code: str) -> dict | None:
+async def check_feature_credit(
+    user_id: str, feature_code: str, run_on_oh: bool = False
+) -> dict | None:
     url = '/api/subcription/check-pricing'
     headers = {
         'Content-Type': 'application/json',
@@ -419,15 +421,23 @@ async def check_feature_credit(user_id: str, feature_code: str) -> dict | None:
     payload = {'featureCode': feature_code, 'userId': user_id}
     logger.debug(f'payload: {payload}')
     try:
-        response = await thesis_auth_client.post(url, headers=headers, json=payload)
+        if run_on_oh:
+            async with httpx.AsyncClient(
+                base_url=os.getenv('THESIS_AUTH_SERVER_URL', ''),
+                timeout=30.0,
+            ) as client:
+                response = await client.post(url, headers=headers, json=payload)
+        else:
+            response = await thesis_auth_client.post(url, headers=headers, json=payload)
         if response.status_code != 200:
             logger.error(
                 f'Failed to check feature credit: {response.status_code} - {response.text}'
             )
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=response.json().get('error', 'Unknown error'),
-            )
+            if not run_on_oh:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=response.json().get('msg', 'Unknown error'),
+                )
 
         return response.json()
     except httpx.RequestError as exc:
