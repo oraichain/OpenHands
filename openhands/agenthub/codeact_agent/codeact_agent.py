@@ -91,11 +91,8 @@ class CodeActAgent(Agent):
             codeact_enable_jupyter=self.config.codeact_enable_jupyter,
             codeact_enable_llm_editor=self.config.codeact_enable_llm_editor,
             llm=self.llm,
+            enable_pyodide_bash=self.config.enable_pyodide,
         )
-        # # Add A2A tools if A2A server URLs are provided
-        # if self.config.a2a_server_urls:
-        #     built_in_tools.append(ListRemoteAgents)
-        #     built_in_tools.append(SendTask)
 
         self.tools = built_in_tools
 
@@ -138,41 +135,27 @@ class CodeActAgent(Agent):
 
     def _select_tools_based_on_mode(self, research_mode: str | None) -> list[dict]:
         """Selects the tools based on the mode of the agent."""
-        selected_tools = []
-        # pyodide_bash_tool = None
-        pyodide_filesystem_manager_tools = []
-        if self.mcp_tools:
-            pyodide_filesystem_manager_tools = [
-                tool for tool in self.mcp_tools if "pyodide" in tool["function"]["name"]
-            ]
 
-        if research_mode is None or research_mode == ResearchMode.CHAT:
-            # enable pyodide tools if MCP tools are set
-            selected_tools = self.tools + self.search_tools
-            if self.mcp_tools and pyodide_filesystem_manager_tools:
-                selected_tools = (
-                    codeact_function_calling.get_tools(enable_pyodide_bash=True)
-                    + pyodide_filesystem_manager_tools
-                    + self.search_tools
-                )
+        # Helper function to get base tools with optional pyodide support
+        def get_base_tools_with_pyodide():
+            return self.tools.copy()
 
-        elif research_mode == ResearchMode.FOLLOW_UP:
-            selected_tools = [
-                # ThinkTool,
-                FinishTool
-            ]
-        else:
-            # Base tools selection
-            selected_tools = self.tools
+        # Select tools based on research mode
+        if research_mode == ResearchMode.FOLLOW_UP:
+            # FOLLOW_UP mode: Only finish tool
+            selected_tools = [FinishTool]
 
-            # Add pyodide tools if available
-            if pyodide_filesystem_manager_tools:
-                selected_tools = (
-                    codeact_function_calling.get_tools(enable_pyodide_bash=True)
-                    + self.search_tools
-                )
+        elif research_mode is None or research_mode == ResearchMode.CHAT:
+            # CHAT mode: Base tools + search tools + MCP tools
+            selected_tools = get_base_tools_with_pyodide() + self.search_tools
 
-            # Add unique MCP tools. No need to add pyodide tools here since they are already in the MCP tools
+        elif research_mode == ResearchMode.DEEP_RESEARCH:
+            # DEEP_RESEARCH mode: Base tools + search tools + MCP tools + A2A tools (if configured)
+            selected_tools = get_base_tools_with_pyodide() + self.search_tools
+            # Add A2A tools if configured for DEEP_RESEARCH mode
+            if self.config.a2a_server_urls:
+                selected_tools.extend([ListRemoteAgents, SendTask])
+
             if self.mcp_tools:
                 existing_names = {tool["function"]["name"] for tool in selected_tools}
                 unique_mcp_tools = [
@@ -181,13 +164,11 @@ class CodeActAgent(Agent):
                     if tool["function"]["name"] not in existing_names
                 ]
                 selected_tools.extend(unique_mcp_tools)
+        else:
+            # Default case: treat as CHAT mode
+            selected_tools = get_base_tools_with_pyodide() + self.search_tools
+
         logger.debug(f"Selected tools: {selected_tools}")
-
-        # Add A2A tools if A2A server URLs are provided
-        if self.config.a2a_server_urls:
-            selected_tools.append(ListRemoteAgents)
-            selected_tools.append(SendTask)
-
         return selected_tools
 
     def step(self, state: State) -> Action:
