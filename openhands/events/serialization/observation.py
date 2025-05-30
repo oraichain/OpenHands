@@ -21,6 +21,7 @@ from openhands.events.observation.commands import (
     CmdOutputObservation,
     IPythonRunCellObservation,
 )
+from openhands.events.observation.credit import CreditErrorObservation
 from openhands.events.observation.delegate import AgentDelegateObservation
 from openhands.events.observation.empty import (
     NullObservation,
@@ -65,6 +66,7 @@ observations = (
     A2ASendTaskUpdateObservation,
     A2ASendTaskArtifactObservation,
     A2ASendTaskResponseObservation,
+    CreditErrorObservation,
 )
 
 OBSERVATION_TYPE_TO_CLASS = {
