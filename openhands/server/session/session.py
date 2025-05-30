@@ -29,7 +29,7 @@ from openhands.server.session.agent_session import AgentSession
 from openhands.server.settings import Settings
 from openhands.storage.files import FileStore
 
-ROOM_KEY = 'room:{sid}'
+ROOM_KEY = "room:{sid}"
 
 
 class Session:
@@ -61,7 +61,7 @@ class Session:
         self.sio = sio
         self.last_active_ts = int(time.time())
         self.file_store = file_store
-        self.logger = OpenHandsLoggerAdapter(extra={'session_id': sid})
+        self.logger = OpenHandsLoggerAdapter(extra={"session_id": sid})
         self.agent_session = AgentSession(
             sid,
             file_store,
@@ -85,9 +85,9 @@ class Session:
     async def close(self):
         if self.sio:
             await self.sio.emit(
-                'oh_event',
+                "oh_event",
                 event_to_dict(
-                    AgentStateChangedObservation('', AgentState.STOPPED.value)
+                    AgentStateChangedObservation("", AgentState.STOPPED.value)
                 ),
                 to=ROOM_KEY.format(sid=self.sid),
             )
@@ -108,7 +108,7 @@ class Session:
     ):
         start_time = time.time()
         self.agent_session.event_stream.add_event(
-            AgentStateChangedObservation('', AgentState.LOADING),
+            AgentStateChangedObservation("", AgentState.LOADING),
             EventSource.ENVIRONMENT,
         )
         agent_cls = settings.agent or self.config.default_agent
@@ -136,7 +136,7 @@ class Session:
         # persist if we retrieve the default LLM config again when constructing
         # the agent
         default_llm_config = self.config.get_llm_config()
-        default_llm_config.model = settings.llm_model or ''
+        default_llm_config.model = settings.llm_model or ""
         default_llm_config.api_key = settings.llm_api_key
         default_llm_config.base_url = settings.llm_base_url
 
@@ -151,13 +151,13 @@ class Session:
             )
 
         agent_config = self.config.get_agent_config(agent_cls)
-        self.logger.info(f'Enabling default condenser: {agent_config.condenser}')
-        if settings.enable_default_condenser and agent_config.condenser.type == 'noop':
+        self.logger.info(f"Enabling default condenser: {agent_config.condenser}")
+        if settings.enable_default_condenser and agent_config.condenser.type == "noop":
             default_condenser_config = LLMSummarizingCondenserConfig(
                 llm_config=llm.config, keep_first=3, max_size=20
             )
 
-            self.logger.info(f'Enabling default condenser: {default_condenser_config}')
+            self.logger.info(f"Enabling default condenser: {default_condenser_config}")
             agent_config.condenser = default_condenser_config
 
         if mcp_disable:
@@ -168,7 +168,7 @@ class Session:
         workspace_mount_path_in_sandbox_store_in_session = (
             self.config.workspace_mount_path_in_sandbox_store_in_session
         )
-        if self.config.runtime == 'local':
+        if self.config.runtime == "local":
             workspace_mount_path_in_sandbox_store_in_session = False
 
         mcp_tools = (
@@ -191,7 +191,10 @@ class Session:
         try:
             await a2a_manager.initialize_agent_cards()
         except Exception as e:
-            self.logger.warning(f'Error initializing A2A manager: {e}')
+            self.logger.warning(f"Error initializing A2A manager: {e}")
+
+        if self.config.runtime == "pyodide":
+            agent_config.enable_pyodide = True
 
         agent = Agent.get_cls(agent_cls)(
             llm,
@@ -241,18 +244,18 @@ class Session:
             )
             end_time = time.time()
             total_time = end_time - start_time
-            self.logger.debug(f'Total initialize_agent time: {total_time:.2f} seconds')
+            self.logger.debug(f"Total initialize_agent time: {total_time:.2f} seconds")
         except Exception as e:
-            self.logger.exception(f'Error creating agent_session: {e}')
+            self.logger.exception(f"Error creating agent_session: {e}")
             err_class = e.__class__.__name__
-            await self.send_error(f'Failed to create agent session: {err_class}')
+            await self.send_error(f"Failed to create agent session: {err_class}")
             return
 
     def _create_llm(self, agent_cls: str | None) -> LLM:
         """
         Initialize LLM, extracted for testing.
         """
-        agent_name = agent_cls if agent_cls is not None else 'agent'
+        agent_name = agent_cls if agent_cls is not None else "agent"
         return LLM(
             config=self.config.get_llm_config_from_agent(agent_name),
             retry_listener=self._notify_on_llm_retry,
@@ -261,9 +264,9 @@ class Session:
         )
 
     def _notify_on_llm_retry(self, retries: int, max: int) -> None:
-        msg_id = 'STATUS$LLM_RETRY'
+        msg_id = "STATUS$LLM_RETRY"
         self.queue_status_message(
-            'info', msg_id, f'Retrying LLM request, {retries} / {max}'
+            "info", msg_id, f"Retrying LLM request, {retries} / {max}"
         )
 
     def on_event(self, event: Event):
@@ -290,20 +293,20 @@ class Session:
         ):
             # feedback from the environment to agent actions is understood as agent events by the UI
             event_dict = event_to_dict(event)
-            event_dict['source'] = EventSource.AGENT
+            event_dict["source"] = EventSource.AGENT
             await self.send(event_dict)
             if (
                 isinstance(event, AgentStateChangedObservation)
                 and event.agent_state == AgentState.ERROR
             ):
                 self.logger.info(
-                    'Agent status error',
-                    extra={'signal': 'agent_status_error'},
+                    "Agent status error",
+                    extra={"signal": "agent_status_error"},
                 )
         elif isinstance(event, ErrorObservation):
             # send error events as agent events to the UI
             event_dict = event_to_dict(event)
-            event_dict['source'] = EventSource.AGENT
+            event_dict["source"] = EventSource.AGENT
             await self.send(event_dict)
 
     async def dispatch(self, data: dict):
@@ -314,12 +317,12 @@ class Session:
             if controller:
                 if controller.agent.llm.config.disable_vision:
                     await self.send_error(
-                        'Support for images is disabled for this model, try without an image.'
+                        "Support for images is disabled for this model, try without an image."
                     )
                     return
                 if not controller.agent.llm.vision_is_active():
                     await self.send_error(
-                        'Model does not support image upload, change to a different model or try without an image.'
+                        "Model does not support image upload, change to a different model or try without an image."
                     )
                     return
         self.agent_session.event_stream.add_event(event, EventSource.USER)
@@ -335,32 +338,32 @@ class Session:
             if not self.is_alive:
                 return False
             if self.sio:
-                await self.sio.emit('oh_event', data, to=ROOM_KEY.format(sid=self.sid))
+                await self.sio.emit("oh_event", data, to=ROOM_KEY.format(sid=self.sid))
             await asyncio.sleep(0.001)  # This flushes the data to the client
             self.last_active_ts = int(time.time())
             return True
         except RuntimeError as e:
-            self.logger.error(f'Error sending data to websocket: {str(e)}')
+            self.logger.error(f"Error sending data to websocket: {str(e)}")
             self.is_alive = False
             return False
 
     async def send_error(self, message: str):
         """Sends an error message to the client."""
-        await self.send({'error': True, 'message': message})
+        await self.send({"error": True, "message": message})
 
     async def _send_status_message(self, msg_type: str, id: str, message: str):
         """Sends a status message to the client."""
-        if msg_type == 'error':
+        if msg_type == "error":
             agent_session = self.agent_session
             controller = self.agent_session.controller
             if controller is not None and not agent_session.is_closed():
                 await controller.set_agent_state_to(AgentState.ERROR)
             self.logger.info(
-                'Agent status error',
-                extra={'signal': 'agent_status_error'},
+                "Agent status error",
+                extra={"signal": "agent_status_error"},
             )
         await self.send(
-            {'status_update': True, 'type': msg_type, 'id': id, 'message': message}
+            {"status_update": True, "type": msg_type, "id": id, "message": message}
         )
 
     def queue_status_message(self, msg_type: str, id: str, message: str):

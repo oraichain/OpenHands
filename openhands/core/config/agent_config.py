@@ -24,20 +24,21 @@ class AgentConfig(BaseModel):
     """
 
     llm_config: str | None = Field(default=None)
-    codeact_enable_browsing: bool = Field(default=True)
+    codeact_enable_browsing: bool = Field(default=False)
     codeact_enable_llm_editor: bool = Field(default=False)
-    codeact_enable_jupyter: bool = Field(default=True)
+    codeact_enable_jupyter: bool = Field(default=False)
     enable_prompt_extensions: bool = Field(default=True)
     disabled_microagents: list[str] = Field(default_factory=list)
     enable_history_truncation: bool = Field(default=True)
     enable_som_visual_browsing: bool = Field(default=True)
     condenser: CondenserConfig = Field(
-        default_factory=lambda: NoOpCondenserConfig(type='noop')
+        default_factory=lambda: NoOpCondenserConfig(type="noop")
     )
     a2a_server_urls: list[str] = Field(default_factory=list)
     enable_llm_router: bool = Field(default=False)
     llm_router_infer_url: str | None = Field(default=None)
-    model_config = {'extra': 'forbid'}
+    enable_pyodide: bool = Field(default=False)
+    model_config = {"extra": "forbid"}
 
     @classmethod
     def from_toml_section(cls, data: dict) -> dict[str, AgentConfig]:
@@ -76,13 +77,13 @@ class AgentConfig(BaseModel):
         # Try to create the base config
         try:
             base_config = cls.model_validate(base_data)
-            agent_mapping['agent'] = base_config
+            agent_mapping["agent"] = base_config
         except ValidationError as e:
-            logger.warning(f'Invalid base agent configuration: {e}. Using defaults.')
+            logger.warning(f"Invalid base agent configuration: {e}. Using defaults.")
             # If base config fails, create a default one
             base_config = cls()
             # Still add it to the mapping
-            agent_mapping['agent'] = base_config
+            agent_mapping["agent"] = base_config
 
         # Process each custom section independently
         for name, overrides in custom_sections.items():
@@ -93,7 +94,7 @@ class AgentConfig(BaseModel):
                 agent_mapping[name] = custom_config
             except ValidationError as e:
                 logger.warning(
-                    f'Invalid agent configuration for [{name}]: {e}. This section will be skipped.'
+                    f"Invalid agent configuration for [{name}]: {e}. This section will be skipped."
                 )
                 # Skip this custom section but continue with others
                 continue
