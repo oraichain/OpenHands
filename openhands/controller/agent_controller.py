@@ -374,6 +374,8 @@ class AgentController:
                 return False
             if isinstance(event, A2ASendTaskArtifactObservation):
                 return False
+            if isinstance(event, ReportVerificationObservation):
+                return False
             return True
         return False
 
@@ -888,7 +890,14 @@ class AgentController:
                                 AgentState.AWAITING_USER_INPUT
                             )
                             action = NullAction()
-
+                        else:
+                            self.event_stream.add_event(
+                                ReportVerificationObservation(
+                                    result=True,
+                                    content=reason,
+                                ),
+                                EventSource.AGENT,
+                            )
                     except Exception as e:
                         self.log(
                             'error', f'Failed during finish action intercept: {str(e)}'
