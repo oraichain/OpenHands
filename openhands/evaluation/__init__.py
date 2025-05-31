@@ -48,6 +48,7 @@ async def should_step_after_call_evaluation_endpoint(
     """
     config = load_app_config()
     evaluation_endpoint = config.evaluation_endpoint_url
+    evaluation_timeout = config.evaluation_timeout
     if not evaluation_endpoint:
         log_func('error', 'evaluation_endpoint_url not set in config.toml')
         return True, '', ''
@@ -67,7 +68,7 @@ async def should_step_after_call_evaluation_endpoint(
             url=evaluation_endpoint,
             headers=headers,
             json=payload,
-            timeout=60.0,
+            timeout=evaluation_timeout,
         )
 
         log_func('info', f'Evaluation endpoint response: {response.status_code}')
