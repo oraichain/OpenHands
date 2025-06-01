@@ -895,6 +895,7 @@ class AgentController:
                                 ReportVerificationObservation(
                                     result=True,
                                     content=reason,
+                                    file_path=file_path,
                                 ),
                                 EventSource.AGENT,
                             )
