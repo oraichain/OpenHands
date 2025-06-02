@@ -1,6 +1,7 @@
 import json
 import os
 from collections import deque
+from copy import deepcopy
 from typing import override
 
 from httpx import request
@@ -134,6 +135,49 @@ class CodeActAgent(Agent):
         super().reset()
         self.pending_actions.clear()
 
+    def _select_tools_based_on_mode(self, research_mode: str | None) -> list[dict]:
+        """Selects the tools based on the mode of the agent."""
+        if research_mode == ResearchMode.FOLLOW_UP:
+            selected_tools = [FinishTool]
+        elif research_mode == ResearchMode.DEEP_RESEARCH:
+            # Start with built-in tools
+            selected_tools = deepcopy(self.tools)
+
+            if self.config.a2a_server_urls:
+                selected_tools.extend([ListRemoteAgents, SendTask])
+
+            # Add search tools, avoiding duplicates
+            existing_names = {tool['function']['name'] for tool in selected_tools}
+            unique_search_tools = [
+                tool
+                for tool in self.search_tools
+                if tool['function']['name'] not in existing_names
+            ]
+            selected_tools.extend(unique_search_tools)
+
+            # Add MCP tools, avoiding duplicates
+            existing_names = {tool['function']['name'] for tool in selected_tools}
+            unique_mcp_tools = [
+                tool
+                for tool in self.mcp_tools
+                if tool['function']['name'] not in existing_names
+            ]
+            selected_tools.extend(unique_mcp_tools)
+        else:
+            # For other modes, combine tools and search_tools with deduplication
+            selected_tools = deepcopy(self.tools)
+            existing_names = {tool['function']['name'] for tool in selected_tools}
+            unique_search_tools = [
+                tool
+                for tool in self.search_tools
+                if tool['function']['name'] not in existing_names
+            ]
+            selected_tools.extend(unique_search_tools)
+
+        logger.debug(f'Selected tools: {selected_tools}')
+        selected_tools[-1]['cache_control'] = {'type': 'ephemeral'}
+        return selected_tools
+
     def step(self, state: State) -> Action:
         """Performs one step using the CodeAct Agent.
 
@@ -179,11 +223,31 @@ class CodeActAgent(Agent):
         )
 
         messages = self._get_messages(condensed_history, research_mode=research_mode)
-
-        # process the user input and check chatmode
-
+        formatted_messages = self.llm.format_messages_for_llm(messages)
+        convert_knowledge_to_list = [
+            self.knowledge_base[k] for k in self.knowledge_base
+        ]
+        # NOTE: This is user's dynamic knowledge base. Do not cache this message, as it will be updated frequently.
+        # NOTE: Only cache static large knowledge base that is uploaded by the user (changed rarely).
+        if len(convert_knowledge_to_list) > 0:
+            formatted_messages.append(
+                {
+                    'role': 'assistant',
+                    'content': [
+                        {
+                            'type': 'text',
+                            'text': 'Knowledge base of the user: '
+                            + json.dumps(convert_knowledge_to_list),
+                        },
+                        {
+                            'type': 'text',
+                            'text': "Use the knowledge base to reference the user's information if needed.",
+                        },
+                    ],
+                }
+            )
         params: dict = {
-            'messages': self.llm.format_messages_for_llm(messages),
+            'messages': formatted_messages,
         }
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         # if chat mode, we need to use the search tools
@@ -311,9 +375,6 @@ class CodeActAgent(Agent):
         agent_infos = (
             self.a2a_manager.list_remote_agents() if self.a2a_manager else None
         )
-        convert_knowledge_to_list = [
-            self.knowledge_base[k] for k in self.knowledge_base
-        ]
 
         # Use ConversationMemory to process initial messages
         # switch mode and initial messages
@@ -321,12 +382,10 @@ class CodeActAgent(Agent):
         messages = self.conversation_memory.process_initial_messages(
             with_caching=self.llm.is_caching_prompt_active(),
             agent_infos=agent_infos,
-            knowledge_base=convert_knowledge_to_list,
         )
         if research_mode == ResearchMode.FOLLOW_UP:
             messages = self.conversation_memory.process_initial_followup_message(
                 with_caching=self.llm.is_caching_prompt_active(),
-                knowledge_base=convert_knowledge_to_list,
             )
         elif research_mode is None or research_mode == ResearchMode.CHAT:
             messages = self.conversation_memory.process_initial_chatmode_message(
@@ -338,7 +397,6 @@ class CodeActAgent(Agent):
                     }
                     for tool in self.search_tools
                 ],
-                knowledge_base=convert_knowledge_to_list,
             )
         # Use ConversationMemory to process events
         messages = self.conversation_memory.process_events(
