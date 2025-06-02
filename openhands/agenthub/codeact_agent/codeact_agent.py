@@ -2,6 +2,7 @@ import json
 import os
 from collections import deque
 from copy import deepcopy
+from datetime import datetime
 from typing import override
 
 from httpx import request
@@ -174,7 +175,9 @@ class CodeActAgent(Agent):
             selected_tools.extend(unique_search_tools)
 
         logger.debug(f'Selected tools: {selected_tools}')
-        selected_tools[-1]['cache_control'] = {'type': 'ephemeral'}
+        # NOTE:only for anthropic model, we need to set the cache_control for the tool list
+        if 'claude' in self.llm.config.model and len(selected_tools) > 0:
+            selected_tools[-1]['cache_control'] = {'type': 'ephemeral'}
         return selected_tools
 
     def step(self, state: State) -> Action:
@@ -247,6 +250,18 @@ class CodeActAgent(Agent):
                     ],
                 }
             )
+        current_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        formatted_messages.append(
+            {
+                'role': 'assistant',
+                'content': [
+                    {
+                        'type': 'text',
+                        'text': f'Current date: {current_date}',
+                    },
+                ],
+            }
+        )
         params: dict = {
             'messages': formatted_messages,
         }

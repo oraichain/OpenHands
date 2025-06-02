@@ -72,7 +72,7 @@ def check_dependencies(code_repo_path: str, poetry_venvs_path: str):
     pane = session.attached_pane
     pane.send_keys('echo "test"')
     pane_output = '\n'.join(pane.cmd('capture-pane', '-p').stdout)
-    session.kill_session()
+    session.kill()
     if 'test' not in pane_output:
         raise ValueError('libtmux is not properly installed. ' + ERROR_MESSAGE)
 
