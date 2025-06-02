@@ -64,6 +64,7 @@ class ConversationMemory:
     def __init__(self, config: AgentConfig, prompt_manager: PromptManager):
         self.agent_config = config
         self.prompt_manager = prompt_manager
+        self.current_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     def process_events(
         self,
@@ -157,7 +158,7 @@ class ConversationMemory:
                     TextContent(
                         text=self.prompt_manager.get_followup_mode_message(
                             **kwargs,
-                            CURRENT_DATE=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            CURRENT_DATE=self.current_date,
                         ),
                         cache_prompt=with_caching,
                     )
@@ -175,7 +176,7 @@ class ConversationMemory:
                     TextContent(
                         text=self.prompt_manager.get_chat_mode_message(
                             **kwargs,
-                            CURRENT_DATE=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            CURRENT_DATE=self.current_date,
                         ),
                         cache_prompt=with_caching,
                     )
@@ -187,22 +188,22 @@ class ConversationMemory:
         self,
         with_caching: bool = False,
         agent_infos: list | None = None,
-        knowledge_base: list[dict] | None = None,
     ) -> list[Message]:
         """Create the initial messages for the conversation."""
+        system_messages = [
+            TextContent(
+                text=self.prompt_manager.get_system_message(
+                    agent_infos=agent_infos,
+                    CURRENT_DATE=self.current_date,
+                ),
+                cache_prompt=with_caching,
+            )
+        ]
+
         return [
             Message(
                 role='system',
-                content=[
-                    TextContent(
-                        text=self.prompt_manager.get_system_message(
-                            agent_infos=agent_infos,
-                            CURRENT_DATE=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                            knowledge_base=knowledge_base,
-                        ),
-                        cache_prompt=with_caching,
-                    )
-                ],
+                content=system_messages,
             )
         ]
 
