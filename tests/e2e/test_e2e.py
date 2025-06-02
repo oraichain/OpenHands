@@ -199,27 +199,7 @@ if __name__ == '__main__':
         conversation_id = os.getenv('CONVERSATION_ID')
         if not conversation_id:
             new_conversation_response = create_conversation(
-                initial_user_msg="""You are a Perpetual Whales Agent agent who is an expert analyst specializing in detecting whale trading patterns with years of experience understanding deeply crypto trading behavior, on-chain metrics, and derivatives markets, you have developed a keen understanding of whale trading strategies.
-
-    You can identify patterns in whale positions, analyze their portfolio changes over time, and evaluate the potential reasons behind their trading decisions. Your analysis helps traders decide whether to follow whale trading moves or not.
-
-    Here will be your task, please do it from step by step, one task is done you will able to move to next task. DO NOT use liquidity heatmap tool, function for analyzing:
-
-    - Fetching every whales on some markets
-    - Find trading patterns and strategies identified based on latest whales activity, histocial trading pnl
-    - Risk assessment of all current positions
-    - Analyze market trend based on 30 days of tokens
-    - Define short-term trades as many as possible that can be executed with safety scoring and entries, stop loss, take profit, concise description, bias including short-term or long-term trades. The entries should be closest to latest price, stop loss and take profit should be realistic which is not too far from entry.
-
-    Identify and extract key DeFi metrics from each tool call result, such as:
-    - Protocol or platform names
-    - Total value locked (TVL) in USD
-    - Transaction volumes or counts
-    - Yield rates or APYs
-    - Token prices or market data
-    - Other relevant DeFi-specific metrics
-
-    Summarize your final report as detailed as possible. Make it from 5 to 10 paragraphs. Remember to be very specific and precise about the metrics and numbers.""",
+                initial_user_msg="""What’s the ORAI balance of these wallets: orai1f6q9wjn8qp3ll8y8ztd8290vtec2yxyx0wnd0d, orai179dea42h80arp69zd779zcav5jp0kv04zx4h09, orai1f7wcl8drgvyvhzylu54gphul0st2x87kdn6g6k, orai1unpv9tsw7d27n7wym83z4lajh4pt252jsvwgvf, orai1qv5jn7tueeqw7xqdn5rem7s09n7zletrsnc5vq, orai12ru3276mkzuuay6vhmg3t6z9hpvrsnpljq7v75, orai1azu0pge4yx6j6sd0tn8nz4x9vj7l9kga8y3arf,orai1uer4mwcq2vlt8l23ncwyjj70mug5pzx8et6u9a,orai1g35xkqtjfxw88rud2je2jyrshrdyrxv4vcu7zt,orai1mfdn23y2ydnp6j3l3f8rw6r2gzazrmprm49h8v,orai18wpvqfu9g0n8x3ysu72fcdtwz025tvg72nxll0,orai155svs6sgxe55rnvs6ghprtqu0mh69kehsqewps,orai1f0kay35s8pfk0vptm7wfxf9aqndtrlfsfagp4r,orai1906ngejrrhxlj4fygj2pr233hv573h7n92wt0e,orai1pqe2j4znxd5c3hy56cc6hskt4kejrp43td5ja0,orai1rc883qa2rnkylmzfe4kvwzsv49y66ltulyrvyx. Next, query their delegation amounts""",
                 image_urls=[],
                 selected_repository=None,
                 selected_branch=None,

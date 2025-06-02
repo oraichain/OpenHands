@@ -126,7 +126,8 @@ class Message(BaseModel):
             if message_dict['role'] == 'tool':
                 message_dict['cache_control'] = {'type': 'ephemeral'}
             else:
-                message_dict['content'][-1]['cache_control'] = {'type': 'ephemeral'}
+                if len(message_dict['content']) > 0:
+                    message_dict['content'][-1]['cache_control'] = {'type': 'ephemeral'}
 
         # add tool call keys if we have a tool call or response
         return self._add_tool_call_keys(message_dict)
