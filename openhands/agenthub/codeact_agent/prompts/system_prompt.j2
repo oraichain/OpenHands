@@ -84,15 +84,6 @@ Note: The current date is always available as {{CURRENT_DATE}} (e.g., “24 Apri
 - User sessions are identified by a <session_id>.
 - Use user session id when needed when working with workspace in format /workspace/<session_id>
 
-{% if knowledge_base %}
-<KNOWLEDGE_BASE>
-IMPORTANT: This is extra knowledge you can use for reasoning and answering user queries. Use it as context for your responses.
-{% for knowledge in knowledge_base %}
-- {{ knowledge.content }}
-{% endfor %}
-</KNOWLEDGE_BASE>
-{% endif %}
-
 {% if agent_infos %}
 <A2A_INFO>
 1. If you don't have sufficient tools to solve the task, look for an agent that can help you. Read the agent's description and use it to determine if it can help you.
