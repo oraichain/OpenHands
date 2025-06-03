@@ -81,7 +81,7 @@ from openhands.events.serialization.event import (
 from openhands.llm.llm import LLM
 from openhands.llm.metrics import Metrics
 from openhands.server.mem0 import process_single_event_for_mem0, search_knowledge_mem0
-from openhands.server.thesis_auth import check_feature_credit, webhook_rag_conversation
+from openhands.server.thesis_auth import check_feature_credit, search_knowledge, webhook_rag_conversation
 
 # note: RESUME is only available on web GUI
 TRAFFIC_CONTROL_REMINDER = (
@@ -510,6 +510,27 @@ class AgentController:
             if self.state.agent_state == AgentState.ERROR:
                 self.state.metrics.merge(self.state.local_metrics)
 
+    async def _search_knowledge(self, query: str):
+        if self.user_id and (self.space_id or self.thread_follow_up):
+            knowledge_base = await search_knowledge_mem0(
+                query,
+                self.space_id,
+                self.raw_followup_conversation_id,
+                self.user_id,
+            )
+            if knowledge_base and len(knowledge_base) > 0:
+                self.agent.update_agent_knowledge_base(knowledge_base)
+            # fallback to call rag
+            else:
+                knowledge_base = await search_knowledge(
+                    query,
+                    self.space_id,
+                    self.thread_follow_up,
+                    self.user_id,
+                )
+                if knowledge_base and len(knowledge_base) > 0:
+                    self.agent.update_agent_knowledge_base(knowledge_base)
+
     async def _handle_message_action(self, action: MessageAction) -> None:
         """Handles message actions from the event stream.
 
@@ -573,15 +594,7 @@ class AgentController:
             print(f'self.thread_follow_up: {self.thread_follow_up}')
 
             # update new knowledge base with the user message
-            if self.user_id and (self.space_id or self.thread_follow_up):
-                knowledge_base = await search_knowledge_mem0(
-                    action.content,
-                    self.space_id,
-                    self.raw_followup_conversation_id,
-                    self.user_id,
-                )
-                if knowledge_base:
-                    self.agent.update_agent_knowledge_base(knowledge_base)
+            await self._search_knowledge(action.content)
 
             recall_action = RecallAction(query=action.content, recall_type=recall_type)
             self._pending_action = recall_action
