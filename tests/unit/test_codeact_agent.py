@@ -44,6 +44,7 @@ def agent() -> CodeActAgent:
     agent.llm = Mock()
     agent.llm.config = Mock()
     agent.llm.config.max_message_chars = 1000
+    agent.llm.config.model = 'claude-3-5-sonnet-20241022'  # Set a valid model name
     return agent
 
 
