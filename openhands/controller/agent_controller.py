@@ -1,10 +1,13 @@
 import asyncio
 import copy
+import json
 import os
 import traceback
 from typing import Callable, ClassVar, Type
 
 import litellm  # noqa
+import requests
+from dotenv import load_dotenv
 from litellm.exceptions import (  # noqa
     APIConnectionError,
     APIError,
@@ -85,6 +88,10 @@ from openhands.server.thesis_auth import webhook_rag_conversation
 TRAFFIC_CONTROL_REMINDER = (
     "Please click on resume button if you'd like to continue, or start a new task."
 )
+
+
+load_dotenv()
+REWRITE_USER_PROMPT_URL = os.getenv('REWRITE_USER_PROMPT_URL')
 
 
 class AgentController:
@@ -506,6 +513,28 @@ class AgentController:
             if self.state.agent_state == AgentState.ERROR:
                 self.state.metrics.merge(self.state.local_metrics)
 
+    def _rewrite_user_prompt(self, prompt: str, do_thinking: bool = False) -> str:
+        if REWRITE_USER_PROMPT_URL is None:
+            logger.error(
+                'REWRITE_USER_PROMPT_URL is not set, returning original prompt'
+            )
+            return prompt
+        try:
+            logger.info(f'inside_rewrite_user_prompt: {prompt}')
+            payload = json.dumps({'raw_prompt': prompt, 'do_thinking': do_thinking})
+            headers = {'accept': 'application/json', 'Content-Type': 'application/json'}
+
+            logger.info(f'rewrite_user_prompt: {payload}')
+            response = requests.post(
+                REWRITE_USER_PROMPT_URL, headers=headers, data=payload
+            )
+            logger.info(f'rewrite_user_prompt response: {response.json()}')
+
+            return response.json()['optimized_prompt']
+        except Exception as e:
+            logger.error(f'rewrite_user_prompt error: {str(e)}')
+            return prompt
+
     async def _handle_message_action(self, action: MessageAction) -> None:
         """Handles message actions from the event stream.
 
@@ -563,6 +592,7 @@ class AgentController:
                 if knowledge_base:
                     self.agent.update_agent_knowledge_base(knowledge_base)
 
+            action.content = self._rewrite_user_prompt(action.content)
             recall_action = RecallAction(query=action.content, recall_type=recall_type)
             self._pending_action = recall_action
             # this is source=USER because the user message is the trigger for the microagent retrieval
