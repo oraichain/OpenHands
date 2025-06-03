@@ -45,7 +45,6 @@ from openhands.server.shared import (
 )
 from openhands.server.thesis_auth import (
     change_thread_visibility,
-    check_feature_credit,
     create_thread,
     delete_thread,
     get_thread_by_id,
@@ -147,15 +146,6 @@ async def _create_new_conversation(
     logger.info('Loading conversation store')
     conversation_store = await ConversationStoreImpl.get_instance(config, user_id, None)
     logger.info('Conversation store loaded')
-
-    # check credit
-    if research_mode == 'deep_research' and user_id is not None:
-        check_credit = await check_feature_credit(user_id, 'deep_research')
-        if check_credit and not check_credit.get('data'):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=check_credit.get('msg', 'Feature credit check failed'),
-            )
 
     conversation_id = uuid.uuid4().hex
     while await conversation_store.exists(conversation_id):
