@@ -1,7 +1,7 @@
 import json
 import os
-from copy import deepcopy
 from collections import deque
+from copy import deepcopy
 from typing import override
 
 from httpx import request
@@ -34,7 +34,7 @@ from openhands.utils.prompt import PromptManager
 
 
 class CodeActAgent(Agent):
-    VERSION = "2.2"
+    VERSION = '2.2'
     """
     The Code Act Agent is a minimalist agent.
     The agent works by passing the model a list of action-observation pairs and prompting the model to take the next step.
@@ -98,15 +98,15 @@ class CodeActAgent(Agent):
         self.tools = built_in_tools
 
         self.prompt_manager = PromptManager(
-            prompt_dir=os.path.join(os.path.dirname(__file__), "prompts"),
+            prompt_dir=os.path.join(os.path.dirname(__file__), 'prompts'),
         )
 
         # Create a ConversationMemory instance
         self.conversation_memory = ConversationMemory(self.config, self.prompt_manager)
-        if "llm_config" in self.config.condenser:
-            logger.info(f"Condenser config: {self.config.condenser.llm_config}")
+        if 'llm_config' in self.config.condenser:
+            logger.info(f'Condenser config: {self.config.condenser.llm_config}')
         self.condenser = Condenser.from_config(self.config.condenser)
-        logger.info(f"Using condenser: {type(self.condenser)}")
+        logger.info(f'Using condenser: {type(self.condenser)}')
         self.routing_llms = routing_llms
         self.search_tools: list[dict] = []
         self.session_id: str | None = None
@@ -117,7 +117,7 @@ class CodeActAgent(Agent):
         if self.prompt_manager:
             self.prompt_manager.set_system_message(system_prompt)
         logger.info(
-            f"New system prompt: {self.conversation_memory.process_initial_messages()}"
+            f'New system prompt: {self.conversation_memory.process_initial_messages()}'
         )
 
     @override
@@ -126,7 +126,7 @@ class CodeActAgent(Agent):
         if self.prompt_manager:
             self.prompt_manager.set_user_message(user_prompt)
         logger.info(
-            f"New user prompt: {self.conversation_memory.process_initial_messages()}"
+            f'New user prompt: {self.conversation_memory.process_initial_messages()}'
         )
 
     def reset(self) -> None:
@@ -146,34 +146,34 @@ class CodeActAgent(Agent):
                 selected_tools.extend([ListRemoteAgents, SendTask])
 
             # Add search tools, avoiding duplicates
-            existing_names = {tool["function"]["name"] for tool in selected_tools}
+            existing_names = {tool['function']['name'] for tool in selected_tools}
             unique_search_tools = [
                 tool
                 for tool in self.search_tools
-                if tool["function"]["name"] not in existing_names
+                if tool['function']['name'] not in existing_names
             ]
             selected_tools.extend(unique_search_tools)
 
             # Add MCP tools, avoiding duplicates
-            existing_names = {tool["function"]["name"] for tool in selected_tools}
+            existing_names = {tool['function']['name'] for tool in selected_tools}
             unique_mcp_tools = [
                 tool
                 for tool in self.mcp_tools
-                if tool["function"]["name"] not in existing_names
+                if tool['function']['name'] not in existing_names
             ]
             selected_tools.extend(unique_mcp_tools)
         else:
             # For other modes, combine tools and search_tools with deduplication
             selected_tools = deepcopy(self.tools)
-            existing_names = {tool["function"]["name"] for tool in selected_tools}
+            existing_names = {tool['function']['name'] for tool in selected_tools}
             unique_search_tools = [
                 tool
                 for tool in self.search_tools
-                if tool["function"]["name"] not in existing_names
+                if tool['function']['name'] not in existing_names
             ]
             selected_tools.extend(unique_search_tools)
 
-        logger.debug(f"Selected tools: {selected_tools}")
+        logger.debug(f'Selected tools: {selected_tools}')
         return selected_tools
 
     def step(self, state: State) -> Action:
@@ -200,7 +200,7 @@ class CodeActAgent(Agent):
         # if we're done, go back
         latest_user_message = state.get_last_user_message()
 
-        if latest_user_message and latest_user_message.content.strip() == "/exit":
+        if latest_user_message and latest_user_message.content.strip() == '/exit':
             return AgentFinishAction()
 
         # Condense the events from the state. If we get a view we'll pass those
@@ -216,7 +216,7 @@ class CodeActAgent(Agent):
                 return condensation_action
 
         logger.info(
-            f"Processing {len(condensed_history)} events from a total of {len(state.history)} events"
+            f'Processing {len(condensed_history)} events from a total of {len(state.history)} events'
         )
         research_mode = (
             latest_user_message.mode if latest_user_message is not None else None
@@ -225,66 +225,66 @@ class CodeActAgent(Agent):
         messages = self._get_messages(condensed_history, research_mode=research_mode)
 
         params: dict = {
-            "messages": self.llm.format_messages_for_llm(messages),
+            'messages': self.llm.format_messages_for_llm(messages),
         }
-        params["extra_body"] = {"metadata": state.to_llm_metadata(agent_name=self.name)}
+        params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         # if chat mode, we need to use the search tools
-        params["tools"] = self._select_tools_based_on_mode(research_mode)
-        logger.debug(f"Messages: {messages}")
+        params['tools'] = self._select_tools_based_on_mode(research_mode)
+        logger.debug(f'Messages: {messages}')
         last_message = messages[-1]
         response = None
         if (
-            last_message.role == "user"
+            last_message.role == 'user'
             and self.config.enable_llm_router
             and self.config.llm_router_infer_url is not None
             and self.routing_llms is not None
-            and self.routing_llms["simple"] is not None
+            and self.routing_llms['simple'] is not None
         ):
-            content = "\n".join(
+            content = '\n'.join(
                 [
                     msg.text
                     for msg in last_message.content
                     if isinstance(msg, TextContent)
                 ]
             )
-            text_input = "Prompt: " + content
+            text_input = 'Prompt: ' + content
             body = {
-                "inputs": [
+                'inputs': [
                     {
-                        "name": "INPUT",
-                        "shape": [1, 1],
-                        "datatype": "BYTES",
-                        "data": [text_input],
+                        'name': 'INPUT',
+                        'shape': [1, 1],
+                        'datatype': 'BYTES',
+                        'data': [text_input],
                     }
                 ]
             }
-            logger.debug(f"Body: {body}")
-            headers = {"Content-Type": "application/json"}
+            logger.debug(f'Body: {body}')
+            headers = {'Content-Type': 'application/json'}
             result = request(
-                "POST",
+                'POST',
                 self.config.llm_router_infer_url,
                 data=json.dumps(body),
                 headers=headers,
             )
             res = result.json()
-            logger.debug(f"Result from classifier: {res}")
-            complexity_score = res["outputs"][0]["data"][0]
-            logger.debug(f"Complexity score: {complexity_score}")
+            logger.debug(f'Result from classifier: {res}')
+            complexity_score = res['outputs'][0]['data'][0]
+            logger.debug(f'Complexity score: {complexity_score}')
             if complexity_score > 0.3:
                 response = self.llm.completion(**params)
             else:
-                response = self.routing_llms["simple"].completion(**params)
+                response = self.routing_llms['simple'].completion(**params)
         else:
             response = self.llm.completion(**params)
 
-        logger.debug(f"Response from LLM: {response}")
+        logger.debug(f'Response from LLM: {response}')
 
         actions = codeact_function_calling.response_to_actions(
             response,
             state.session_id,
             self.workspace_mount_path_in_sandbox_store_in_session,
         )
-        logger.debug(f"Actions after response_to_actions: {actions}")
+        logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
             self.pending_actions.append(action)
         return self.pending_actions.popleft()
@@ -324,7 +324,7 @@ class CodeActAgent(Agent):
             - For Anthropic models, specific messages are cached according to their documentation
         """
         if not self.prompt_manager:
-            raise Exception("Prompt Manager not instantiated.")
+            raise Exception('Prompt Manager not instantiated.')
         agent_infos = (
             self.a2a_manager.list_remote_agents() if self.a2a_manager else None
         )
@@ -350,8 +350,8 @@ class CodeActAgent(Agent):
                 with_caching=self.llm.is_caching_prompt_active(),
                 search_tools=[
                     {
-                        "name": tool["function"]["name"],
-                        "description": tool["function"]["description"],
+                        'name': tool['function']['name'],
+                        'description': tool['function']['description'],
                     }
                     for tool in self.search_tools
                 ],
@@ -381,28 +381,28 @@ class CodeActAgent(Agent):
         Returns:
             list[Message]: The enhanced list of messages
         """
-        assert self.prompt_manager, "Prompt Manager not instantiated."
+        assert self.prompt_manager, 'Prompt Manager not instantiated.'
 
         results: list[Message] = []
         is_first_message_handled = False
         prev_role = None
 
         for msg in messages:
-            if msg.role == "user" and not is_first_message_handled:
+            if msg.role == 'user' and not is_first_message_handled:
                 is_first_message_handled = True
                 # compose the first user message with examples
                 self.prompt_manager.add_examples_to_initial_message(
                     msg, self.session_id
                 )
 
-            elif msg.role == "user":
+            elif msg.role == 'user':
                 # Add double newline between consecutive user messages
-                if prev_role == "user" and len(msg.content) > 0:
+                if prev_role == 'user' and len(msg.content) > 0:
                     # Find the first TextContent in the message to add newlines
                     for content_item in msg.content:
                         if isinstance(content_item, TextContent):
                             # If the previous message was also from a user, prepend two newlines to ensure separation
-                            content_item.text = "\n\n" + content_item.text
+                            content_item.text = '\n\n' + content_item.text
                             break
 
             results.append(msg)
