@@ -375,6 +375,8 @@ class AgentController:
                 return False
             if isinstance(event, A2ASendTaskArtifactObservation):
                 return False
+            if isinstance(event, CreditErrorObservation):
+                return False
             return True
         return False
 
