@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import os
@@ -24,7 +25,7 @@ from openhands.llm.metrics import Metrics
 # Configuration
 API_BASE_URL = 'http://localhost:3000'
 SYSTEM_PROMPT = 'You are a helpful AI assistant.'
-
+DEFAULT_PROMPT = 'What’s the ORAI balance of these wallets: orai1f6q9wjn8qp3ll8y8ztd8290vtec2yxyx0wnd0d, orai179dea42h80arp69zd779zcav5jp0kv04zx4h09, orai1f7wcl8drgvyvhzylu54gphul0st2x87kdn6g6k, orai1unpv9tsw7d27n7wym83z4lajh4pt252jsvwgvf, orai1qv5jn7tueeqw7xqdn5rem7s09n7zletrsnc5vq, orai12ru3276mkzuuay6vhmg3t6z9hpvrsnpljq7v75, orai1azu0pge4yx6j6sd0tn8nz4x9vj7l9kga8y3arf,orai1uer4mwcq2vlt8l23ncwyjj70mug5pzx8et6u9a,orai1g35xkqtjfxw88rud2je2jyrshrdyrxv4vcu7zt,orai1mfdn23y2ydnp6j3l3f8rw6r2gzazrmprm49h8v,orai18wpvqfu9g0n8x3ysu72fcdtwz025tvg72nxll0,orai155svs6sgxe55rnvs6ghprt'
 # Create a SocketIO client
 sio = socketio.AsyncClient()
 
@@ -49,7 +50,6 @@ async def join_conversation(conversation_id: str, public_address: str):
         f'&auth={public_address}'
         f'&latest_event_id=-1'
         f'&mode=normal'
-        f'&system_prompt={SYSTEM_PROMPT}'
     )
 
     try:
@@ -120,6 +120,7 @@ async def join_conversation(conversation_id: str, public_address: str):
                                 'args': {
                                     'content': user_input,
                                     'timestamp': time.time(),
+                                    'mode': ResearchMode.DEEP_RESEARCH,
                                 },
                             },
                         )
@@ -161,7 +162,6 @@ def create_conversation(
     selected_branch: Optional[str] = None,
     replay_json: Optional[str] = None,
     public_address: Optional[str] = None,
-    system_prompt: Optional[str] = None,
     user_prompt: Optional[str] = None,
     research_mode: Optional[ResearchMode] = None,
 ) -> dict:
@@ -171,7 +171,6 @@ def create_conversation(
         'selected_repository': selected_repository,
         'selected_branch': selected_branch,
         'replay_json': replay_json,
-        'system_prompt': system_prompt,
         'user_prompt': user_prompt,
         'research_mode': research_mode,
     }
@@ -195,17 +194,26 @@ def create_conversation(
 
 if __name__ == '__main__':
     try:
+        # Set up argument parser
+        parser = argparse.ArgumentParser(
+            description='Run the A2A Agent with a custom prompt'
+        )
+        parser.add_argument(
+            '--prompt', type=str, help='Custom prompt to send to the agent'
+        )
+        args = parser.parse_args()
+        # Use the provided prompt or the default one
+        prompt = args.prompt if args.prompt else DEFAULT_PROMPT
         public_address = '0x11A87E9d573597d5A4271272df09C1177F34bEbC'
         conversation_id = os.getenv('CONVERSATION_ID')
         if not conversation_id:
             new_conversation_response = create_conversation(
-                initial_user_msg="""What’s the ORAI balance of these wallets: orai1f6q9wjn8qp3ll8y8ztd8290vtec2yxyx0wnd0d, orai179dea42h80arp69zd779zcav5jp0kv04zx4h09, orai1f7wcl8drgvyvhzylu54gphul0st2x87kdn6g6k, orai1unpv9tsw7d27n7wym83z4lajh4pt252jsvwgvf, orai1qv5jn7tueeqw7xqdn5rem7s09n7zletrsnc5vq, orai12ru3276mkzuuay6vhmg3t6z9hpvrsnpljq7v75, orai1azu0pge4yx6j6sd0tn8nz4x9vj7l9kga8y3arf,orai1uer4mwcq2vlt8l23ncwyjj70mug5pzx8et6u9a,orai1g35xkqtjfxw88rud2je2jyrshrdyrxv4vcu7zt,orai1mfdn23y2ydnp6j3l3f8rw6r2gzazrmprm49h8v,orai18wpvqfu9g0n8x3ysu72fcdtwz025tvg72nxll0,orai155svs6sgxe55rnvs6ghprtqu0mh69kehsqewps,orai1f0kay35s8pfk0vptm7wfxf9aqndtrlfsfagp4r,orai1906ngejrrhxlj4fygj2pr233hv573h7n92wt0e,orai1pqe2j4znxd5c3hy56cc6hskt4kejrp43td5ja0,orai1rc883qa2rnkylmzfe4kvwzsv49y66ltulyrvyx. Next, query their delegation amounts""",
+                initial_user_msg=prompt,
                 image_urls=[],
                 selected_repository=None,
                 selected_branch=None,
                 replay_json=None,
                 public_address=public_address,
-                system_prompt=SYSTEM_PROMPT,
                 research_mode=ResearchMode.DEEP_RESEARCH,
             )
             conversation_id = new_conversation_response['conversation_id']
