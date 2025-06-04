@@ -240,8 +240,11 @@ class CodeActAgent(Agent):
                     'content': [
                         {
                             'type': 'text',
-                            'text': 'Knowledge base of the user: '
-                            + json.dumps(convert_knowledge_to_list),
+                            'text': 'Knowledge base of the user is put in the <knowledge_base></knowledge_base> tag below\n',
+                        },
+                        {
+                            'type': 'text',
+                            'text': f'<knowledge_base>{json.dumps(convert_knowledge_to_list)}</knowledge_base>',
                         },
                         {
                             'type': 'text',
@@ -250,14 +253,22 @@ class CodeActAgent(Agent):
                     ],
                 }
             )
-        current_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        current_date = datetime.now().strftime('%Y-%m-%d')
         formatted_messages.append(
             {
                 'role': 'assistant',
                 'content': [
                     {
                         'type': 'text',
-                        'text': f'Current date: {current_date}',
+                        'text': 'Current date is put in the <current_date></current_date> tag below\n',
+                    },
+                    {
+                        'type': 'text',
+                        'text': f'<current_date>{current_date}</current_date>',
+                    },
+                    {
+                        'type': 'text',
+                        'text': 'Use it as a reference for any time-sensitive information.',
                     },
                 ],
             }
