@@ -55,8 +55,6 @@ async def create_mcp_clients(
     sid: Optional[str] = None,
     mnemonic: Optional[str] = None,
 ) -> list[MCPClient]:
-    mcp_clients: list[MCPClient] = []
-
     # Initialize SSE connections
     async def connect_client(name: str, mcp_config: MCPConfig) -> Optional[MCPClient]:
         logger.info(
@@ -86,11 +84,16 @@ async def create_mcp_clients(
         connect_client(name, mcp_config) for name, mcp_config in dict_mcp_config.items()
     ]
 
-    # Run all connection attempts concurrently
-    results = await asyncio.gather(*tasks)
-
-    # Filter out None results and add successful clients
-    mcp_clients.extend([client for client in results if client is not None])
+    # Run all connection attempts concurrently, ignoring exceptions
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Filter out exceptions and None results
+    mcp_clients: list[MCPClient] = [
+        r
+        for r in results
+        if not isinstance(r, Exception)
+        and not isinstance(r, BaseException)
+        and r is not None
+    ]
 
     return mcp_clients
 

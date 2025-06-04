@@ -8,6 +8,7 @@ from typing import List, Optional
 
 import requests
 import socketio
+import uvloop
 from prompt_toolkit import HTML, print_formatted_text
 
 # Import required functions and classes from the first file
@@ -218,7 +219,7 @@ if __name__ == '__main__':
             )
             conversation_id = new_conversation_response['conversation_id']
         display_message(f'Conversation created with ID: {conversation_id}')
-        asyncio.run(
+        uvloop.run(
             join_conversation(
                 conversation_id=conversation_id, public_address=public_address
             )
