@@ -86,6 +86,8 @@ REASONING_EFFORT_SUPPORTED_MODELS = [
     'o1',
     'o3-mini-2025-01-31',
     'o3-mini',
+    'skylark-prod-250415',
+    'deepseek-reasoner',
 ]
 
 MODELS_WITHOUT_STOP_WORDS = [
