@@ -177,6 +177,11 @@ class CodeActAgent(Agent):
         logger.debug(f'Selected tools: {selected_tools}')
         # NOTE:only for anthropic model, we need to set the cache_control for the tool list
         if 'claude' in self.llm.config.model and len(selected_tools) > 0:
+            # Remove any existing cache_control first
+            for tool in selected_tools:
+                if 'cache_control' in tool:
+                    del tool['cache_control']
+            # Add cache_control to last element so it is persistent
             selected_tools[-1]['cache_control'] = {'type': 'ephemeral'}
         return selected_tools
 
@@ -240,7 +245,7 @@ class CodeActAgent(Agent):
                     'content': [
                         {
                             'type': 'text',
-                            'text': 'Knowledge base of the user is put in the <knowledge_base></knowledge_base> tag below\n',
+                            'text': "User's Knowledge base is in <knowledge_base></knowledge_base> tag\n",
                         },
                         {
                             'type': 'text',
@@ -248,7 +253,7 @@ class CodeActAgent(Agent):
                         },
                         {
                             'type': 'text',
-                            'text': "Use the knowledge base to reference the user's information if needed.",
+                            'text': "Use it for user info's reference if needed",
                         },
                     ],
                 }
@@ -260,7 +265,7 @@ class CodeActAgent(Agent):
                 'content': [
                     {
                         'type': 'text',
-                        'text': 'Current date is put in the <current_date></current_date> tag below\n',
+                        'text': 'Current date is in <current_date></current_date> tag\n',
                     },
                     {
                         'type': 'text',
@@ -268,7 +273,7 @@ class CodeActAgent(Agent):
                     },
                     {
                         'type': 'text',
-                        'text': 'Use it as a reference for any time-sensitive information.',
+                        'text': 'Use it as reference for time-sensitive information',
                     },
                 ],
             }
