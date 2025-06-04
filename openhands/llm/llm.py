@@ -77,6 +77,8 @@ FUNCTION_CALLING_SUPPORTED_MODELS = [
     'Qwen3-235B-A22B-fp8-tput',
     'grok-3-mini',
     'grok-3-mini-beta',
+    'skylark-prod-250415',
+    'deepseek-reasoner',
 ]
 
 REASONING_EFFORT_SUPPORTED_MODELS = [
