@@ -379,6 +379,8 @@ class AgentController:
                 return False
             if isinstance(event, ReportVerificationObservation):
                 return False
+            if isinstance(event, CreditErrorObservation):
+                return False
             return True
         return False
 
