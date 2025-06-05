@@ -21,7 +21,6 @@ from openhands.agenthub.codeact_agent.tools import (
     create_str_replace_editor_tool,
 )
 from openhands.core.exceptions import (
-    FunctionCallNotExistsError,
     FunctionCallValidationError,
 )
 from openhands.core.logger import openhands_logger as logger
@@ -148,7 +147,7 @@ def response_to_actions(
                     path = put_session_id_in_path(path, sid)
                     if path == '':
                         raise FunctionCallValidationError(
-                            f'Invalid path: {path}. Original path: {arguments["path"]}. Please provide a valid path.'
+                            f"Invalid path: {path}. Original path: {arguments['path']}. Please provide a valid path."
                         )
 
                 action = FileEditAction(
@@ -179,7 +178,7 @@ def response_to_actions(
                     path = put_session_id_in_path(path, sid)
                     if path == '':
                         raise FunctionCallValidationError(
-                            f'Invalid path: {path}. Original path: {arguments["path"]}. Please provide a valid path.'
+                            f"Invalid path: {path}. Original path: {arguments['path']}. Please provide a valid path."
                         )
                 command = arguments['command']
                 other_kwargs = {
@@ -261,8 +260,8 @@ def response_to_actions(
                     task_message=arguments['task_message'],
                 )
             else:
-                raise FunctionCallNotExistsError(
-                    f'Tool {tool_call.function.name} is not registered. (arguments: {arguments}). Please check the tool name and retry with an existing tool.'
+                action = AgentThinkAction(
+                    thought=f'Tool {tool_call.function.name} is not registered. (arguments: {arguments}). Please check the tool name and retry with an existing tool.'
                 )
 
             # We only add thought to the first action
@@ -359,7 +358,7 @@ def put_session_id_in_path(path: str, sid: str) -> str:
             return cleaned_path.rstrip('/')
         # Construct path with sid, adding '/' only if remaining_path exists
         result = (
-            f'/workspace/{sid}/{remaining_path.lstrip("/")}'
+            f"/workspace/{sid}/{remaining_path.lstrip('/')}"
             if remaining_path
             else f'/workspace/{sid}'
         )
