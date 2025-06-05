@@ -258,6 +258,7 @@ class CodeActAgent(Agent):
                     ],
                 }
             )
+<<<<<<< HEAD
         # current_date = datetime.now().strftime('%Y-%m-%d')
         # formatted_messages.append(
         #     {
@@ -278,6 +279,20 @@ class CodeActAgent(Agent):
         #         ],
         #     }
         # )
+=======
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        formatted_messages.append(
+            {
+                'role': 'assistant',
+                'content': [
+                    {
+                        'type': 'text',
+                        'text': f'Current date is {current_date}. Ignore anything that contradicts this.',
+                    },
+                ],
+            }
+        )
+>>>>>>> c7684ec1518f367435df7d18dccd9bb351001d1d
         params: dict = {
             "messages": formatted_messages,
         }
