@@ -72,6 +72,7 @@ FUNCTION_CALLING_SUPPORTED_MODELS = [
     'o3-mini-2025-01-31',
     'o3-mini',
     'gemini-2.5-pro',
+    'gemini-2.5-pro-preview-05-06',
     'Llama-4-Maverick-17B-128E-Instruct-FP8',
     'Qwen3-235B-A22B-fp8-tput',
     'grok-3-mini',
@@ -90,9 +91,14 @@ MODELS_WITHOUT_STOP_WORDS = [
     'o1-preview',
     'o1',
     'o1-2024-12-17',
+    'o4-mini',
 ]
 
 FORMATTED_MODELS = ['llama-4-maverick-17b-128e-instruct']
+
+MODELS_USING_MAX_COMPLETION_TOKENS = ['o4-mini']
+
+MODELS_WITH_TEMPERATURE_DEFAULT_AS_1 = ['o4-mini']
 
 
 class LLM(RetryMixin, DebugMixin):
@@ -176,6 +182,13 @@ class LLM(RetryMixin, DebugMixin):
         if self.config.model.startswith('azure'):
             kwargs['max_tokens'] = self.config.max_output_tokens
             kwargs.pop('max_completion_tokens')
+
+        if self.config.model in MODELS_USING_MAX_COMPLETION_TOKENS:
+            kwargs['max_completion_tokens'] = self.config.max_output_tokens
+            kwargs.pop('max_tokens')
+
+        if self.config.model in MODELS_WITH_TEMPERATURE_DEFAULT_AS_1:
+            kwargs['temperature'] = 1
 
         self._completion = partial(
             litellm_completion,
