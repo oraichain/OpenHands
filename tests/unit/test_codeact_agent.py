@@ -29,6 +29,7 @@ from openhands.events.action import (
     CmdRunAction,
     MessageAction,
 )
+from openhands.events.action.agent import AgentThinkAction
 from openhands.events.event import EventSource
 from openhands.events.observation.commands import (
     CmdOutputObservation,
@@ -58,7 +59,7 @@ def mock_state() -> State:
 
 def test_reset(agent: CodeActAgent):
     # Add some state
-    action = MessageAction(content='test')
+    action = MessageAction(content="test")
     action._source = EventSource.AGENT
     agent.pending_actions.append(action)
 
@@ -71,7 +72,7 @@ def test_reset(agent: CodeActAgent):
 
 def test_step_with_pending_actions(agent: CodeActAgent):
     # Add a pending action
-    pending_action = MessageAction(content='test')
+    pending_action = MessageAction(content="test")
     pending_action._source = EventSource.AGENT
     agent.pending_actions.append(pending_action)
 
@@ -90,11 +91,11 @@ def test_get_tools_default():
     assert len(tools) > 0
 
     # Check required tools are present
-    tool_names = [tool['function']['name'] for tool in tools]
-    assert 'execute_bash' in tool_names
-    assert 'execute_ipython_cell' in tool_names
-    assert 'edit_file' in tool_names
-    assert 'web_read' in tool_names
+    tool_names = [tool["function"]["name"] for tool in tools]
+    assert "execute_bash" in tool_names
+    assert "execute_ipython_cell" in tool_names
+    assert "edit_file" in tool_names
+    assert "web_read" in tool_names
 
 
 def test_get_tools_with_options():
@@ -104,10 +105,10 @@ def test_get_tools_with_options():
         codeact_enable_jupyter=True,
         codeact_enable_llm_editor=True,
     )
-    tool_names = [tool['function']['name'] for tool in tools]
-    assert 'browser' in tool_names
-    assert 'execute_ipython_cell' in tool_names
-    assert 'edit_file' in tool_names
+    tool_names = [tool["function"]["name"] for tool in tools]
+    assert "browser" in tool_names
+    assert "execute_ipython_cell" in tool_names
+    assert "edit_file" in tool_names
 
     # Test with all options disabled
     tools = get_tools(
@@ -115,118 +116,118 @@ def test_get_tools_with_options():
         codeact_enable_jupyter=False,
         codeact_enable_llm_editor=False,
     )
-    tool_names = [tool['function']['name'] for tool in tools]
-    assert 'browser' not in tool_names
-    assert 'execute_ipython_cell' not in tool_names
-    assert 'edit_file' not in tool_names
+    tool_names = [tool["function"]["name"] for tool in tools]
+    assert "browser" not in tool_names
+    assert "execute_ipython_cell" not in tool_names
+    assert "edit_file" not in tool_names
 
 
 def test_cmd_run_tool():
     CmdRunTool = create_cmd_run_tool()
-    assert CmdRunTool['type'] == 'function'
-    assert CmdRunTool['function']['name'] == 'execute_bash'
-    assert 'command' in CmdRunTool['function']['parameters']['properties']
-    assert CmdRunTool['function']['parameters']['required'] == ['command']
+    assert CmdRunTool["type"] == "function"
+    assert CmdRunTool["function"]["name"] == "execute_bash"
+    assert "command" in CmdRunTool["function"]["parameters"]["properties"]
+    assert CmdRunTool["function"]["parameters"]["required"] == ["command"]
 
 
 def test_ipython_tool():
-    assert IPythonTool['type'] == 'function'
-    assert IPythonTool['function']['name'] == 'execute_ipython_cell'
-    assert 'code' in IPythonTool['function']['parameters']['properties']
-    assert IPythonTool['function']['parameters']['required'] == ['code']
+    assert IPythonTool["type"] == "function"
+    assert IPythonTool["function"]["name"] == "execute_ipython_cell"
+    assert "code" in IPythonTool["function"]["parameters"]["properties"]
+    assert IPythonTool["function"]["parameters"]["required"] == ["code"]
 
 
 def test_llm_based_file_edit_tool():
-    assert LLMBasedFileEditTool['type'] == 'function'
-    assert LLMBasedFileEditTool['function']['name'] == 'edit_file'
+    assert LLMBasedFileEditTool["type"] == "function"
+    assert LLMBasedFileEditTool["function"]["name"] == "edit_file"
 
-    properties = LLMBasedFileEditTool['function']['parameters']['properties']
-    assert 'path' in properties
-    assert 'content' in properties
-    assert 'start' in properties
-    assert 'end' in properties
+    properties = LLMBasedFileEditTool["function"]["parameters"]["properties"]
+    assert "path" in properties
+    assert "content" in properties
+    assert "start" in properties
+    assert "end" in properties
 
-    assert LLMBasedFileEditTool['function']['parameters']['required'] == [
-        'path',
-        'content',
+    assert LLMBasedFileEditTool["function"]["parameters"]["required"] == [
+        "path",
+        "content",
     ]
 
 
 def test_str_replace_editor_tool():
     StrReplaceEditorTool = create_str_replace_editor_tool()
-    assert StrReplaceEditorTool['type'] == 'function'
-    assert StrReplaceEditorTool['function']['name'] == 'str_replace_editor'
+    assert StrReplaceEditorTool["type"] == "function"
+    assert StrReplaceEditorTool["function"]["name"] == "str_replace_editor"
 
-    properties = StrReplaceEditorTool['function']['parameters']['properties']
-    assert 'command' in properties
-    assert 'path' in properties
-    assert 'file_text' in properties
-    assert 'old_str' in properties
-    assert 'new_str' in properties
-    assert 'insert_line' in properties
-    assert 'view_range' in properties
+    properties = StrReplaceEditorTool["function"]["parameters"]["properties"]
+    assert "command" in properties
+    assert "path" in properties
+    assert "file_text" in properties
+    assert "old_str" in properties
+    assert "new_str" in properties
+    assert "insert_line" in properties
+    assert "view_range" in properties
 
-    assert StrReplaceEditorTool['function']['parameters']['required'] == [
-        'command',
-        'path',
+    assert StrReplaceEditorTool["function"]["parameters"]["required"] == [
+        "command",
+        "path",
     ]
 
 
 def test_web_read_tool():
-    assert WebReadTool['type'] == 'function'
-    assert WebReadTool['function']['name'] == 'web_read'
-    assert 'url' in WebReadTool['function']['parameters']['properties']
-    assert WebReadTool['function']['parameters']['required'] == ['url']
+    assert WebReadTool["type"] == "function"
+    assert WebReadTool["function"]["name"] == "web_read"
+    assert "url" in WebReadTool["function"]["parameters"]["properties"]
+    assert WebReadTool["function"]["parameters"]["required"] == ["url"]
 
 
 def test_browser_tool():
-    assert BrowserTool['type'] == 'function'
-    assert BrowserTool['function']['name'] == 'browser'
-    assert 'code' in BrowserTool['function']['parameters']['properties']
-    assert BrowserTool['function']['parameters']['required'] == ['code']
+    assert BrowserTool["type"] == "function"
+    assert BrowserTool["function"]["name"] == "browser"
+    assert "code" in BrowserTool["function"]["parameters"]["properties"]
+    assert BrowserTool["function"]["parameters"]["required"] == ["code"]
     # Check that the description includes all the functions
     description = _BROWSER_TOOL_DESCRIPTION
-    assert 'goto(' in description
-    assert 'go_back()' in description
-    assert 'go_forward()' in description
-    assert 'noop(' in description
-    assert 'scroll(' in description
-    assert 'fill(' in description
-    assert 'select_option(' in description
-    assert 'click(' in description
-    assert 'dblclick(' in description
-    assert 'hover(' in description
-    assert 'press(' in description
-    assert 'focus(' in description
-    assert 'clear(' in description
-    assert 'drag_and_drop(' in description
-    assert 'upload_file(' in description
+    assert "goto(" in description
+    assert "go_back()" in description
+    assert "go_forward()" in description
+    assert "noop(" in description
+    assert "scroll(" in description
+    assert "fill(" in description
+    assert "select_option(" in description
+    assert "click(" in description
+    assert "dblclick(" in description
+    assert "hover(" in description
+    assert "press(" in description
+    assert "focus(" in description
+    assert "clear(" in description
+    assert "drag_and_drop(" in description
+    assert "upload_file(" in description
 
     # Test BrowserTool definition
-    assert BrowserTool['type'] == 'function'
-    assert BrowserTool['function']['name'] == 'browser'
-    assert BrowserTool['function']['description'] == _BROWSER_DESCRIPTION
-    assert BrowserTool['function']['parameters']['type'] == 'object'
-    assert 'code' in BrowserTool['function']['parameters']['properties']
-    assert BrowserTool['function']['parameters']['required'] == ['code']
+    assert BrowserTool["type"] == "function"
+    assert BrowserTool["function"]["name"] == "browser"
+    assert BrowserTool["function"]["description"] == _BROWSER_DESCRIPTION
+    assert BrowserTool["function"]["parameters"]["type"] == "object"
+    assert "code" in BrowserTool["function"]["parameters"]["properties"]
+    assert BrowserTool["function"]["parameters"]["required"] == ["code"]
     assert (
-        BrowserTool['function']['parameters']['properties']['code']['type'] == 'string'
+        BrowserTool["function"]["parameters"]["properties"]["code"]["type"] == "string"
     )
-    assert 'description' in BrowserTool['function']['parameters']['properties']['code']
+    assert "description" in BrowserTool["function"]["parameters"]["properties"]["code"]
 
 
 def test_response_to_actions_invalid_tool():
     # Test response with invalid tool call
     mock_response = ModelResponse(
-        id='mock-id',
+        id="mock-id",
         choices=[
             {
-                'message': {
-                    'content': 'Invalid tool',
-                    'tool_calls': [
+                "message": {
+                    "content": "Invalid tool",
+                    "tool_calls": [
                         {
-                            'id': 'tool_call_10',
-                            'function': {'name': 'invalid_tool', 'arguments': '{}'},
+                            "id": "tool_call_10",
+                            "function": {"name": "invalid_tool", "arguments": "{}"},
                         }
                     ],
                 }
@@ -234,22 +235,27 @@ def test_response_to_actions_invalid_tool():
         ],
     )
 
-    with pytest.raises(FunctionCallNotExistsError):
-        response_to_actions(mock_response)
+    action = response_to_actions(mock_response)
+    assert isinstance(action[0], AgentThinkAction)
+    print(action[0].thought)
+    assert (
+        action[0].thought
+        == "Invalid tool\nTool invalid_tool is not registered. (arguments: {}). Please check the tool name and retry with an existing tool."
+    )
 
 
 def test_step_with_no_pending_actions(mock_state: State):
     # Mock the LLM response
     mock_response = Mock()
-    mock_response.id = 'mock_id'
+    mock_response.id = "mock_id"
     mock_response.total_calls_in_response = 1
     mock_response.choices = [Mock()]
     mock_response.choices[0].message = Mock()
-    mock_response.choices[0].message.content = 'Task completed'
+    mock_response.choices[0].message.content = "Task completed"
     mock_response.choices[0].message.tool_calls = []
 
     mock_config = Mock()
-    mock_config.model = 'mock_model'
+    mock_config.model = "mock_model"
 
     llm = Mock()
     llm.config = mock_config
@@ -273,13 +279,13 @@ def test_step_with_no_pending_actions(mock_state: State):
 
     action = agent.step(mock_state)
     assert isinstance(action, MessageAction)
-    assert action.content == 'Task completed'
+    assert action.content == "Task completed"
 
 
 def test_correct_tool_description_loaded_based_on_model_name(mock_state: State):
     """Tests that the simplified tool descriptions are loaded for specific models."""
     o3_mock_config = Mock()
-    o3_mock_config.model = 'mock_o3_model'
+    o3_mock_config.model = "mock_o3_model"
 
     llm = Mock()
     llm.config = o3_mock_config
@@ -287,15 +293,15 @@ def test_correct_tool_description_loaded_based_on_model_name(mock_state: State):
     agent = CodeActAgent(llm=llm, config=AgentConfig())
     for tool in agent.tools:
         # Assert all descriptions have less than 1024 characters
-        assert len(tool['function']['description']) < 1024
+        assert len(tool["function"]["description"]) < 1024
 
     sonnet_mock_config = Mock()
-    sonnet_mock_config.model = 'mock_sonnet_model'
+    sonnet_mock_config.model = "mock_sonnet_model"
 
     llm.config = sonnet_mock_config
     agent = CodeActAgent(llm=llm, config=AgentConfig())
     # Assert existence of the detailed tool descriptions that are longer than 1024 characters
-    assert any(len(tool['function']['description']) > 1024 for tool in agent.tools)
+    assert any(len(tool["function"]["description"]) > 1024 for tool in agent.tools)
 
 
 def test_mismatched_tool_call_events(mock_state: State):
@@ -305,28 +311,28 @@ def test_mismatched_tool_call_events(mock_state: State):
     tool_call_metadata = Mock(
         spec=ToolCallMetadata,
         model_response=Mock(
-            id='model_response_0',
+            id="model_response_0",
             choices=[
                 Mock(
                     message=Mock(
-                        role='assistant',
-                        content='',
+                        role="assistant",
+                        content="",
                         tool_calls=[
-                            Mock(spec=ChatCompletionMessageToolCall, id='tool_call_0')
+                            Mock(spec=ChatCompletionMessageToolCall, id="tool_call_0")
                         ],
                     )
                 )
             ],
         ),
-        tool_call_id='tool_call_0',
-        function_name='foo',
+        tool_call_id="tool_call_0",
+        function_name="foo",
     )
 
-    action = CmdRunAction('foo')
-    action._source = 'agent'
+    action = CmdRunAction("foo")
+    action._source = "agent"
     action.tool_call_metadata = tool_call_metadata
 
-    observation = CmdOutputObservation(content='', command_id=0, command='foo')
+    observation = CmdOutputObservation(content="", command_id=0, command="foo")
     observation.tool_call_metadata = tool_call_metadata
 
     # When both events are provided, the agent should get three messages:
@@ -365,26 +371,26 @@ def test_enhance_messages_adds_newlines_between_consecutive_user_messages(
     # Create consecutive user messages with various content types
     messages = [
         # First user message with TextContent only
-        Message(role='user', content=[TextContent(text='First user message')]),
+        Message(role="user", content=[TextContent(text="First user message")]),
         # Second user message with TextContent only - should get newlines added
-        Message(role='user', content=[TextContent(text='Second user message')]),
+        Message(role="user", content=[TextContent(text="Second user message")]),
         # Assistant message
-        Message(role='assistant', content=[TextContent(text='Assistant response')]),
+        Message(role="assistant", content=[TextContent(text="Assistant response")]),
         # Third user message with TextContent only - shouldn't get newlines
-        Message(role='user', content=[TextContent(text='Third user message')]),
+        Message(role="user", content=[TextContent(text="Third user message")]),
         # Fourth user message with ImageContent first, TextContent second - should get newlines
         Message(
-            role='user',
+            role="user",
             content=[
-                ImageContent(image_urls=['https://example.com/image.jpg']),
-                TextContent(text='Fourth user message with image'),
+                ImageContent(image_urls=["https://example.com/image.jpg"]),
+                TextContent(text="Fourth user message with image"),
             ],
         ),
         # Fifth user message with only ImageContent - no TextContent to modify
         Message(
-            role='user',
+            role="user",
             content=[
-                ImageContent(image_urls=['https://example.com/another-image.jpg'])
+                ImageContent(image_urls=["https://example.com/another-image.jpg"])
             ],
         ),
     ]
@@ -393,16 +399,16 @@ def test_enhance_messages_adds_newlines_between_consecutive_user_messages(
     enhanced_messages = agent._enhance_messages(messages)
 
     # Verify newlines were added correctly
-    assert enhanced_messages[1].content[0].text.startswith('\n\n')
-    assert enhanced_messages[1].content[0].text == '\n\nSecond user message'
+    assert enhanced_messages[1].content[0].text.startswith("\n\n")
+    assert enhanced_messages[1].content[0].text == "\n\nSecond user message"
 
     # Third message follows assistant, so shouldn't have newlines
-    assert not enhanced_messages[3].content[0].text.startswith('\n\n')
-    assert enhanced_messages[3].content[0].text == 'Third user message'
+    assert not enhanced_messages[3].content[0].text.startswith("\n\n")
+    assert enhanced_messages[3].content[0].text == "Third user message"
 
     # Fourth message follows user, so should have newlines in its TextContent
-    assert enhanced_messages[4].content[1].text.startswith('\n\n')
-    assert enhanced_messages[4].content[1].text == '\n\nFourth user message with image'
+    assert enhanced_messages[4].content[1].text.startswith("\n\n")
+    assert enhanced_messages[4].content[1].text == "\n\nFourth user message with image"
 
     # Fifth message only has ImageContent, no TextContent to modify
     assert len(enhanced_messages[5].content) == 1
@@ -414,15 +420,15 @@ def test_select_tools_based_on_mode_chat_mode(agent: CodeActAgent):
     # Mock MCP tools
     agent.mcp_tools = [
         {
-            'function': {
-                'name': 'pyodide_execute_bash_mcp_tool_call',
-                'description': 'Execute bash command',
+            "function": {
+                "name": "pyodide_execute_bash_mcp_tool_call",
+                "description": "Execute bash command",
             }
         },
         {
-            'function': {
-                'name': 'pyodide_str_replace_editor_mcp_tool_call',
-                'description': 'Edit file',
+            "function": {
+                "name": "pyodide_str_replace_editor_mcp_tool_call",
+                "description": "Edit file",
             }
         },
     ]
@@ -430,17 +436,17 @@ def test_select_tools_based_on_mode_chat_mode(agent: CodeActAgent):
 
     # Mock search tools
     agent.search_tools = [
-        {'function': {'name': 'search_tool', 'description': 'Search tool'}}
+        {"function": {"name": "search_tool", "description": "Search tool"}}
     ]
 
     # Test with CHAT mode
     tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
 
     # Should include simplified tools, pyodide tools, and search tools
-    tool_names = [tool['function']['name'] for tool in tools]
-    assert 'search_tool' in tool_names
-    assert 'think' in tool_names
-    assert 'finish' in tool_names
+    tool_names = [tool["function"]["name"] for tool in tools]
+    assert "search_tool" in tool_names
+    assert "think" in tool_names
+    assert "finish" in tool_names
 
 
 def test_select_tools_based_on_mode_follow_up_mode(agent: CodeActAgent):
@@ -448,9 +454,9 @@ def test_select_tools_based_on_mode_follow_up_mode(agent: CodeActAgent):
     # Mock MCP tools
     agent.mcp_tools = [
         {
-            'function': {
-                'name': 'pyodide_execute_bash_mcp_tool_call',
-                'description': 'Execute bash command',
+            "function": {
+                "name": "pyodide_execute_bash_mcp_tool_call",
+                "description": "Execute bash command",
             }
         }
     ]
@@ -469,19 +475,19 @@ def test_select_tools_based_on_mode_no_mcp_tools(agent: CodeActAgent):
     """Test tool selection when no MCP tools are available."""
     agent.mcp_tools = None
     agent.search_tools = [
-        {'function': {'name': 'search_tool', 'description': 'Search tool'}}
+        {"function": {"name": "search_tool", "description": "Search tool"}}
     ]
 
     # Test with CHAT mode
     tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
 
     # Should include base tools and search tools
-    tool_names = [tool['function']['name'] for tool in tools]
-    assert 'search_tool' in tool_names
-    assert 'execute_bash' in tool_names
-    assert 'think' in tool_names
-    assert 'finish' in tool_names
-    assert 'str_replace_editor' in tool_names
+    tool_names = [tool["function"]["name"] for tool in tools]
+    assert "search_tool" in tool_names
+    assert "execute_bash" in tool_names
+    assert "think" in tool_names
+    assert "finish" in tool_names
+    assert "str_replace_editor" in tool_names
     assert len(tools) > 1  # Should have base tools plus search tools
 
 
@@ -490,14 +496,14 @@ def test_select_tools_based_on_mode_missing_pyodide_tools(agent: CodeActAgent):
     # Mock MCP tools with only bash tool
     agent.mcp_tools = [
         {
-            'function': {
-                'name': 'pyodide_execute_bash_mcp_tool_call',
-                'description': 'Execute bash command',
+            "function": {
+                "name": "pyodide_execute_bash_mcp_tool_call",
+                "description": "Execute bash command",
             }
         }
     ]
     agent.search_tools = [
-        {'function': {'name': 'search_tool', 'description': 'Search tool'}}
+        {"function": {"name": "search_tool", "description": "Search tool"}}
     ]
 
     agent.tools = function_calling.get_tools(
@@ -513,11 +519,11 @@ def test_select_tools_based_on_mode_missing_pyodide_tools(agent: CodeActAgent):
 
     # Should not fall back to base tools since there are pyodide tools present
     assert len(tools) == 4
-    tool_names = [tool['function']['name'] for tool in tools]
-    assert 'think' in tool_names
-    assert 'finish' in tool_names
-    assert 'search_tool' in tool_names
-    assert 'str_replace_editor' in tool_names
+    tool_names = [tool["function"]["name"] for tool in tools]
+    assert "think" in tool_names
+    assert "finish" in tool_names
+    assert "search_tool" in tool_names
+    assert "str_replace_editor" in tool_names
 
 
 def test_select_tools_based_on_mode_duplicate_tools(agent: CodeActAgent):
@@ -525,15 +531,15 @@ def test_select_tools_based_on_mode_duplicate_tools(agent: CodeActAgent):
     # Mock MCP tools with duplicate names
     agent.mcp_tools = [
         {
-            'function': {
-                'name': 'duplicate_tool_mcp_tool_call',
-                'description': 'First tool',
+            "function": {
+                "name": "duplicate_tool_mcp_tool_call",
+                "description": "First tool",
             }
         },
         {
-            'function': {
-                'name': 'duplicate_tool_mcp_tool_call',
-                'description': 'Second tool',
+            "function": {
+                "name": "duplicate_tool_mcp_tool_call",
+                "description": "Second tool",
             }
         },
     ]
@@ -541,16 +547,16 @@ def test_select_tools_based_on_mode_duplicate_tools(agent: CodeActAgent):
     # Add duplicate to base tools
     agent.tools = [
         {
-            'function': {
-                'name': 'duplicate_tool_mcp_tool_call',
-                'description': 'Base tool',
+            "function": {
+                "name": "duplicate_tool_mcp_tool_call",
+                "description": "Base tool",
             }
         }
     ]
 
     # Test with other mode
-    tools = agent._select_tools_based_on_mode('OTHER_MODE')
+    tools = agent._select_tools_based_on_mode("OTHER_MODE")
 
     # Should deduplicate tools
-    tool_names = [tool['function']['name'] for tool in tools]
-    assert tool_names.count('duplicate_tool_mcp_tool_call') == 1
+    tool_names = [tool["function"]["name"] for tool in tools]
+    assert tool_names.count("duplicate_tool_mcp_tool_call") == 1
