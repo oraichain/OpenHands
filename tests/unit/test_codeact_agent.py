@@ -22,13 +22,13 @@ from openhands.agenthub.codeact_agent.tools.browser import (
 from openhands.agenthub.codeact_agent.tools.finish import FinishTool
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig, LLMConfig
-from openhands.core.exceptions import FunctionCallNotExistsError
 from openhands.core.message import ImageContent, Message, TextContent
 from openhands.core.schema.research import ResearchMode
 from openhands.events.action import (
     CmdRunAction,
     MessageAction,
 )
+from openhands.events.action.agent import AgentThinkAction
 from openhands.events.event import EventSource
 from openhands.events.observation.commands import (
     CmdOutputObservation,
@@ -234,8 +234,13 @@ def test_response_to_actions_invalid_tool():
         ],
     )
 
-    with pytest.raises(FunctionCallNotExistsError):
-        response_to_actions(mock_response)
+    action = response_to_actions(mock_response)
+    assert isinstance(action[0], AgentThinkAction)
+    print(action[0].thought)
+    assert (
+        action[0].thought
+        == 'Invalid tool\nTool invalid_tool is not registered. (arguments: {}). Please check the tool name and retry with an existing tool.'
+    )
 
 
 def test_step_with_no_pending_actions(mock_state: State):
