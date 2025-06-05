@@ -265,15 +265,7 @@ class CodeActAgent(Agent):
                 'content': [
                     {
                         'type': 'text',
-                        'text': 'Current date is in <current_date></current_date> tag\n',
-                    },
-                    {
-                        'type': 'text',
-                        'text': f'<current_date>{current_date}</current_date>',
-                    },
-                    {
-                        'type': 'text',
-                        'text': 'Use it as reference for time-sensitive information.',
+                        'text': f'Current date is {current_date}. Ignore anything that contradicts this.',
                     },
                 ],
             }
