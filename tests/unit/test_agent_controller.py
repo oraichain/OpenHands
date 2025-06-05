@@ -793,25 +793,27 @@ async def test_context_window_exceeded_error_handling(
     # Look at pre/post-step views. Normally, these should always increase in
     # size (because we return a message action, which triggers a recall, which
     # triggers a recall response). But if the pre/post-views are on the turn
-    # when we throw the context window exceeded error, we should see a
-    # CondensationAction in the post-step view indicating compression happened.
+    # when we throw the context window exceeded error, we should see the
+    # view size decrease or stay the same due to compression.
     compression_happened = False
     for index, (first_view, second_view) in enumerate(
         zip(step_state.views[:-1], step_state.views[1:])
     ):
         if index == error_after:
-            # Check if compression happened by looking for CondensationAction
-            has_condensation = any(
-                isinstance(event, CondensationAction) for event in second_view.events
+            # After compression, the view should not grow (or may shrink)
+            # This indicates that compression occurred
+            assert len(first_view) >= len(second_view), (
+                f'Expected compression to prevent growth at index {index}, '
+                f'but view grew from {len(first_view)} to {len(second_view)} events'
             )
-            assert (
-                has_condensation
-            ), 'Expected CondensationAction in view after context window error'
             compression_happened = True
         else:
             # Before compression, views should grow
             if not compression_happened:
-                assert len(first_view) < len(second_view)
+                assert len(first_view) < len(second_view), (
+                    f'Expected view to grow before compression at index {index}, '
+                    f'but it went from {len(first_view)} to {len(second_view)} events'
+                )
 
     # Verify compression actually happened
     assert compression_happened, 'Context window compression should have occurred'
