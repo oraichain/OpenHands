@@ -253,7 +253,7 @@ class CodeActAgent(Agent):
                         },
                         {
                             'type': 'text',
-                            'text': "Use it for user info's reference if needed",
+                            'text': "Use it for user info's reference if needed.",
                         },
                     ],
                 }
@@ -273,7 +273,7 @@ class CodeActAgent(Agent):
                     },
                     {
                         'type': 'text',
-                        'text': 'Use it as reference for time-sensitive information',
+                        'text': 'Use it as reference for time-sensitive information.',
                     },
                 ],
             }
