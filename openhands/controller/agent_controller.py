@@ -85,14 +85,17 @@ from openhands.events.serialization.event import (
 )
 from openhands.llm.llm import LLM
 from openhands.llm.metrics import Metrics
-from openhands.server.mem0 import process_single_event_for_mem0, search_knowledge_mem0
-from openhands.server.thesis_auth import check_feature_credit, search_knowledge, webhook_rag_conversation
 from openhands.server.mem0 import (
     _db_pool_instance,
     _extract_content_from_event,
     _extract_file_text_from_tool_call,
     process_single_event_for_mem0,
     search_knowledge_mem0,
+)
+from openhands.server.thesis_auth import (
+    check_feature_credit,
+    search_knowledge,
+    webhook_rag_conversation,
 )
 from openhands.storage import get_file_store
 
