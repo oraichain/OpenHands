@@ -50,10 +50,10 @@ from openhands.mcp import MCPClientTool
 
 
 def combine_thought(action: Action, thought: str) -> Action:
-    if not hasattr(action, 'thought'):
+    if not hasattr(action, "thought"):
         return action
     if thought and action.thought:
-        action.thought = f'{thought}\n{action.thought}'
+        action.thought = f"{thought}\n{action.thought}"
     elif thought:
         action.thought = thought
     return action
@@ -65,137 +65,137 @@ def response_to_actions(
     workspace_mount_path_in_sandbox_store_in_session: bool = True,
 ) -> list[Action]:
     actions: list[Action] = []
-    assert len(response.choices) == 1, 'Only one choice is supported for now'
+    assert len(response.choices) == 1, "Only one choice is supported for now"
     choice = response.choices[0]
     assistant_msg = choice.message
-    if hasattr(assistant_msg, 'tool_calls') and assistant_msg.tool_calls:
+    if hasattr(assistant_msg, "tool_calls") and assistant_msg.tool_calls:
         # Check if there's assistant_msg.content. If so, add it to the thought
-        thought = ''
+        thought = ""
         if isinstance(assistant_msg.content, str):
             thought = assistant_msg.content
         elif isinstance(assistant_msg.content, list):
             for msg in assistant_msg.content:
-                if msg['type'] == 'text':
-                    thought += msg['text']
+                if msg["type"] == "text":
+                    thought += msg["text"]
 
         # Process each tool call to OpenHands action
         for i, tool_call in enumerate(assistant_msg.tool_calls):
             action: Action
-            logger.info(f'Tool call in function_calling.py: {tool_call.function.name}')
+            logger.info(f"Tool call in function_calling.py: {tool_call.function.name}")
             try:
                 arguments = json.loads(tool_call.function.arguments)
             except json.decoder.JSONDecodeError as e:
                 raise RuntimeError(
-                    f'Failed to parse tool call arguments: {tool_call.function.arguments}'
+                    f"Failed to parse tool call arguments: {tool_call.function.arguments}"
                 ) from e
 
             # ================================================
             # CmdRunTool (Bash)
             # ================================================
 
-            if tool_call.function.name == create_cmd_run_tool()['function']['name']:
-                if 'command' not in arguments:
+            if tool_call.function.name == create_cmd_run_tool()["function"]["name"]:
+                if "command" not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "command" in tool call {tool_call.function.name}'
                     )
                 # convert is_input to boolean
-                is_input = arguments.get('is_input', 'false') == 'true'
-                action = CmdRunAction(command=arguments['command'], is_input=is_input)
+                is_input = arguments.get("is_input", "false") == "true"
+                action = CmdRunAction(command=arguments["command"], is_input=is_input)
 
             # ================================================
             # IPythonTool (Jupyter)
             # ================================================
-            elif tool_call.function.name == IPythonTool['function']['name']:
-                if 'code' not in arguments:
+            elif tool_call.function.name == IPythonTool["function"]["name"]:
+                if "code" not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "code" in tool call {tool_call.function.name}'
                     )
-                action = IPythonRunCellAction(code=arguments['code'])
-            elif tool_call.function.name == 'delegate_to_browsing_agent':
+                action = IPythonRunCellAction(code=arguments["code"])
+            elif tool_call.function.name == "delegate_to_browsing_agent":
                 action = AgentDelegateAction(
-                    agent='BrowsingAgent',
+                    agent="BrowsingAgent",
                     inputs=arguments,
                 )
 
             # ================================================
             # AgentFinishAction
             # ================================================
-            elif tool_call.function.name == FinishTool['function']['name']:
-                logger.debug(f'FinishTool: {arguments}')
+            elif tool_call.function.name == FinishTool["function"]["name"]:
+                logger.debug(f"FinishTool: {arguments}")
                 action = AgentFinishAction(
-                    final_thought=arguments.get('message', ''),
-                    task_completed=arguments.get('task_completed', None),
+                    final_thought=arguments.get("message", ""),
+                    task_completed=arguments.get("task_completed", None),
                 )
 
             # ================================================
             # LLMBasedFileEditTool (LLM-based file editor, deprecated)
             # ================================================
-            elif tool_call.function.name == LLMBasedFileEditTool['function']['name']:
-                if 'path' not in arguments:
+            elif tool_call.function.name == LLMBasedFileEditTool["function"]["name"]:
+                if "path" not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "path" in tool call {tool_call.function.name}'
                     )
-                if 'content' not in arguments:
+                if "content" not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "content" in tool call {tool_call.function.name}'
                     )
-                path: str = arguments['path']
+                path: str = arguments["path"]
                 if (
                     sid is not None
                     and sid not in path
                     and workspace_mount_path_in_sandbox_store_in_session
                 ):
                     path = put_session_id_in_path(path, sid)
-                    if path == '':
+                    if path == "":
                         raise FunctionCallValidationError(
-                            f'Invalid path: {path}. Original path: {arguments["path"]}. Please provide a valid path.'
+                            f"Invalid path: {path}. Original path: {arguments['path']}. Please provide a valid path."
                         )
 
                 action = FileEditAction(
                     path=path,
-                    content=arguments['content'],
-                    start=arguments.get('start', 1),
-                    end=arguments.get('end', -1),
+                    content=arguments["content"],
+                    start=arguments.get("start", 1),
+                    end=arguments.get("end", -1),
                 )
             elif (
                 tool_call.function.name
-                == create_str_replace_editor_tool()['function']['name']
+                == create_str_replace_editor_tool()["function"]["name"]
             ):
-                if 'command' not in arguments:
+                if "command" not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "command" in tool call {tool_call.function.name}'
                     )
-                if 'path' not in arguments:
+                if "path" not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "path" in tool call {tool_call.function.name}'
                     )
-                path = arguments['path']
+                path = arguments["path"]
                 if (
                     sid is not None
-                    and sid != ''
+                    and sid != ""
                     and sid not in path
                     and workspace_mount_path_in_sandbox_store_in_session
                 ):
                     path = put_session_id_in_path(path, sid)
-                    if path == '':
+                    if path == "":
                         raise FunctionCallValidationError(
-                            f'Invalid path: {path}. Original path: {arguments["path"]}. Please provide a valid path.'
+                            f"Invalid path: {path}. Original path: {arguments['path']}. Please provide a valid path."
                         )
-                command = arguments['command']
+                command = arguments["command"]
                 other_kwargs = {
-                    k: v for k, v in arguments.items() if k not in ['command', 'path']
+                    k: v for k, v in arguments.items() if k not in ["command", "path"]
                 }
 
-                if command == 'view':
+                if command == "view":
                     action = FileReadAction(
                         path=path,
                         impl_source=FileReadSource.OH_ACI,
-                        view_range=other_kwargs.get('view_range', None),
+                        view_range=other_kwargs.get("view_range", None),
                     )
                 else:
-                    if 'view_range' in other_kwargs:
+                    if "view_range" in other_kwargs:
                         # Remove view_range from other_kwargs since it is not needed for FileEditAction
-                        other_kwargs.pop('view_range')
+                        other_kwargs.pop("view_range")
                     action = FileEditAction(
                         path=path,
                         command=command,
@@ -205,41 +205,41 @@ def response_to_actions(
             # ================================================
             # AgentThinkAction
             # ================================================
-            elif tool_call.function.name == ThinkTool['function']['name']:
-                action = AgentThinkAction(thought=arguments.get('thought', ''))
+            elif tool_call.function.name == ThinkTool["function"]["name"]:
+                action = AgentThinkAction(thought=arguments.get("thought", ""))
 
             # ================================================
             # BrowserTool
             # ================================================
-            elif tool_call.function.name == BrowserTool['function']['name']:
-                if 'code' not in arguments:
+            elif tool_call.function.name == BrowserTool["function"]["name"]:
+                if "code" not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "code" in tool call {tool_call.function.name}'
                     )
-                action = BrowseInteractiveAction(browser_actions=arguments['code'])
+                action = BrowseInteractiveAction(browser_actions=arguments["code"])
 
             # ================================================
             # WebReadTool (simplified browsing)
             # ================================================
-            elif tool_call.function.name == WebReadTool['function']['name']:
-                if 'url' not in arguments:
+            elif tool_call.function.name == WebReadTool["function"]["name"]:
+                if "url" not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "url" in tool call {tool_call.function.name}'
                     )
-                action = BrowseURLAction(url=arguments['url'])
+                action = BrowseURLAction(url=arguments["url"])
 
             # ================================================
             # McpAction (MCP)
             # ================================================
             elif tool_call.function.name.endswith(MCPClientTool.postfix()):
                 original_action_name = tool_call.function.name.replace(
-                    MCPClientTool.postfix(), ''
+                    MCPClientTool.postfix(), ""
                 )
-                logger.info(f'Original action name: {original_action_name}')
+                logger.info(f"Original action name: {original_action_name}")
                 arguments = json.loads(tool_call.function.arguments)
-                if 'pyodide' in original_action_name:
+                if "pyodide" in original_action_name:
                     # we don't trust sessionId passed by the LLM. Always use the one from the session to get deterministic results
-                    arguments['sessionId'] = sid
+                    arguments["sessionId"] = sid
                 # Update the arguments string with the modified sessionId
                 updated_arguments_str = json.dumps(arguments)
                 action = McpAction(
@@ -249,20 +249,20 @@ def response_to_actions(
             # ================================================
             # A2A
             # ================================================
-            elif tool_call.function.name == 'a2a_list_remote_agents':
+            elif tool_call.function.name == "a2a_list_remote_agents":
                 action = A2AListRemoteAgentsAction()
-            elif tool_call.function.name == 'a2a_send_task':
-                if 'agent_name' and 'task_message' not in arguments:
+            elif tool_call.function.name == "a2a_send_task":
+                if "agent_name" and "task_message" not in arguments:
                     raise FunctionCallValidationError(
                         f'Missing required argument "agent_name" and "task_message" in tool call {tool_call.function.name}'
                     )
                 action = A2ASendTaskAction(
-                    agent_name=arguments['agent_name'],
-                    task_message=arguments['task_message'],
+                    agent_name=arguments["agent_name"],
+                    task_message=arguments["task_message"],
                 )
             else:
-                raise FunctionCallNotExistsError(
-                    f'Tool {tool_call.function.name} is not registered. (arguments: {arguments}). Please check the tool name and retry with an existing tool.'
+                action = AgentThinkAction(
+                    thought=f"Tool {tool_call.function.name} is not registered. (arguments: {arguments}). Please check the tool name and retry with an existing tool."
                 )
 
             # We only add thought to the first action
@@ -279,7 +279,7 @@ def response_to_actions(
     else:
         actions.append(
             MessageAction(
-                content=str(assistant_msg.content) if assistant_msg.content else '',
+                content=str(assistant_msg.content) if assistant_msg.content else "",
                 wait_for_response=True,
             )
         )
@@ -302,7 +302,7 @@ def get_tools(
     llm: LLM | None = None,
     enable_pyodide_bash: bool = False,
 ) -> list[ChatCompletionToolParam]:
-    SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ['gpt-', 'o3', 'o1']
+    SIMPLIFIED_TOOL_DESCRIPTION_LLM_SUBSTRS = ["gpt-", "o3", "o1"]
 
     use_simplified_tool_desc = False
     if llm is not None:
@@ -341,27 +341,27 @@ def get_tools(
 def put_session_id_in_path(path: str, sid: str) -> str:
     # Check if path starts with '/workspace' or '/workspace/'
     if not sid:
-        return ''
-    if path == '/workspace' or path.startswith('/workspace/'):
+        return ""
+    if path == "/workspace" or path.startswith("/workspace/"):
         # Manually clean . and .. without resolving above /workspace
-        parts = path.split('/')
-        cleaned_parts = ['/workspace']
+        parts = path.split("/")
+        cleaned_parts = ["/workspace"]
         for part in parts[2:]:  # Skip ['', 'workspace']
-            if part and part not in ('.', '..'):
+            if part and part not in (".", ".."):
                 cleaned_parts.append(part)
-        cleaned_path = '/'.join(cleaned_parts)
+        cleaned_path = "/".join(cleaned_parts)
         # Strip '/workspace' and get remaining path
         remaining_path = (
-            cleaned_path[len('/workspace') :] if cleaned_path != '/workspace' else ''
+            cleaned_path[len("/workspace") :] if cleaned_path != "/workspace" else ""
         )
         # Handle empty sid case
         if not sid:
-            return cleaned_path.rstrip('/')
+            return cleaned_path.rstrip("/")
         # Construct path with sid, adding '/' only if remaining_path exists
         result = (
-            f'/workspace/{sid}/{remaining_path.lstrip("/")}'
+            f"/workspace/{sid}/{remaining_path.lstrip('/')}"
             if remaining_path
-            else f'/workspace/{sid}'
+            else f"/workspace/{sid}"
         )
-        return result.rstrip('/')
-    return ''
+        return result.rstrip("/")
+    return ""
