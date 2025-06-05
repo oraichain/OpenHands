@@ -17,7 +17,7 @@ from openhands.events.observation.agent import MicroagentKnowledge
 class RuntimeInfo:
     date: str
     available_hosts: dict[str, int] = field(default_factory=dict)
-    additional_agent_instructions: str = ''
+    additional_agent_instructions: str = ""
 
 
 @dataclass
@@ -43,26 +43,26 @@ class PromptManager:
         prompt_dir: str,
     ):
         self.prompt_dir: str = prompt_dir
-        self.system_template: Template = self._load_template('system_prompt')
-        self.user_template: Template = self._load_template('user_prompt')
-        self.additional_info_template: Template = self._load_template('additional_info')
-        self.microagent_info_template: Template = self._load_template('microagent_info')
-        self.a2a_info_template: Template = self._load_template('a2a_info')
-        self.chat_mode_template: Template = self._load_template('chat_mode_prompt')
+        self.system_template: Template = self._load_template("system_prompt")
+        self.user_template: Template = self._load_template("user_prompt")
+        self.additional_info_template: Template = self._load_template("additional_info")
+        self.microagent_info_template: Template = self._load_template("microagent_info")
+        self.a2a_info_template: Template = self._load_template("a2a_info")
+        self.chat_mode_template: Template = self._load_template("chat_mode_prompt")
         self.followup_mode_template: Template = self._load_template(
-            'followup_mode_prompt'
+            "followup_mode_prompt"
         )
         self.system_prompt: str | None = None
         self.user_prompt: str | None = None
 
     def _load_template(self, template_name: str) -> Template:
         if self.prompt_dir is None:
-            raise ValueError('Prompt directory is not set')
-        template_path = os.path.join(self.prompt_dir, f'{template_name}.j2')
+            raise ValueError("Prompt directory is not set")
+        template_path = os.path.join(self.prompt_dir, f"{template_name}.j2")
         if not os.path.exists(template_path):
             # raise FileNotFoundError(f'Prompt file {template_path} not found')
-            return Template('')
-        with open(template_path, 'r') as file:
+            return Template("")
+        with open(template_path, "r") as file:
             return Template(file.read())
 
     def set_system_message(self, system_prompt: str) -> None:
@@ -75,13 +75,13 @@ class PromptManager:
         # **kwargs is used to pass additional context to the system prompt, such as current date, ...
         final_system_prompt = self.system_template.render(**kwargs).strip()
         if self.system_prompt:
-            agent_infos_prompt = ''
+            agent_infos_prompt = ""
             agent_infos_prompt_match = re.search(
-                r'<A2A_INFO>(.*?)</A2A_INFO>', final_system_prompt, re.DOTALL
+                r"<A2A_INFO>(.*?)</A2A_INFO>", final_system_prompt, re.DOTALL
             )
             if agent_infos_prompt_match:
                 agent_infos_prompt = agent_infos_prompt_match.group(1)
-            final_system_prompt = self.system_prompt + '\n' + agent_infos_prompt
+            final_system_prompt = self.system_prompt + "\n" + agent_infos_prompt
         return final_system_prompt
 
     def get_chat_mode_message(self, **kwargs) -> str:
@@ -90,7 +90,9 @@ class PromptManager:
     def get_followup_mode_message(self, **kwargs) -> str:
         return self.followup_mode_template.render(**kwargs).strip()
 
-    def get_example_user_message(self, session_id: str | None = None) -> str:
+    def get_example_user_message(
+        self, session_id: str | None = None, current_date: str | None = None
+    ) -> str:
         """This is the initial user message provided to the agent
         before *actual* user instructions are provided.
 
@@ -103,13 +105,20 @@ class PromptManager:
 
         if self.user_prompt:
             return self.user_prompt
-        return self.user_template.render(session_id=session_id).strip()
+        return self.user_template.render(
+            session_id=session_id, current_date=current_date
+        ).strip()
 
     def add_examples_to_initial_message(
-        self, message: Message, session_id: str | None = None
+        self,
+        message: Message,
+        session_id: str | None = None,
+        current_date: str | None = None,
     ) -> None:
         """Add example_message to the first user message."""
-        example_message = self.get_example_user_message(session_id) or None
+        example_message = (
+            self.get_example_user_message(session_id, current_date) or None
+        )
 
         # Insert it at the start of the TextContent list
         if example_message:
@@ -119,7 +128,7 @@ class PromptManager:
         self,
         repository_info: RepositoryInfo | None,
         runtime_info: RuntimeInfo | None,
-        repo_instructions: str = '',
+        repo_instructions: str = "",
     ) -> str:
         """Renders the additional info template with the stored repository/runtime info."""
         return self.additional_info_template.render(
@@ -149,12 +158,12 @@ class PromptManager:
         """Renders the a2a info template with the triggered agents."""
 
         artifact = Artifact(
-            **agent_artifact_observation.task_artifact_event['artifact']
+            **agent_artifact_observation.task_artifact_event["artifact"]
         )
         parts = artifact.parts
         converted_parts = convert_parts(parts)
-        text = '\n'.join(converted_parts)
-        art_obs = {'agent_name': agent_artifact_observation.agent_name, 'content': text}
+        text = "\n".join(converted_parts)
+        art_obs = {"agent_name": agent_artifact_observation.agent_name, "content": text}
         return self.a2a_info_template.render(agent_artifact_observation=art_obs).strip()
 
     def add_turns_left_reminder(self, messages: list[Message], state: State) -> None:
@@ -163,7 +172,7 @@ class PromptManager:
                 (
                     m
                     for m in reversed(messages)
-                    if m.role == 'user'
+                    if m.role == "user"
                     and any(isinstance(c, TextContent) for c in m.content)
                 ),
                 1,
@@ -171,5 +180,5 @@ class PromptManager:
             None,
         )
         if latest_user_message:
-            reminder_text = f'\n\nENVIRONMENT REMINDER: You have {state.max_iterations - state.iteration} turns left to complete the task. When finished reply with <finish></finish>.'
+            reminder_text = f"\n\nENVIRONMENT REMINDER: You have {state.max_iterations - state.iteration} turns left to complete the task. When finished reply with <finish></finish>."
             latest_user_message.content.append(TextContent(text=reminder_text))
