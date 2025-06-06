@@ -432,11 +432,16 @@ class StandaloneConversationManager(ConversationManager):
         session = self._local_agent_loops_by_sid.get(sid)
         if session:
             agent_state = session.agent_session.get_state()
-            if agent_state in [AgentState.FINISHED, AgentState.REJECTED, AgentState.ERROR]:
+            if agent_state in [
+                AgentState.FINISHED,
+                AgentState.REJECTED,
+                AgentState.ERROR,
+            ]:
                 # Check if there are no other active connections to this session
                 # Count remaining connections for this session
                 remaining_connections = [
-                    conn_id for conn_id, sess_id in self._local_connection_id_to_session_id.items() 
+                    conn_id
+                    for conn_id, sess_id in self._local_connection_id_to_session_id.items()
                     if sess_id == sid
                 ]
                 if not remaining_connections:
