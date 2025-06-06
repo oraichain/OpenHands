@@ -519,9 +519,11 @@ class ConversationModule:
                     }
 
             # Process all conversations concurrently
-            results = await asyncio.gather(
-                *[process_conversation(conv) for conv in conversations]
-            )
+            results = []
+
+            for conv in conversations:
+                result = await process_conversation(conv)
+                results.append(result)
 
             updated_count = sum(1 for result in results if result['success'])
             errors = [
