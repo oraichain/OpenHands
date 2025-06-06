@@ -192,6 +192,10 @@ class LLM(RetryMixin, DebugMixin):
         if self.config.model in MODELS_WITH_TEMPERATURE_DEFAULT_AS_1:
             kwargs["temperature"] = 1
 
+        # Token efficient tools for claude-3-7-sonnet-20250219: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/token-efficient-tool-use
+        if self.config.model == 'claude-3-7-sonnet-20250219':
+            kwargs['anthropic-beta'] = 'token-efficient-tools-2025-02-19'
+
         self._completion = partial(
             litellm_completion,
             model=self.config.model,
