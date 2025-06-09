@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from collections import deque
@@ -571,7 +572,10 @@ class CodeActAgent(Agent):
         if perform_health_check_fn is None:
             perform_health_check_fn = perform_health_check
         models_rate_limit: dict[str, tuple[int, int, float]] = {}
-        for name, llm in self.routing_llms.items():
+
+        async def check_llm(
+            name: str, llm: LLM
+        ) -> tuple[str, tuple[int, int, float]] | None:
             (remaining_requests, remaining_tokens) = await perform_health_check_fn(
                 {
                     'model': llm.config.model,
@@ -580,11 +584,20 @@ class CodeActAgent(Agent):
                 }
             )
             if remaining_requests is not None and remaining_tokens is not None:
-                models_rate_limit[name] = (
-                    remaining_requests,
-                    remaining_tokens,
-                    llm.config.weight,
-                )
+                return name, (remaining_requests, remaining_tokens, llm.config.weight)
+            return None
+
+        tasks = [check_llm(name, llm) for name, llm in self.routing_llms.items()]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        models_rate_limit = {
+            name: data
+            for result in results
+            if result is not None
+            and not isinstance(result, Exception)
+            and not isinstance(result, BaseException)
+            for name, data in [result]
+        }
         return models_rate_limit
 
     def _select_llm_from_weights(
