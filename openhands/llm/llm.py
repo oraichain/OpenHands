@@ -223,7 +223,7 @@ class LLM(RetryMixin, DebugMixin):
 
             messages: list[dict[str, Any]] | dict[str, Any] = []
             mock_function_calling = not self.is_function_calling_active()
-            logger.info(f'Mock function calling: {mock_function_calling}')
+            logger.debug(f'Mock function calling: {mock_function_calling}')
             # Add session_id and user_id as span attributes if they exist
             try:
                 span = trace.get_current_span()

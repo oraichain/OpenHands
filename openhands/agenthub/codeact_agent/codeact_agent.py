@@ -520,7 +520,7 @@ class CodeActAgent(Agent):
             self.llm = await self._select_llm_from_weight_and_availability()
             logger.info(f'Selected LLM: {self.llm.config.model}')
         except Exception as e:
-            logger.error(
+            logger.warning(
                 f'Error selecting LLM from weight and availability: {e}. Use default LLM.'
             )
 
