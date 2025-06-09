@@ -13,7 +13,14 @@ with warnings.catch_warnings():
     warnings.simplefilter('ignore')
     import litellm
 
-from litellm import ChatCompletionMessageToolCall, ModelInfo, PromptTokensDetails
+from anthropic import Anthropic
+from anthropic.types import MessageTokensCount
+from litellm import (
+    ChatCompletionMessageToolCall,
+    ChatCompletionToolParam,
+    ModelInfo,
+    PromptTokensDetails,
+)
 from litellm import Message as LiteLLMMessage
 from litellm import completion as litellm_completion
 from litellm import completion_cost as litellm_completion_cost
@@ -672,7 +679,11 @@ class LLM(RetryMixin, DebugMixin):
 
         return cur_cost
 
-    def get_token_count(self, messages: list[dict] | list[Message]) -> int:
+    def get_token_count(
+        self,
+        messages: list[dict] | list[Message],
+        tools: list[ChatCompletionToolParam] | None = None,
+    ) -> int:
         """Get the number of tokens in a list of messages. Use dicts for better token counting.
 
         Args:
@@ -694,11 +705,15 @@ class LLM(RetryMixin, DebugMixin):
         # try to get the token count with the default litellm tokenizers
         # or the custom tokenizer if set for this LLM configuration
         try:
+            # special case for Anthropic
+            if 'claude' in self.config.model:
+                return int(self._get_token_count_anthropic(messages, tools))
             return int(
                 litellm.token_counter(
                     model=self.config.model,
                     messages=messages,
                     custom_tokenizer=self.tokenizer,
+                    tools=tools,
                 )
             )
         except Exception as e:
@@ -815,6 +830,64 @@ class LLM(RetryMixin, DebugMixin):
 
         # let pydantic handle the serialization
         return [message.model_dump() for message in messages]
+
+    def _get_token_count_anthropic(
+        self,
+        messages: list[dict] | list[Message],
+        tools: list[ChatCompletionToolParam] | None = None,
+    ) -> int:
+        """Get the number of tokens in a list of messages. Use dicts for better token counting.
+
+        Args:
+            messages (list): A list of messages, either as a list of dicts or as a list of Message objects.
+        Returns:
+            int: The number of tokens.
+        """
+        # attempt to convert Message objects to dicts, litellm expects dicts
+        if (
+            isinstance(messages, list)
+            and len(messages) > 0
+            and isinstance(messages[0], Message)
+        ):
+            logger.info(
+                'Message objects now include serialized tool calls in token counting'
+            )
+            messages = self.format_messages_for_llm(messages)  # type: ignore
+        # Convert messages to Anthropic format
+        client = Anthropic(
+            api_key=self.config.api_key.get_secret_value()
+            if self.config.api_key
+            else None,
+            base_url=self.config.base_url,
+        )
+
+        # Find and extract system message
+        system_message = None
+        filtered_messages = []
+        for msg in messages:
+            if msg.get('role') == 'system':
+                system_message = msg.get('content')
+            else:
+                filtered_messages.append(msg)
+
+        formatted_tools = None
+        if tools:
+            formatted_tools = [
+                {
+                    'name': tool['function']['name'],
+                    'description': tool['function']['description'],
+                    'input_schema': tool['function']['parameters'],
+                }
+                for tool in tools
+            ]
+
+        response: MessageTokensCount = client.messages.count_tokens(
+            model=self.model_info.get('key') if self.model_info else None,
+            messages=filtered_messages,
+            tools=formatted_tools,
+            system=system_message,
+        )
+        return response.input_tokens
 
 
 def transform_messages_for_llama(messages):

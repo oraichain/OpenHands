@@ -681,7 +681,7 @@ def test_get_token_count_with_dict_messages(mock_token_counter, default_config):
 
     assert token_count == 42
     mock_token_counter.assert_called_once_with(
-        model=default_config.model, messages=messages, custom_tokenizer=None
+        model=default_config.model, messages=messages, custom_tokenizer=None, tools=None
     )
 
 
@@ -707,10 +707,10 @@ def test_get_token_count_with_message_objects(
     assert mock_token_counter.call_count == 2
 
 
-@patch('openhands.llm.llm.litellm.token_counter')
 @patch('openhands.llm.llm.create_pretrained_tokenizer')
-def test_get_token_count_with_custom_tokenizer(
-    mock_create_tokenizer, mock_token_counter, default_config
+@patch('openhands.llm.llm.litellm.token_counter')
+def test_get_token_count_with_tools_and_custom_tokenizer(
+    mock_token_counter, mock_create_tokenizer, default_config
 ):
     mock_tokenizer = MagicMock()
     mock_create_tokenizer.return_value = mock_tokenizer
@@ -726,7 +726,28 @@ def test_get_token_count_with_custom_tokenizer(
     assert token_count == 42
     mock_create_tokenizer.assert_called_once_with('custom/tokenizer')
     mock_token_counter.assert_called_once_with(
-        model=config.model, messages=messages, custom_tokenizer=mock_tokenizer
+        model=config.model,
+        messages=messages,
+        custom_tokenizer=mock_tokenizer,
+        tools=None,
+    )
+
+
+@patch('openhands.llm.llm.litellm.token_counter')
+def test_get_token_count_with_empty_tools(mock_token_counter, default_config):
+    mock_token_counter.return_value = 42
+    llm = LLM(default_config)
+    messages = [{'role': 'user', 'content': 'Hello!'}]
+    tools = []
+
+    token_count = llm.get_token_count(messages, tools=tools)
+
+    assert token_count == 42
+    mock_token_counter.assert_called_once_with(
+        model=default_config.model,
+        messages=messages,
+        custom_tokenizer=None,
+        tools=tools,
     )
 
 
@@ -972,3 +993,71 @@ class TestTransformMessagesForLlama:
             {'role': 'user', 'content': 'hi'},
             {'role': 'assistant', 'content': 'hello'},
         ]
+
+
+@patch('openhands.llm.llm.litellm.token_counter')
+def test_get_token_count_with_tools(mock_token_counter, default_config):
+    mock_token_counter.return_value = 42
+    llm = LLM(default_config)
+    messages = [{'role': 'user', 'content': 'Hello!'}]
+    tools = [
+        {
+            'type': 'function',
+            'function': {
+                'name': 'test_function',
+                'description': 'A test function',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {
+                        'param1': {'type': 'string'},
+                        'param2': {'type': 'number'},
+                    },
+                },
+            },
+        }
+    ]
+
+    token_count = llm.get_token_count(messages, tools=tools)
+
+    assert token_count == 42
+    mock_token_counter.assert_called_once_with(
+        model=default_config.model,
+        messages=messages,
+        custom_tokenizer=None,
+        tools=tools,
+    )
+
+
+@patch('openhands.llm.llm.LLM._get_token_count_anthropic')
+@patch('openhands.llm.llm.litellm.token_counter')
+def test_get_token_count_with_claude_model(
+    mock_token_counter, mock_get_token_count_anthropic, default_config
+):
+    # Set up config for a Claude model
+    config = copy.deepcopy(default_config)
+    config.model = 'claude-3-opus-20240229'
+    llm = LLM(config)
+    messages = [{'role': 'user', 'content': 'Hello!'}]
+    tools = [
+        {
+            'type': 'function',
+            'function': {
+                'name': 'test_function',
+                'description': 'A test function',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {
+                        'param1': {'type': 'string'},
+                        'param2': {'type': 'number'},
+                    },
+                },
+            },
+        }
+    ]
+    mock_get_token_count_anthropic.return_value = 123
+
+    token_count = llm.get_token_count(messages, tools=tools)
+
+    assert token_count == 123
+    mock_get_token_count_anthropic.assert_called_once_with(messages, tools)
+    mock_token_counter.assert_not_called()
