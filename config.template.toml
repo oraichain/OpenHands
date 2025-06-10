@@ -211,10 +211,13 @@ model = "gpt-4o"
 # https://github.com/All-Hands-AI/OpenHands/pull/4711
 #native_tool_calling = None
 
+# weight of the LLM. This is used to select the LLM when multiple LLMs are available.
+#weight = 0.6
 
 [llm.gpt4o-mini]
 api_key = ""
 model = "gpt-4o"
+weight = 0.4
 
 
 #################################### Agent ###################################

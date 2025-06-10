@@ -64,8 +64,8 @@ class MCPClient(BaseModel):
             'timeout': timeout,
             'sse_read_timeout': read_timeout,
         }
-        logger.info(f'sid: {sid}')
-        logger.info('Connecting to MCP server')
+        logger.debug(f'sid: {sid}')
+        logger.debug('Connecting to MCP server')
 
         try:
             async with sse_client(**self._server_params) as (read, write):
@@ -110,7 +110,7 @@ class MCPClient(BaseModel):
             self.tool_map[tool.name] = server_tool
             self.tools.append(server_tool)
 
-        logger.info(
+        logger.debug(
             f'Connected to server with tools: {[tool.name for tool in response.tools]}'
         )
 

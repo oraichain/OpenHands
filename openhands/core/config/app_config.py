@@ -117,13 +117,21 @@ class AppConfig(BaseModel):
     def get_llm_config(self, name: str = 'llm') -> LLMConfig:
         """'llm' is the name for default config (for backward compatibility prior to 0.8)."""
         if name in self.llms:
-            return self.llms[name]
+            llm = self.llms[name]
+            if llm.model is not None and (
+                llm.api_key is not None or llm.base_url is not None
+            ):
+                return llm
         if name is not None and name != 'llm':
             logger.openhands_logger.warning(
                 f'llm config group {name} not found, using default config'
             )
-        if 'llm' not in self.llms:
+        if len(self.llms) == 0:
             self.llms['llm'] = LLMConfig()
+        else:
+            # Get the LLM config with highest weight
+            highest_weight_llm = max(self.llms.items(), key=lambda x: x[1].weight)
+            self.llms['llm'] = highest_weight_llm[1]
         return self.llms['llm']
 
     def set_llm_config(self, value: LLMConfig, name: str = 'llm') -> None:
