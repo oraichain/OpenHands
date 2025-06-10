@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from typing import Any, Optional
@@ -54,31 +55,32 @@ async def create_mcp_clients(
     sid: Optional[str] = None,
     mnemonic: Optional[str] = None,
 ) -> list[MCPClient]:
-    mcp_clients: list[MCPClient] = []
-    # Initialize SSE connections
-    for name, mcp_config in dict_mcp_config.items():
-        logger.info(
-            f'Initializing MCP {name} agent for {mcp_config.url} with {mcp_config.mode} connection...'
-        )
-        # check if the name in a search engine config
+    """Create MCP clients by connecting to all servers in parallel."""
+    if not dict_mcp_config:
+        return []
+
+    async def connect_client(name: str, config: MCPConfig) -> MCPClient | None:
+        # Skip search engine configs
         if f'search_engine_{name}' in dict_mcp_config:
-            continue
+            return None
+
         client = MCPClient(name=name)
         try:
-            await client.connect_sse(mcp_config.url, sid, mnemonic)
-            # Only add the client to the list after a successful connection
-            mcp_clients.append(client)
-            logger.info(f'Connected to MCP server {mcp_config.url} via SSE')
+            await client.connect_sse(config.url, sid, mnemonic)
+            logger.info(f'Connected to MCP server {name} at {config.url}')
+            return client
         except Exception as e:
-            logger.error(f'Failed to connect to {mcp_config.url}: {str(e)}')
-            try:
-                await client.disconnect()
-            except Exception as disconnect_error:
-                logger.error(
-                    f'Error during disconnect after failed connection: {str(disconnect_error)}'
-                )
+            logger.error(f'Failed to connect to {name} at {config.url}: {e}')
+            return None
 
-    return mcp_clients
+    # Connect to all servers in parallel
+    tasks = [connect_client(name, config) for name, config in dict_mcp_config.items()]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Filter successful connections
+    clients = [client for client in results if isinstance(client, MCPClient)]
+    logger.info(f'Successfully connected to {len(clients)}/{len(tasks)} MCP servers')
+    return clients
 
 
 async def fetch_mcp_tools_from_config(

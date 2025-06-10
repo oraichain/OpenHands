@@ -106,6 +106,9 @@ class Session:
         knowledge_base: list[dict] | None = None,
         research_mode: str | None = None,
     ):
+        # Lazy import to avoid circular import
+        from openhands.server.shared import mcp_tools_cache
+
         start_time = time.time()
         self.agent_session.event_stream.add_event(
             AgentStateChangedObservation('', AgentState.LOADING),
@@ -160,10 +163,10 @@ class Session:
             self.logger.info(f'Enabling default condenser: {default_condenser_config}')
             agent_config.condenser = default_condenser_config
 
-        if mcp_disable:
-            for key in mcp_disable:
-                if key in self.config.dict_mcp_config and mcp_disable[key]:
-                    del self.config.dict_mcp_config[key]
+        # if mcp_disable:
+        #     for key in mcp_disable:
+        #         if key in self.config.dict_mcp_config and mcp_disable[key]:
+        #             del self.config.dict_mcp_config[key]
 
         workspace_mount_path_in_sandbox_store_in_session = (
             self.config.workspace_mount_path_in_sandbox_store_in_session
@@ -171,21 +174,45 @@ class Session:
         if self.config.runtime == 'local':
             workspace_mount_path_in_sandbox_store_in_session = False
 
-        mcp_tools = (
-            []
-            if research_mode == ResearchMode.FOLLOW_UP
-            else await fetch_mcp_tools_from_config(
+        start_connect_time = time.time()
+
+        # Use cached MCP tools if available, otherwise fetch them
+        if research_mode == ResearchMode.FOLLOW_UP:
+            mcp_tools = []
+        elif mcp_tools_cache.is_initialized():
+            self.logger.info('Using cached MCP tools')
+            mcp_tools = mcp_tools_cache.get_mcp_tools()
+            # Filter tools based on mcp_disable if necessary
+            if mcp_disable:
+                # Since tools are already cached, we need to filter them based on disabled configs
+                disabled_configs = {k for k, v in mcp_disable.items() if v}
+                mcp_tools = [
+                    tool
+                    for tool in mcp_tools
+                    if not any(
+                        disabled in tool.get('name', '')
+                        for disabled in disabled_configs
+                    )
+                ]
+        else:
+            # fallback to fetch search tools
+            mcp_tools = await fetch_mcp_tools_from_config(
                 self.config.dict_mcp_config, sid=self.sid, mnemonic=mnemonic
             )
+
+        self.logger.info(
+            f'process mcp time: {time.time() - start_connect_time} seconds'
         )
 
-        search_tools = (
-            []
-            if research_mode == ResearchMode.FOLLOW_UP
-            else await fetch_search_tools_from_config(
+        if research_mode == ResearchMode.FOLLOW_UP:
+            search_tools = []
+        elif mcp_tools_cache.is_initialized():
+            search_tools = mcp_tools_cache.get_search_tools()
+        else:
+            # fallback to fetch search tools
+            search_tools = await fetch_search_tools_from_config(
                 self.config.dict_search_engine_config, sid=self.sid, mnemonic=mnemonic
             )
-        )
 
         a2a_manager: A2AManager = A2AManager(agent_config.a2a_server_urls)
         try:
@@ -244,7 +271,8 @@ class Session:
             )
             end_time = time.time()
             total_time = end_time - start_time
-            self.logger.debug(f'Total initialize_agent time: {total_time:.2f} seconds')
+            self.logger.info(f'Total initialize_agent time: {total_time:.2f} seconds')
+            return
         except Exception as e:
             self.logger.exception(f'Error creating agent_session: {e}')
             err_class = e.__class__.__name__
