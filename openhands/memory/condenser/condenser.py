@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from openhands.controller.state.state import State
 from openhands.core.config.condenser_config import CondenserConfig
+from openhands.core.message import Message
 from openhands.events.action.agent import CondensationAction
 from openhands.memory.view import View
 
@@ -86,21 +87,37 @@ class Condenser(ABC):
             self.write_metadata(state)
 
     @abstractmethod
-    def condense(self, View) -> View | Condensation:
+    def condense(self, view: View) -> View | Condensation:
         """Condense a sequence of events into a potentially smaller list.
 
         New condenser strategies should override this method to implement their own condensation logic. Call `self.add_metadata` in the implementation to record any relevant per-condensation diagnostic information.
 
         Args:
-            View: A view of the history containing all events that should be condensed.
+            view: A view of the history containing all events that should be condensed.
 
         Returns:
             View | Condensation: A condensed view of the events or an event indicating the history has been condensed.
         """
+    
+    def condense_with_token_length(self, view: View, token_length: int) -> View | Condensation:
+        """Condense a sequence of events into a potentially smaller list.
+
+        New condenser strategies should override this method to implement their own condensation logic. Call `self.add_metadata` in the implementation to record any relevant per-condensation diagnostic information.
+
+        Args:
+            view: A view of the history containing all events that should be condensed.
+            token_length: The token length of the context window.
+
+        Returns:
+            View | Condensation: A condensed view of the events or an event indicating the history has been condensed.
+        """
+        pass
 
     def condensed_history(self, state: State) -> View | Condensation:
         """Condense the state's history."""
         with self.metadata_batch(state):
+            if state.previous_num_tokens_context_window > 0:
+                return self.condense_with_token_length(state.view, state.previous_num_tokens_context_window)
             return self.condense(state.view)
 
     @classmethod

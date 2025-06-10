@@ -193,6 +193,27 @@ class TaskCompletionBrowserCondenserConfig(BaseModel):
 
     model_config = {'extra': 'forbid'}
 
+class CondenseByTokenLengthConfig(BaseModel):
+    """Configuration for CondenseByTokenLength.
+
+    This condenser keeps only the conclusion and report markdown files for completed tasks,
+    condensing all other events before each completed task.
+    """
+
+    type: Literal['condense_by_token_length'] = Field('condense_by_token_length')
+
+    llm_config: LLMConfig = Field(
+        ..., description='Configuration for the LLM to use for attention.'
+    )
+
+    maximum_tokens_before_condensing: int = Field(
+        default=150000,
+        description='Maximum number of tokens before condensing.',
+        ge=50000,
+    )
+
+    model_config = {'extra': 'forbid'}
+
 
 # Type alias for convenience
 CondenserConfig = (
@@ -206,6 +227,7 @@ CondenserConfig = (
     | StructuredSummaryCondenserConfig
     | TaskCompletionCondenserConfig
     | TaskCompletionBrowserCondenserConfig
+    | CondenseByTokenLengthConfig
 )
 
 
@@ -246,7 +268,7 @@ def condenser_config_from_toml_section(
 
         # Handle LLM config reference if needed
         if (
-            condenser_type in ('llm', 'llm_attention')
+            condenser_type in ('llm', 'llm_attention', 'condense_by_token_length')
             and 'llm_config' in data
             and isinstance(data['llm_config'], str)
         ):
@@ -311,6 +333,7 @@ def create_condenser_config(condenser_type: str, data: dict) -> CondenserConfig:
         'structured': StructuredSummaryCondenserConfig,
         'task_completion': TaskCompletionCondenserConfig,
         'task_completion_browser': TaskCompletionBrowserCondenserConfig,
+        'condense_by_token_length': CondenseByTokenLengthConfig,
     }
 
     if condenser_type not in condenser_classes:

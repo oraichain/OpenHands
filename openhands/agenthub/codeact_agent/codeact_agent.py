@@ -25,6 +25,7 @@ from openhands.llm.health_check import perform_health_check
 from openhands.llm.llm import LLM
 from openhands.memory.condenser import Condenser
 from openhands.memory.condenser.condenser import Condensation, View
+from openhands.memory.condenser.impl.token_length_condenser import TokenLengthCondenser
 from openhands.memory.conversation_memory import ConversationMemory
 from openhands.runtime.plugins import (
     AgentSkillsRequirement,
@@ -271,6 +272,12 @@ class CodeActAgent(Agent):
                 ],
             }
         )
+
+        # if condenser is token length, then we need to calculate the token length and update our state for next turn's condenser
+        if isinstance(self.condenser, TokenLengthCondenser):
+            token_length = self.llm.get_token_count(formatted_messages, params['tools'])
+            state.previous_num_tokens_context_window = token_length
+
         params: dict = {
             'messages': formatted_messages,
         }

@@ -103,6 +103,8 @@ class State:
     last_error: str = ''
     user_id: str | None = None
 
+    previous_num_tokens_context_window: int = 0
+
     def save_to_session(self, sid: str, file_store: FileStore, user_id: str | None):
         pickled = pickle.dumps(self)
         logger.debug(f'Saving state to session {sid}:{self.agent_state}')
