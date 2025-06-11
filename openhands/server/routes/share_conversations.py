@@ -32,17 +32,29 @@ async def get_share_conversation(conversation_id: str):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{title}</title>
   <meta name="description" content="{description}">
-  <!-- Open Graph -->
+ <!-- Open Graph -->
   <meta property="og:title" content="{title}" />
   <meta property="og:description" content="{description}" />
   <meta property="og:image" content="{thumbnail_url}" />
   <meta property="og:url" content="{share_url}" />
   <meta property="og:type" content="article" />
   <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary_large_image" />
+  <!-- <meta name="twitter:card" content="summary_large_image" /> -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:url" content="{share_url}" />
   <meta name="twitter:title" content="{title}" />
   <meta name="twitter:description" content="{description}" />
   <meta name="twitter:image" content="{thumbnail_url}" />
+  <meta name="twitter:url" content="{share_url}" />
+  <meta name="twitter:site" content="@thesis_io" />
+  <meta name="twitter:creator" content="@thesis_io" />
+  <meta name="twitter:domain" content="{share_url}" />
+  <meta name="twitter:image:alt" content="{title}" />
+
+  <!-- Fallback for preview engines -->
+  <link rel="image_src" href="{thumbnail_url}" />
+  <link rel="canonical" href="{share_url}" />
+  <link rel="icon" type="image/png" href="{thumbnail_url}" />
 </head>
 <body>
   <h1>{title}</h1>
