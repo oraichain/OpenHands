@@ -235,6 +235,7 @@ class CheckUserActivationMiddleware(BaseHTTPMiddleware):
             '/api/user/status',
             '/api/invitation/validate',
             '/api/usecases',
+            '/share/',
         ]
 
         self.public_path_patterns = [
@@ -242,6 +243,7 @@ class CheckUserActivationMiddleware(BaseHTTPMiddleware):
             '/api/options/conversations/events/',
             '/api/options/conversations/list-files-internal/',
             '/api/options/conversations/select-file-internal/',
+            '/share/',
         ]
 
     async def dispatch(self, request: Request, call_next):
@@ -301,6 +303,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             '/api/options/use-cases/conversations',
             '/api/options/conversations',
             '/api/usecases',
+            '/share',
         ]
 
         self.public_path_patterns = [
@@ -308,6 +311,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             '/api/options/conversations/events/',
             '/api/options/conversations/list-files-internal/',
             '/api/options/conversations/select-file-internal/',
+            '/share/',
         ]
 
     async def dispatch(self, request: Request, call_next):
