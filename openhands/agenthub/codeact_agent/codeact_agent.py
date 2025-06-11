@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 from collections import deque
 from copy import deepcopy
 from datetime import datetime
@@ -186,6 +187,11 @@ class CodeActAgent(Agent):
                     del tool['cache_control']
             # Add cache_control to last element so it is persistent
             selected_tools[-1]['cache_control'] = {'type': 'ephemeral'}
+
+        # NOTE: only for converse aws bedrock claude model, we need to set the cachePoint for the tool list
+        # REF: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-get-started
+        # if "bedrock/converse" in self.llm.config.model:
+        #     selected_tools.append({'cachePoint': {'type': 'default'}})
         return selected_tools
 
     def step(self, state: State) -> Action:
@@ -273,6 +279,12 @@ class CodeActAgent(Agent):
                 ],
             }
         )
+
+        # NOTE: only for converse aws bedrock claude model, we need to set the cachePoint for all messages
+        # REF: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-get-started
+        # if "bedrock/converse" in self.llm.config.model:
+        #     formatted_messages = self._format_cache_point_for_aws_bedrock_converse(formatted_messages)
+
         params: dict = {
             'messages': formatted_messages,
         }
@@ -526,7 +538,7 @@ class CodeActAgent(Agent):
             )
 
     async def _select_llm_from_weight_and_availability(
-        self, perform_health_check_fn=None, now_fn=None
+        self, perform_health_check_fn=None
     ) -> LLM:
         """
         Select an LLM from a list of LLMs based on the weight and availability using round-robin selection.
@@ -534,7 +546,6 @@ class CodeActAgent(Agent):
         Args:
             routing_llms (dict[str, LLM]): Dictionary mapping LLM names to their instances
             perform_health_check_fn (callable, optional): Function to perform health check (for testing)
-            now_fn (callable, optional): Function to get current datetime (for testing)
         Returns:
             LLM: The selected LLM instance
         Raises:
@@ -552,12 +563,12 @@ class CodeActAgent(Agent):
             raise ValueError('No available LLMs found')
 
         # Select LLM based on weights
-        selected_name = self._select_llm_from_weights(models_rate_limit, now_fn)
+        selected_name = self._select_llm_from_weights(models_rate_limit)
         return self.routing_llms[selected_name]
 
     async def _get_available_llms_from_health_check(
         self, perform_health_check_fn=None
-    ) -> dict[str, tuple[int, int, float]]:
+    ) -> dict[str, tuple[int, int, int]]:
         """
         Get available LLMs by performing health checks.
 
@@ -565,17 +576,17 @@ class CodeActAgent(Agent):
             perform_health_check_fn: Function to perform health check
 
         Returns:
-            dict[str, tuple[int, int, float]]: Dictionary mapping LLM names to their rate limits and weights
+            dict[str, tuple[int, int, int]]: Dictionary mapping LLM names to their rate limits and weights
         """
         if not self.routing_llms:
             raise ValueError('No LLMs available for routing')
         if perform_health_check_fn is None:
             perform_health_check_fn = perform_health_check
-        models_rate_limit: dict[str, tuple[int, int, float]] = {}
+        models_rate_limit: dict[str, tuple[int, int, int]] = {}
 
         async def check_llm(
             name: str, llm: LLM
-        ) -> tuple[str, tuple[int, int, float]] | None:
+        ) -> tuple[str, tuple[int, int, int]] | None:
             (remaining_requests, remaining_tokens) = await perform_health_check_fn(
                 {
                     'model': llm.config.model,
@@ -601,14 +612,13 @@ class CodeActAgent(Agent):
         return models_rate_limit
 
     def _select_llm_from_weights(
-        self, models_rate_limit: dict[str, tuple[int, int, float]], now_fn=None
+        self, models_rate_limit: dict[str, tuple[int, int, int]]
     ) -> str:
         """
         Select an LLM based on weights using round-robin selection.
 
         Args:
             models_rate_limit: Dictionary mapping LLM names to their rate limits and weights
-            now_fn: Function to get current datetime
 
         Returns:
             str: Name of the selected LLM
@@ -616,33 +626,33 @@ class CodeActAgent(Agent):
         Raises:
             ValueError: If no available LLMs found or total weight is 0
         """
-        if now_fn is None:
-            from datetime import datetime as dt
-
-            now_fn = dt.now
         # Calculate total weight and normalize in a single pass
-        total_weight = 0.0
-        normalized_weights = {}
-        for name, (_, _, weight) in models_rate_limit.items():
-            total_weight += weight
-            normalized_weights[name] = weight
+        weights: list[int] = [weight for _, _, weight in models_rate_limit.values()]
+        total_weight = sum(weights)
 
-        if total_weight <= 0:
-            raise ValueError('No available LLMs found')
+        if total_weight == 0:
+            raise ValueError('Total weight must be greater than 0')
 
-        # Normalize weights and create selection pool in one pass
-        selection_pool = []
-        for name, weight in normalized_weights.items():
-            count = int((weight / total_weight) * 100)
-            if count > 0:
-                selection_pool.extend([name] * count)
+        normalized_weights: list[float] = [weight / total_weight for weight in weights]
+        selected_index = random.choices(
+            range(len(normalized_weights)), weights=normalized_weights
+        )[0]
+        return list(models_rate_limit.keys())[selected_index]
 
-        if not selection_pool:
-            # Fallback to equal weights if no weights specified
-            selection_pool = list(models_rate_limit.keys())
+    def _format_cache_point_for_aws_bedrock_converse(
+        self, formatted_messages: list[dict]
+    ):
+        """
+        Formats the cache point for the converse model.
+        """
+        for message in formatted_messages:
+            content = message.get('content', [])
+            if (
+                content
+                and isinstance(content, list)
+                and len(content) > 0
+                and 'cache_control' in content[-1]
+            ):
+                content.append({'cachePoint': {'type': 'default'}})
 
-        # Get current timestamp for deterministic but changing selection
-        current_time = int(now_fn().timestamp())
-        # Select LLM using timestamp-based index
-        selected_index = current_time % len(selection_pool)
-        return selection_pool[selected_index]
+        return formatted_messages

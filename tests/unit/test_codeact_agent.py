@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import litellm
 import pytest
@@ -702,23 +702,18 @@ async def test_select_llm_basic_functionality(agent: CodeActAgent):
     """Test basic functionality with two available LLMs."""
     # Create mock LLMs
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.5)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=5)
 
     llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.5)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=5)
 
     agent.routing_llms = {'llm1': llm1, 'llm2': llm2}
 
     async def mock_health_check(*args, **kwargs):
         return (100, 1000)
 
-    def mock_now():
-        from datetime import datetime
-
-        return datetime(2024, 1, 1, 12, 0, 0)
-
     selected_llm = await agent._select_llm_from_weight_and_availability(
-        perform_health_check_fn=mock_health_check, now_fn=mock_now
+        perform_health_check_fn=mock_health_check
     )
     assert selected_llm in agent.routing_llms.values()
 
@@ -727,24 +722,19 @@ async def test_select_llm_basic_functionality(agent: CodeActAgent):
 async def test_select_llm_no_available_llms(agent: CodeActAgent):
     """Test behavior when no LLMs are available."""
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.5)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=5)
 
     llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.5)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=5)
 
     agent.routing_llms = {'llm1': llm1, 'llm2': llm2}
 
     async def mock_health_check(*args, **kwargs):
         return (None, None)
 
-    def mock_now():
-        from datetime import datetime
-
-        return datetime(2024, 1, 1, 12, 0, 0)
-
     with pytest.raises(ValueError, match='No available LLMs found'):
         await agent._select_llm_from_weight_and_availability(
-            perform_health_check_fn=mock_health_check, now_fn=mock_now
+            perform_health_check_fn=mock_health_check
         )
 
 
@@ -762,32 +752,20 @@ async def test_select_llm_weight_distribution(agent: CodeActAgent):
     """Test that LLM selection respects weight distribution."""
     # Create two LLMs with different weights
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.7)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=7)
 
     llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.3)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=3)
 
     agent.routing_llms = {'llm1': llm1, 'llm2': llm2}
 
     async def mock_health_check(*args, **kwargs):
         return (100, 1000)
 
-    # Simulate increasing timestamps
-    base_timestamp = 1704100800  # Arbitrary fixed timestamp
-
-    def make_mock_now(i):
-        def _mock_now():
-            from datetime import datetime
-
-            return datetime.fromtimestamp(base_timestamp + i)
-
-        return _mock_now
-
     selections = []
     for i in range(100):
         selected_llm = await agent._select_llm_from_weight_and_availability(
-            perform_health_check_fn=mock_health_check,
-            now_fn=make_mock_now(i),
+            perform_health_check_fn=mock_health_check
         )
         selections.append(selected_llm)
     llm1_count = selections.count(llm1)
@@ -802,51 +780,40 @@ async def test_select_llm_weight_distribution(agent: CodeActAgent):
 async def test_select_llm_partial_availability(agent: CodeActAgent):
     """Test behavior when only some LLMs are available."""
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.5)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=5)
 
     llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.5)
-
-    agent.routing_llms = {'llm1': llm1, 'llm2': llm2}
-
-    async def mock_health_check(*args, **kwargs):
-        if args[0]['model'] == 'model1':
-            return (100, 1000)
-        return (None, None)
-
-    def mock_now():
-        from datetime import datetime
-
-        return datetime(2024, 1, 1, 12, 0, 0)
-
-    selected_llm = await agent._select_llm_from_weight_and_availability(
-        perform_health_check_fn=mock_health_check, now_fn=mock_now
-    )
-    assert selected_llm == llm1  # Should only select the available LLM
-
-
-@pytest.mark.asyncio
-async def test_select_llm_zero_weights(agent: CodeActAgent):
-    """Test behavior when all weights are zero."""
-    llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.0)
-
-    llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.0)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=5)
 
     agent.routing_llms = {'llm1': llm1, 'llm2': llm2}
 
     async def mock_health_check(*args, **kwargs):
         return (100, 1000)
 
-    def mock_now():
-        from datetime import datetime
+    with patch('random.choices', return_value=[0]):
+        selected = await agent._select_llm_from_weight_and_availability(
+            perform_health_check_fn=mock_health_check
+        )
+    assert selected is llm1
 
-        return datetime(2024, 1, 1, 12, 0, 0)
 
-    with pytest.raises(ValueError, match='No available LLMs found'):
+@pytest.mark.asyncio
+async def test_select_llm_zero_weights(agent: CodeActAgent):
+    """Test behavior when all weights are zero."""
+    llm1 = Mock(spec=LLM)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0)
+
+    llm2 = Mock(spec=LLM)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0)
+
+    agent.routing_llms = {'llm1': llm1, 'llm2': llm2}
+
+    async def mock_health_check(*args, **kwargs):
+        return (100, 1000)
+
+    with pytest.raises(ValueError, match='Total weight must be greater than 0'):
         await agent._select_llm_from_weight_and_availability(
-            perform_health_check_fn=mock_health_check, now_fn=mock_now
+            perform_health_check_fn=mock_health_check
         )
 
 
@@ -854,52 +821,45 @@ async def test_select_llm_zero_weights(agent: CodeActAgent):
 async def test_select_llm_health_check_failure(agent: CodeActAgent):
     """Test behavior when health check fails."""
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.5)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=5)
 
-    agent.routing_llms = {'llm1': llm1}
+    llm2 = Mock(spec=LLM)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=5)
+
+    agent.routing_llms = {'llm1': llm1, 'llm2': llm2}
 
     async def mock_health_check(*args, **kwargs):
-        raise ValueError('Health check failed')
+        raise Exception('Health check failed')
 
-    def mock_now():
-        from datetime import datetime
-
-        return datetime(2024, 1, 1, 12, 0, 0)
-
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='No available LLMs found'):
         await agent._select_llm_from_weight_and_availability(
-            perform_health_check_fn=mock_health_check, now_fn=mock_now
+            perform_health_check_fn=mock_health_check
         )
 
 
 @pytest.mark.asyncio
 async def test_select_llm_consistent_selection(agent: CodeActAgent):
-    """Test that selection is consistent within the same second."""
+    """Test that selection is consistent within the same call when random.choices is patched."""
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.5)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=5)
 
     llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.5)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=5)
 
     agent.routing_llms = {'llm1': llm1, 'llm2': llm2}
 
     async def mock_health_check(*args, **kwargs):
         return (100, 1000)
 
-    def mock_now():
-        from datetime import datetime
-
-        return datetime(2024, 1, 1, 12, 0, 0)
-
-    # Make two selections
-    first_selection = await agent._select_llm_from_weight_and_availability(
-        perform_health_check_fn=mock_health_check, now_fn=mock_now
-    )
-    second_selection = await agent._select_llm_from_weight_and_availability(
-        perform_health_check_fn=mock_health_check, now_fn=mock_now
-    )
-    # Should get same LLM since timestamp is the same
-    assert first_selection == second_selection
+    with patch('random.choices', return_value=[1]):
+        selected1 = await agent._select_llm_from_weight_and_availability(
+            perform_health_check_fn=mock_health_check
+        )
+        selected2 = await agent._select_llm_from_weight_and_availability(
+            perform_health_check_fn=mock_health_check
+        )
+    assert selected1 is llm2
+    assert selected2 is llm2
 
 
 def test_completion_with_failover_success(agent: CodeActAgent):
@@ -924,7 +884,7 @@ def test_completion_with_failover_rate_limit_error(agent: CodeActAgent):
 
     # Set up routing LLMs
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.7)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=7)
     llm1.completion = Mock(return_value={'content': 'success'})
 
     agent.routing_llms = {'llm1': llm1}
@@ -946,7 +906,7 @@ def test_completion_with_failover_internal_server_error(agent: CodeActAgent):
 
     # Set up routing LLMs
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.7)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=7)
     llm1.completion = Mock(return_value={'content': 'success'})
 
     agent.routing_llms = {'llm1': llm1}
@@ -964,7 +924,7 @@ def test_completion_with_failover_other_error(agent: CodeActAgent):
 
     # Set up routing LLMs
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.7)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=7)
     llm1.completion = Mock(return_value={'content': 'success'})
 
     agent.routing_llms = {'llm1': llm1}
@@ -988,7 +948,7 @@ def test_completion_with_failover_all_llms_fail(agent: CodeActAgent):
 
     # Set up routing LLMs that all fail
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.7)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=7)
     llm1.completion = Mock(
         side_effect=litellm.InternalServerError(
             'Server error', 'test_provider', 'test_model'
@@ -996,7 +956,7 @@ def test_completion_with_failover_all_llms_fail(agent: CodeActAgent):
     )
 
     llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.3)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=3)
     llm2.completion = Mock(
         side_effect=litellm.RateLimitError(
             'Rate limit exceeded', 'test_provider', 'test_model'
@@ -1066,7 +1026,7 @@ def test_completion_with_failover_weight_ordering(agent: CodeActAgent):
 
     # Set up LLMs with different weights
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.3)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=3)
     llm1.completion = Mock(
         side_effect=litellm.RateLimitError(
             'Rate limit exceeded', 'test_provider', 'test_model'
@@ -1074,7 +1034,7 @@ def test_completion_with_failover_weight_ordering(agent: CodeActAgent):
     )
 
     llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.5)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=5)
     llm2.completion = Mock(
         side_effect=litellm.RateLimitError(
             'Rate limit exceeded', 'test_provider', 'test_model'
@@ -1082,7 +1042,7 @@ def test_completion_with_failover_weight_ordering(agent: CodeActAgent):
     )
 
     llm3 = Mock(spec=LLM)
-    llm3.config = LLMConfig(model='model3', api_key='key3', base_url='url3', weight=0.2)
+    llm3.config = LLMConfig(model='model3', api_key='key3', base_url='url3', weight=2)
     llm3.completion = Mock(return_value={'content': 'success'})
 
     agent.routing_llms = {'llm1': llm1, 'llm2': llm2, 'llm3': llm3}
@@ -1092,9 +1052,9 @@ def test_completion_with_failover_weight_ordering(agent: CodeActAgent):
 
     # Verify LLMs were called in weight order (highest to lowest)
     agent.llm.completion.assert_called_once_with(test_param='value')  # Default LLM
-    llm2.completion.assert_called_once_with(test_param='value')  # Weight 0.5
-    llm1.completion.assert_called_once_with(test_param='value')  # Weight 0.3
-    llm3.completion.assert_called_once_with(test_param='value')  # Weight 0.2
+    llm2.completion.assert_called_once_with(test_param='value')  # Weight 5
+    llm1.completion.assert_called_once_with(test_param='value')  # Weight 3
+    llm3.completion.assert_called_once_with(test_param='value')  # Weight 2
 
 
 def test_completion_with_failover_params_preservation(agent: CodeActAgent):
@@ -1113,7 +1073,7 @@ def test_completion_with_failover_params_preservation(agent: CodeActAgent):
     )
 
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.7)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=7)
     llm1.completion = Mock(
         side_effect=litellm.RateLimitError(
             'Rate limit exceeded', 'test_provider', 'test_model'
@@ -1121,7 +1081,7 @@ def test_completion_with_failover_params_preservation(agent: CodeActAgent):
     )
 
     llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.3)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=3)
     llm2.completion = Mock(return_value={'content': 'success'})
 
     agent.routing_llms = {'llm1': llm1, 'llm2': llm2}
@@ -1146,7 +1106,7 @@ def test_completion_with_failover_simple_llm_fallback(agent: CodeActAgent):
 
     # Set up regular LLMs that fail
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.7)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=7)
     llm1.completion = Mock(
         side_effect=litellm.RateLimitError(
             'Rate limit exceeded', 'test_provider', 'test_model'
@@ -1156,7 +1116,7 @@ def test_completion_with_failover_simple_llm_fallback(agent: CodeActAgent):
     # Set up simple LLM that succeeds
     simple_llm = Mock(spec=LLM)
     simple_llm.config = LLMConfig(
-        model='simple', api_key='key2', base_url='url2', weight=0.0
+        model='simple', api_key='key2', base_url='url2', weight=0
     )
     simple_llm.completion = Mock(return_value={'content': 'success'})
 
@@ -1182,7 +1142,7 @@ def test_completion_with_failover_simple_llm_fails(agent: CodeActAgent):
 
     # Set up regular LLMs that fail
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.7)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=7)
     llm1.completion = Mock(
         side_effect=litellm.RateLimitError(
             'Rate limit exceeded', 'test_provider', 'test_model'
@@ -1192,7 +1152,7 @@ def test_completion_with_failover_simple_llm_fails(agent: CodeActAgent):
     # Set up simple LLM that also fails
     simple_llm = Mock(spec=LLM)
     simple_llm.config = LLMConfig(
-        model='simple', api_key='key2', base_url='url2', weight=0.0
+        model='simple', api_key='key2', base_url='url2', weight=0
     )
     simple_llm.completion = Mock(
         side_effect=litellm.RateLimitError(
@@ -1216,32 +1176,6 @@ def test_completion_with_failover_simple_llm_fails(agent: CodeActAgent):
     simple_llm.completion.assert_called_once_with(test_param='value')
 
 
-def test_completion_with_failover_only_simple_llm(agent: CodeActAgent):
-    """Test behavior when only simple LLM is available"""
-    # Mock default LLM to fail with rate limit error
-    agent.llm.completion = Mock(
-        side_effect=litellm.RateLimitError(
-            'Rate limit exceeded', 'test_provider', 'test_model'
-        )
-    )
-
-    # Set up only simple LLM
-    simple_llm = Mock(spec=LLM)
-    simple_llm.config = LLMConfig(
-        model='simple', api_key='key2', base_url='url2', weight=0.0
-    )
-    simple_llm.completion = Mock(return_value={'content': 'success'})
-
-    agent.routing_llms = {'simple': simple_llm}
-
-    result = agent._completion_with_failover(test_param='value')
-    assert result == {'content': 'success'}
-
-    # Verify LLMs were called in correct order
-    agent.llm.completion.assert_called_once_with(test_param='value')
-    simple_llm.completion.assert_called_once_with(test_param='value')
-
-
 def test_completion_with_failover_weight_ordering_with_simple(agent: CodeActAgent):
     """Test that routing LLMs are tried in order of their weights after default LLM fails, with simple LLM last"""
     # Mock default LLM to fail with rate limit error
@@ -1253,7 +1187,7 @@ def test_completion_with_failover_weight_ordering_with_simple(agent: CodeActAgen
 
     # Set up LLMs with different weights
     llm1 = Mock(spec=LLM)
-    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=0.3)
+    llm1.config = LLMConfig(model='model1', api_key='key1', base_url='url1', weight=3)
     llm1.completion = Mock(
         side_effect=litellm.RateLimitError(
             'Rate limit exceeded', 'test_provider', 'test_model'
@@ -1261,7 +1195,7 @@ def test_completion_with_failover_weight_ordering_with_simple(agent: CodeActAgen
     )
 
     llm2 = Mock(spec=LLM)
-    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=0.5)
+    llm2.config = LLMConfig(model='model2', api_key='key2', base_url='url2', weight=5)
     llm2.completion = Mock(
         side_effect=litellm.RateLimitError(
             'Rate limit exceeded', 'test_provider', 'test_model'
@@ -1270,7 +1204,7 @@ def test_completion_with_failover_weight_ordering_with_simple(agent: CodeActAgen
 
     simple_llm = Mock(spec=LLM)
     simple_llm.config = LLMConfig(
-        model='simple', api_key='key3', base_url='url3', weight=0.0
+        model='simple', api_key='key3', base_url='url3', weight=0
     )
     simple_llm.completion = Mock(return_value={'content': 'success'})
 
@@ -1281,6 +1215,6 @@ def test_completion_with_failover_weight_ordering_with_simple(agent: CodeActAgen
 
     # Verify LLMs were called in weight order (highest to lowest), with simple last
     agent.llm.completion.assert_called_once_with(test_param='value')  # Default LLM
-    llm2.completion.assert_called_once_with(test_param='value')  # Weight 0.5
-    llm1.completion.assert_called_once_with(test_param='value')  # Weight 0.3
+    llm2.completion.assert_called_once_with(test_param='value')  # Weight 5
+    llm1.completion.assert_called_once_with(test_param='value')  # Weight 3
     simple_llm.completion.assert_called_once_with(test_param='value')  # Simple LLM last

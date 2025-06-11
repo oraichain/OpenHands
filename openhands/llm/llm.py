@@ -56,6 +56,7 @@ CACHE_PROMPT_SUPPORTED_MODELS = [
     'claude-3-5-haiku-20241022',
     'claude-3-haiku-20240307',
     'claude-3-opus-20240229',
+    'bedrock/converse/us.anthropic.claude-3-7-sonnet-20250219-v1:0',
 ]
 
 # function calling supporting models
@@ -311,6 +312,9 @@ class LLM(RetryMixin, DebugMixin):
             # logger.debug(
             #     f'LLM: calling litellm completion with model: {self.config.model}, base_url: {self.config.base_url}, args: {args}, kwargs: {kwargs}'
             # )
+            # NOTE: for litellm proxy, we can use specific_deployment to force the model to be used
+            if 'litellm_proxy' in self.config.model:
+                kwargs['specific_deployment'] = self.config.model
             resp: ModelResponse = self._completion_unwrapped(*args, **kwargs)
             logger.debug(f'Response raw: {resp}')
             # Calculate and record latency
@@ -578,13 +582,9 @@ class LLM(RetryMixin, DebugMixin):
         Returns:
             boolean: True if prompt caching is supported and enabled for the given model.
         """
-        return (
-            self.config.caching_prompt is True
-            and (
-                self.config.model in CACHE_PROMPT_SUPPORTED_MODELS
-                or self.config.model.split('/')[-1] in CACHE_PROMPT_SUPPORTED_MODELS
-            )
-            # We don't need to look-up model_info, because only Anthropic models needs the explicit caching breakpoint
+        return self.config.caching_prompt is True and (
+            self.config.model in CACHE_PROMPT_SUPPORTED_MODELS
+            or self.config.model.split('/')[-1] in CACHE_PROMPT_SUPPORTED_MODELS
         )
 
     def is_function_calling_active(self) -> bool:
