@@ -84,7 +84,7 @@ class LLMConfig(BaseModel):
     native_tool_calling: bool | None = Field(default=None)
     reasoning_effort: str | None = Field(default='high')
     seed: int | None = Field(default=None)
-    weight: int = Field(default=1)
+    weight: int = Field(default=0)
 
     model_config = {'extra': 'forbid'}
 
