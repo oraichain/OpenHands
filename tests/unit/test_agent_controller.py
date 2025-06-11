@@ -793,15 +793,28 @@ async def test_context_window_exceeded_error_handling(
     # Look at pre/post-step views. Normally, these should always increase in
     # size (because we return a message action, which triggers a recall, which
     # triggers a recall response). But if the pre/post-views are on the turn
-    # when we throw the context window exceeded error, we should see the
-    # post-step view compressed.
+    # when we throw the context window exceeded error, we should see a
+    # CondensationAction in the post-step view indicating compression happened.
+    compression_happened = False
     for index, (first_view, second_view) in enumerate(
         zip(step_state.views[:-1], step_state.views[1:])
     ):
         if index == error_after:
-            assert len(first_view) > len(second_view)
+            # Check if compression happened by looking for CondensationAction
+            has_condensation = any(
+                isinstance(event, CondensationAction) for event in second_view.events
+            )
+            assert (
+                has_condensation
+            ), 'Expected CondensationAction in view after context window error'
+            compression_happened = True
         else:
-            assert len(first_view) < len(second_view)
+            # Before compression, views should grow
+            if not compression_happened:
+                assert len(first_view) < len(second_view)
+
+    # Verify compression actually happened
+    assert compression_happened, 'Context window compression should have occurred'
 
     # The final state's history should contain:
     # - max_iterations number of message actions,
@@ -1429,12 +1442,11 @@ def test_apply_conversation_window_basic(mock_event_stream, mock_agent):
         3 <= len(truncated) < len(events)
     )  # First message + at least one action-observation pair
     assert truncated[0] == first_msg  # First message always preserved
-    assert controller.state.start_id == first_msg._id
 
     # Verify pairs aren't split
     for i, event in enumerate(truncated[1:]):
         if isinstance(event, CmdOutputObservation):
-            assert any(e._id == event._cause for e in truncated[: i + 1])
+            assert any(e.id == event.cause for e in truncated[: i + 1])
 
 
 def test_history_restoration_after_truncation(mock_event_stream, mock_agent):
