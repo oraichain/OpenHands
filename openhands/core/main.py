@@ -99,7 +99,6 @@ async def run_controller(
     if agent is None:
         agent = create_agent(config)
         mcp_tools = await fetch_mcp_tools_from_config(config.dict_mcp_config, sid=sid)
-        await agent.select_llm_from_weight_and_availability()
         logger.info(f'MCP tools: {mcp_tools}')
         agent.set_mcp_tools(mcp_tools)
 

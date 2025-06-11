@@ -171,9 +171,3 @@ class Agent(ABC):
             for k in knowledge_base:
                 if k.get('chunkId', None):
                     self.knowledge_base[k['chunkId']] = k
-
-    async def select_llm_from_weight_and_availability(self):
-        """
-        Select an LLM from a list of LLMs based on the weight and availability using round-robin selection.
-        """
-        raise NotImplementedError('This method should be implemented by the subclass')

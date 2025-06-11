@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 from collections import deque
@@ -6,7 +5,6 @@ from copy import deepcopy
 from datetime import datetime
 from typing import override
 
-import litellm
 from httpx import request
 
 import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
@@ -24,7 +22,6 @@ from openhands.events.action import (
     AgentFinishAction,
 )
 from openhands.events.event import Event
-from openhands.llm.health_check import perform_health_check
 from openhands.llm.llm import LLM
 from openhands.memory.condenser import Condenser
 from openhands.memory.condenser.condenser import Condensation, View
@@ -320,11 +317,11 @@ class CodeActAgent(Agent):
             complexity_score = res['outputs'][0]['data'][0]
             logger.debug(f'Complexity score: {complexity_score}')
             if complexity_score > 0.3:
-                response = self._completion_with_failover(**params)
+                response = self.llm.completion(**params)
             else:
                 response = self.routing_llms['simple'].completion(**params)
         else:
-            response = self._completion_with_failover(**params)
+            response = self.llm.completion(**params)
 
         logger.debug(f'Response from LLM: {response}')
 
@@ -452,197 +449,3 @@ class CodeActAgent(Agent):
             prev_role = msg.role
 
         return results
-
-    def _completion_with_failover(self, **params):
-        # First try the default LLM
-        try:
-            return self.llm.completion(**params)
-        except (litellm.RateLimitError, litellm.InternalServerError) as e:
-            logger.error(
-                f'Error completing with default LLM: {e}. Trying routing LLMs.'
-            )
-            last_exception = e
-        except Exception as e:
-            logger.error(
-                f'Error completing with default LLM: {e}. Not rate-limited or server error -> raise'
-            )
-            raise e
-
-        # If no routing LLMs available, raise the original exception
-        if not self.routing_llms:
-            error_msg = (
-                'Default LLM failed and no routing LLMs available. Try again later'
-            )
-            logger.error(error_msg)
-            raise Exception(error_msg) from last_exception
-
-        # Sort LLMs by weight in descending order
-        sorted_llms = sorted(
-            self.routing_llms.items(), key=lambda x: x[1].config.weight, reverse=True
-        )
-
-        has_simple_llm = False
-        for name, llm in sorted_llms:
-            # Skip if this is the current default LLM (comparing by config) since it's already tried
-            if (
-                llm.config.model == self.llm.config.model
-                and llm.config.api_key == self.llm.config.api_key
-                and llm.config.base_url == self.llm.config.base_url
-            ):
-                continue
-            # skip simple LLM for now in case all weight is 0
-            if name == 'simple':
-                has_simple_llm = True
-                continue
-            try:
-                resp = llm.completion(**params)
-                # If successful, assign this LLM as the new default
-                self.llm = llm
-                return resp
-            except Exception as e:
-                logger.error(f'Error completing with {name}: {e}. Trying next LLM.')
-                last_exception = e
-
-        if has_simple_llm:
-            try:
-                # for simple routing, we don't want to re-assign the llm since the model quality is not good
-                return self.routing_llms['simple'].completion(**params)
-            except Exception as e:
-                logger.error(f"Error completing with 'simple' LLM: {e}.")
-                last_exception = e
-        # If we get here, all LLMs failed
-        error_msg = 'All LLMs are not available to process this prompt. Try again later'
-        logger.error(error_msg)
-        raise Exception(error_msg) from last_exception
-
-    @override
-    async def select_llm_from_weight_and_availability(self):
-        try:
-            self.llm = await self._select_llm_from_weight_and_availability()
-            logger.info(f'Selected LLM: {self.llm.config.model}')
-        except Exception as e:
-            logger.warning(
-                f'Error selecting LLM from weight and availability: {e}. Use default LLM.'
-            )
-
-    async def _select_llm_from_weight_and_availability(
-        self, perform_health_check_fn=None, now_fn=None
-    ) -> LLM:
-        """
-        Select an LLM from a list of LLMs based on the weight and availability using round-robin selection.
-
-        Args:
-            routing_llms (dict[str, LLM]): Dictionary mapping LLM names to their instances
-            perform_health_check_fn (callable, optional): Function to perform health check (for testing)
-            now_fn (callable, optional): Function to get current datetime (for testing)
-        Returns:
-            LLM: The selected LLM instance
-        Raises:
-            ValueError: If no available LLMs are found
-        """
-
-        if not self.routing_llms:
-            raise ValueError('No LLMs available for routing')
-
-        # Get available LLMs from health check
-        models_rate_limit = await self._get_available_llms_from_health_check(
-            perform_health_check_fn
-        )
-        if not models_rate_limit:
-            raise ValueError('No available LLMs found')
-
-        # Select LLM based on weights
-        selected_name = self._select_llm_from_weights(models_rate_limit, now_fn)
-        return self.routing_llms[selected_name]
-
-    async def _get_available_llms_from_health_check(
-        self, perform_health_check_fn=None
-    ) -> dict[str, tuple[int, int, float]]:
-        """
-        Get available LLMs by performing health checks.
-
-        Args:
-            perform_health_check_fn: Function to perform health check
-
-        Returns:
-            dict[str, tuple[int, int, float]]: Dictionary mapping LLM names to their rate limits and weights
-        """
-        if not self.routing_llms:
-            raise ValueError('No LLMs available for routing')
-        if perform_health_check_fn is None:
-            perform_health_check_fn = perform_health_check
-        models_rate_limit: dict[str, tuple[int, int, float]] = {}
-
-        async def check_llm(
-            name: str, llm: LLM
-        ) -> tuple[str, tuple[int, int, float]] | None:
-            (remaining_requests, remaining_tokens) = await perform_health_check_fn(
-                {
-                    'model': llm.config.model,
-                    'api_key': llm.config.api_key,
-                    'base_url': llm.config.base_url,
-                }
-            )
-            if remaining_requests is not None and remaining_tokens is not None:
-                return name, (remaining_requests, remaining_tokens, llm.config.weight)
-            return None
-
-        tasks = [check_llm(name, llm) for name, llm in self.routing_llms.items()]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        models_rate_limit = {
-            name: data
-            for result in results
-            if result is not None
-            and not isinstance(result, Exception)
-            and not isinstance(result, BaseException)
-            for name, data in [result]
-        }
-        return models_rate_limit
-
-    def _select_llm_from_weights(
-        self, models_rate_limit: dict[str, tuple[int, int, float]], now_fn=None
-    ) -> str:
-        """
-        Select an LLM based on weights using round-robin selection.
-
-        Args:
-            models_rate_limit: Dictionary mapping LLM names to their rate limits and weights
-            now_fn: Function to get current datetime
-
-        Returns:
-            str: Name of the selected LLM
-
-        Raises:
-            ValueError: If no available LLMs found or total weight is 0
-        """
-        if now_fn is None:
-            from datetime import datetime as dt
-
-            now_fn = dt.now
-        # Calculate total weight and normalize in a single pass
-        total_weight = 0.0
-        normalized_weights = {}
-        for name, (_, _, weight) in models_rate_limit.items():
-            total_weight += weight
-            normalized_weights[name] = weight
-
-        if total_weight <= 0:
-            raise ValueError('No available LLMs found')
-
-        # Normalize weights and create selection pool in one pass
-        selection_pool = []
-        for name, weight in normalized_weights.items():
-            count = int((weight / total_weight) * 100)
-            if count > 0:
-                selection_pool.extend([name] * count)
-
-        if not selection_pool:
-            # Fallback to equal weights if no weights specified
-            selection_pool = list(models_rate_limit.keys())
-
-        # Get current timestamp for deterministic but changing selection
-        current_time = int(now_fn().timestamp())
-        # Select LLM using timestamp-based index
-        selected_index = current_time % len(selection_pool)
-        return selection_pool[selected_index]

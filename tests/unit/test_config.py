@@ -174,8 +174,6 @@ def test_llm_config_native_tool_calling(default_config, temp_toml_file, monkeypa
 
 [llm.gpt4o-mini]
 native_tool_calling = false
-model = "gpt-4o-mini"
-api_key = "test-api-key"
 """
         )
     load_from_toml(default_config, temp_toml_file)
@@ -190,8 +188,6 @@ api_key = "test-api-key"
 
 [llm.gpt4o-mini]
 native_tool_calling = true
-model = "gpt-4o-mini"
-api_key = "test-api-key"
 """
         )
     load_from_toml(default_config, temp_toml_file)

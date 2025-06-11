@@ -148,8 +148,6 @@ class Session:
         for config_name, routing_llm_config in self.config.llms.items():
             routing_llms[config_name] = LLM(
                 config=routing_llm_config,
-                session_id=self.sid,
-                user_id=self.user_id,
             )
 
         agent_config = self.config.get_agent_config(agent_cls)
@@ -217,8 +215,6 @@ class Session:
 
         if user_prompt:
             agent.set_user_prompt(user_prompt)
-
-        await agent.select_llm_from_weight_and_availability()
 
         git_provider_tokens = None
         selected_repository = None
