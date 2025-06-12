@@ -22,7 +22,7 @@ from openhands.events.action import (
     AgentFinishAction,
 )
 from openhands.events.event import Event
-from openhands.llm.llm import LLM
+from openhands.llm.llm import LLM, check_tools
 from openhands.memory.condenser import Condenser
 from openhands.memory.condenser.condenser import Condensation, View
 from openhands.memory.conversation_memory import ConversationMemory
@@ -276,6 +276,7 @@ class CodeActAgent(Agent):
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         # if chat mode, we need to use the search tools
         params['tools'] = self._select_tools_based_on_mode(research_mode)
+        params['tools'] = check_tools(params['tools'], self.llm.config)
         logger.debug(f'Messages: {messages}')
         last_message = messages[-1]
         response = None
