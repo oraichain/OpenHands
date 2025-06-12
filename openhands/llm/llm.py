@@ -56,6 +56,7 @@ CACHE_PROMPT_SUPPORTED_MODELS = [
     'claude-3-5-haiku-20241022',
     'claude-3-haiku-20240307',
     'claude-3-opus-20240229',
+    'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
 ]
 
 # function calling supporting models
@@ -189,6 +190,11 @@ class LLM(RetryMixin, DebugMixin):
 
         if self.config.model in MODELS_WITH_TEMPERATURE_DEFAULT_AS_1:
             kwargs['temperature'] = 1
+
+        if self.config.model.startswith('bedrock/converse'):
+            kwargs['aws_access_key_id'] = os.getenv('AWS_ACCESS_KEY_ID')
+            kwargs['aws_secret_access_key'] = os.getenv('AWS_SECRET_ACCESS_KEY')
+            kwargs['aws_region_name'] = os.getenv('AWS_REGION_NAME')
 
         self._completion = partial(
             litellm_completion,
