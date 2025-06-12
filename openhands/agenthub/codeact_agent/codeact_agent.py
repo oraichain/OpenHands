@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from collections import deque
 from copy import deepcopy
 from typing import override
@@ -19,9 +20,12 @@ from openhands.core.schema import ResearchMode
 from openhands.events.action import (
     Action,
     AgentFinishAction,
+    StreamingMessageAction,
 )
-from openhands.events.event import Event
+from openhands.events.action.message import MessageAction
+from openhands.events.event import Event, EventSource
 from openhands.llm.llm import LLM
+from openhands.llm.streaming_llm import StreamingLLM
 from openhands.memory.condenser import Condenser
 from openhands.memory.condenser.condenser import Condensation, View
 from openhands.memory.conversation_memory import ConversationMemory
@@ -30,6 +34,7 @@ from openhands.runtime.plugins import (
     JupyterRequirement,
     PluginRequirement,
 )
+from openhands.utils.async_utils import call_async_from_sync
 from openhands.utils.prompt import PromptManager
 
 
@@ -110,6 +115,7 @@ class CodeActAgent(Agent):
         self.routing_llms = routing_llms
         self.search_tools: list[dict] = []
         self.session_id: str | None = None
+        self.streaming_llm = StreamingLLM(self.llm.config)
 
     @override
     def set_system_prompt(self, system_prompt: str) -> None:
@@ -176,6 +182,136 @@ class CodeActAgent(Agent):
         logger.debug(f'Selected tools: {selected_tools}')
         return selected_tools
 
+    async def _handle_streaming_response(self, streaming_response):
+        """Handle streaming response - both accumulate in pending_actions AND yield chunks immediately"""
+        # Accumulate streaming data
+        accumulated_tool_calls = {}  # tool_call_id -> partial tool call data
+        last_chunk = None
+        has_tool_calls = False  # Track if we accumulated any tool calls
+        accumulated_content = ''  # Track assistant content
+
+        async for chunk in streaming_response:
+            start_time = time.time()
+            logger.info(f'Response from LLM: {chunk}')
+            end_time = time.time()
+            logger.info(f'Streaming response time: {end_time - start_time} seconds')
+
+            last_chunk = chunk
+            delta = chunk.choices[0].delta
+            # Handle tool call chunks - ACCUMULATE
+            if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                has_tool_calls = True
+                for tool_call_delta in delta.tool_calls:
+                    tool_call_id = getattr(tool_call_delta, 'id', None)
+
+                    # Initialize tool call if not exists
+                    if tool_call_id and tool_call_id not in accumulated_tool_calls:
+                        accumulated_tool_calls[tool_call_id] = {
+                            'id': tool_call_id,
+                            'type': getattr(tool_call_delta, 'type', 'function'),
+                            'function': {'name': '', 'arguments': ''},
+                        }
+
+                    # Update existing tool call or use index-based approach
+                    if tool_call_id:
+                        target_tool_call = accumulated_tool_calls[tool_call_id]
+                    else:
+                        # Fallback for index-based updates (some providers use index instead of id)
+                        tool_call_index = getattr(tool_call_delta, 'index', 0)
+                        if tool_call_index < len(accumulated_tool_calls):
+                            target_tool_call = list(accumulated_tool_calls.values())[
+                                tool_call_index
+                            ]
+                        else:
+                            # Create new tool call with temp id
+                            temp_id = f'temp_{tool_call_index}'
+                            accumulated_tool_calls[temp_id] = {
+                                'id': temp_id,
+                                'type': 'function',
+                                'function': {'name': '', 'arguments': ''},
+                            }
+                            target_tool_call = accumulated_tool_calls[temp_id]
+
+                    # Update function name and arguments incrementally
+                    if hasattr(tool_call_delta, 'function'):
+                        func_delta = tool_call_delta.function
+                        if hasattr(func_delta, 'name') and func_delta.name:
+                            target_tool_call['function']['name'] += func_delta.name
+                        if hasattr(func_delta, 'arguments') and func_delta.arguments:
+                            target_tool_call['function']['arguments'] += (
+                                func_delta.arguments
+                            )
+            else:
+                if delta.content:
+                    accumulated_content += delta.content
+
+                # Only set wait_for_response=True if we don't have tool calls to process
+                wait_for_response = not has_tool_calls
+                stream_action = StreamingMessageAction(
+                    content=delta.content, wait_for_response=wait_for_response
+                )
+                if self.event_stream is not None:
+                    self.event_stream.add_event(stream_action, EventSource.AGENT)
+
+        # AFTER streaming is complete, process accumulated data
+
+        # FIRST: Process tool calls (if any)
+        if accumulated_tool_calls:
+            # Construct a mock ModelResponse to use with existing response_to_actions logic
+            try:
+                from litellm import ModelResponse
+
+                # Convert accumulated tool calls to proper format
+                formatted_tool_calls = []
+                for tool_call_data in accumulated_tool_calls.values():
+                    formatted_tool_calls.append(
+                        {
+                            'id': tool_call_data['id'],
+                            'type': tool_call_data['type'],
+                            'function': {
+                                'name': tool_call_data['function']['name'],
+                                'arguments': tool_call_data['function']['arguments'],
+                            },
+                        }
+                    )
+
+                # Create mock response with both content and tool calls if available
+                mock_response = ModelResponse(
+                    id=last_chunk.id if last_chunk else 'mock-streaming-id',
+                    choices=[
+                        {
+                            'message': {
+                                'role': 'assistant',
+                                'content': accumulated_content
+                                if accumulated_content
+                                else None,
+                                'tool_calls': formatted_tool_calls,
+                            },
+                            'index': 0,
+                            'finish_reason': 'tool_calls',
+                        }
+                    ],
+                )
+
+                # Use existing response_to_actions logic
+                actions = codeact_function_calling.response_to_actions(
+                    mock_response,
+                    self.session_id,
+                    self.workspace_mount_path_in_sandbox_store_in_session,
+                )
+
+                for action in actions:
+                    self.pending_actions.append(action)
+
+            except Exception as e:
+                logger.error(f'Error processing accumulated tool calls: {e}')
+                # Fallback to simple message action - use regular MessageAction for pending_actions
+                fallback_action = MessageAction(
+                    content='Error processing tool calls from streaming response',
+                    wait_for_response=True,
+                )
+                self.pending_actions.append(fallback_action)
+
     def step(self, state: State) -> Action:
         """Performs one step using the CodeAct Agent.
 
@@ -227,7 +363,7 @@ class CodeActAgent(Agent):
         params: dict = {
             'messages': self.llm.format_messages_for_llm(messages),
         }
-        params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
+        # params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
         # if chat mode, we need to use the search tools
         params['tools'] = self._select_tools_based_on_mode(research_mode)
         logger.debug(f'Messages: {messages}')
@@ -275,19 +411,27 @@ class CodeActAgent(Agent):
             else:
                 response = self.routing_llms['simple'].completion(**params)
         else:
-            response = self.llm.completion(**params)
+            # Use streaming response
+            start_time = time.time()
+            response = self.streaming_llm.async_streaming_completion(
+                **params, stream=True
+            )
+            # Process streaming response and populate pending_actions
+            call_async_from_sync(self._handle_streaming_response, 15, response)
+            end_time = time.time()
+            logger.info(f'Streaming response time: {end_time - start_time} seconds')
 
-        logger.debug(f'Response from LLM: {response}')
+            # Return first pending action if available
+            if self.pending_actions:
+                logger.info(
+                    f'Returning first of {len(self.pending_actions)} pending actions from streaming'
+                )
+                return self.pending_actions.popleft()
+            # If no pending actions from streaming, return a default message action
+            return MessageAction(content='', wait_for_response=True)
 
-        actions = codeact_function_calling.response_to_actions(
-            response,
-            state.session_id,
-            self.workspace_mount_path_in_sandbox_store_in_session,
-        )
-        logger.debug(f'Actions after response_to_actions: {actions}')
-        for action in actions:
-            self.pending_actions.append(action)
-        return self.pending_actions.popleft()
+        # Fallback if no response or actions generated
+        return MessageAction(content='', wait_for_response=True)
 
     def _get_messages(
         self, events: list[Event], research_mode: str | None = None

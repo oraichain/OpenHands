@@ -232,6 +232,7 @@ class Session:
         )
         agent.set_mcp_tools(mcp_tools)
         agent.set_search_tools(search_tools)
+        agent.set_event_stream(self.agent_session.event_stream)
 
         # update some metadata of the agent
         if knowledge_base:

@@ -58,6 +58,7 @@ from openhands.events.action import (
     IPythonRunCellAction,
     MessageAction,
     NullAction,
+    StreamingMessageAction,
 )
 from openhands.events.action.agent import CondensationAction, RecallAction
 
@@ -125,6 +126,7 @@ class AgentController:
         NullObservation,
         ChangeAgentStateAction,
         AgentStateChangedObservation,
+        StreamingMessageAction,
     )
     _cached_first_user_message: MessageAction | None = None
     a2a_manager: A2AManager | None = None
@@ -745,7 +747,6 @@ class AgentController:
         elif action.source == EventSource.AGENT:
             # If the agent is waiting for a response, set the appropriate state
             if action.wait_for_response:
-                # I think this is finished user input
                 await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
 
     def _reset(self) -> None:
@@ -1016,7 +1017,7 @@ class AgentController:
                 if action is None:
                     raise LLMNoActionError('No action was returned')
                 action._source = EventSource.AGENT  # type: ignore [attr-defined]
-
+                logger.info(f'Action Step: {action}')
                 config = load_app_config()
                 if config.enable_evaluation and isinstance(action, AgentFinishAction):
                     print('AgentFinishAction', action)
@@ -1078,7 +1079,7 @@ class AgentController:
 
             except (
                 LLMMalformedActionError,
-                LLMNoActionError,
+                # LLMNoActionError,
                 LLMResponseError,
                 FunctionCallValidationError,
                 FunctionCallNotExistsError,

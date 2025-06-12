@@ -37,6 +37,8 @@ class Agent(ABC):
         a2a_manager: A2AManager | None = None,
         **kwargs,
     ):
+        from openhands.events.stream import EventStream
+
         self.llm = llm
         self.config = config
         self._complete = False
@@ -50,6 +52,7 @@ class Agent(ABC):
         self.system_prompt: str = ''
         self.user_prompt: str = ''
         self.knowledge_base: dict[str, dict] = {}
+        self.event_stream: 'EventStream' | None = None
 
     @property
     def complete(self) -> bool:
@@ -171,3 +174,6 @@ class Agent(ABC):
             for k in knowledge_base:
                 if k.get('chunkId', None):
                     self.knowledge_base[k['chunkId']] = k
+
+    def set_event_stream(self, event_stream) -> None:
+        self.event_stream = event_stream
