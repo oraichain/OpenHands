@@ -55,32 +55,53 @@ async def create_mcp_clients(
     sid: Optional[str] = None,
     mnemonic: Optional[str] = None,
 ) -> list[MCPClient]:
-    """Create MCP clients by connecting to all servers in parallel."""
-    if not dict_mcp_config:
-        return []
+    """Create MCP clients with concurrent connections for better performance."""
 
-    async def connect_client(name: str, config: MCPConfig) -> MCPClient | None:
-        # Skip search engine configs
+    async def connect_single_client(
+        name: str, mcp_config: MCPConfig
+    ) -> Optional[MCPClient]:
+        """Connect to a single MCP server and return the client or None on failure."""
+        logger.info(
+            f'Initializing MCP {name} agent for {mcp_config.url} with {mcp_config.mode} connection...'
+        )
+
+        # Skip if this is a search engine config
         if f'search_engine_{name}' in dict_mcp_config:
             return None
 
         client = MCPClient(name=name)
         try:
-            await client.connect_sse(config.url, sid, mnemonic)
-            logger.info(f'Connected to MCP server {name} at {config.url}')
+            await client.connect_sse(mcp_config.url, sid, mnemonic)
+            logger.info(f'Connected to MCP server {mcp_config.url} via SSE')
             return client
         except Exception as e:
-            logger.error(f'Failed to connect to {name} at {config.url}: {e}')
+            logger.error(f'Failed to connect to {mcp_config.url}: {str(e)}')
+            try:
+                await client.disconnect()
+            except Exception as disconnect_error:
+                logger.error(
+                    f'Error during disconnect after failed connection: {str(disconnect_error)}'
+                )
             return None
 
-    # Connect to all servers in parallel
-    tasks = [connect_client(name, config) for name, config in dict_mcp_config.items()]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Create connection tasks for all MCP configs concurrently
+    connection_tasks = [
+        connect_single_client(name, mcp_config)
+        for name, mcp_config in dict_mcp_config.items()
+    ]
 
-    # Filter successful connections
-    clients = [client for client in results if isinstance(client, MCPClient)]
-    logger.info(f'Successfully connected to {len(clients)}/{len(tasks)} MCP servers')
-    return clients
+    # Execute all connections concurrently
+    results = await asyncio.gather(*connection_tasks, return_exceptions=True)
+
+    # Collect successful clients, filtering out None values and exceptions
+    mcp_clients: list[MCPClient] = []
+    for result in results:
+        if isinstance(result, Exception):
+            logger.error(f'Unexpected error during MCP client connection: {result}')
+        elif result is not None and isinstance(result, MCPClient):
+            mcp_clients.append(result)
+
+    return mcp_clients
 
 
 async def fetch_mcp_tools_from_config(
@@ -111,11 +132,13 @@ async def fetch_mcp_tools_from_config(
         mcp_tools = convert_mcp_clients_to_tools(mcp_clients)
 
         # Always disconnect clients to clean up resources
-        for mcp_client in mcp_clients:
-            try:
-                await mcp_client.disconnect()
-            except Exception as disconnect_error:
-                logger.error(f'Error disconnecting MCP client: {str(disconnect_error)}')
+        disconnect_tasks = [mcp_client.disconnect() for mcp_client in mcp_clients]
+        results = await asyncio.gather(*disconnect_tasks, return_exceptions=True)
+
+        # Log any errors that occurred during disconnection
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f'Error disconnecting MCP client: {str(result)}')
     except Exception as e:
         logger.error(f'Error fetching MCP tools: {str(e)}')
         return []

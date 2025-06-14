@@ -9,7 +9,8 @@ from openhands.server.config.server_config import load_server_config
 from openhands.server.conversation_manager.conversation_manager import (
     ConversationManager,
 )
-from openhands.server.mcp_cache import get_mcp_tools_cache
+
+# from openhands.server.mcp_cache import get_mcp_tools_cache
 from openhands.server.monitoring import MonitoringListener
 from openhands.server.utils.imagen import Imagen
 from openhands.server.utils.s3_utils import S3Handler
@@ -26,7 +27,7 @@ file_store = get_file_store(config.file_store, config.file_store_path)
 imagen = Imagen()
 
 # Initialize MCP tools cache
-mcp_tools_cache = get_mcp_tools_cache()
+# mcp_tools_cache = get_mcp_tools_cache()
 
 client_manager = None
 # redis_host = os.environ.get('REDIS_HOST')

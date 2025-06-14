@@ -1,137 +1,113 @@
 import asyncio
-from functools import lru_cache
-from typing import Optional, Union
+from typing import Dict, List, Optional, Set
 
 from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.config.search_engine import SearchEngineConfig
 from openhands.core.logger import openhands_logger as logger
-from openhands.mcp.utils import (
-    fetch_mcp_tools_from_config,
-    fetch_search_tools_from_config,
-)
+from openhands.mcp.client import MCPClient
+from openhands.mcp.utils import fetch_search_tools_from_config
 
 
 class MCPToolsCache:
-    """Singleton class to cache MCP tools and search tools during server startup."""
-
-    _instance: Optional['MCPToolsCache'] = None
-    _initialized: bool = False
+    """Simple cache for MCP and Search tools"""
 
     def __init__(self):
-        self._mcp_tools: list[dict] = []
-        self._search_tools: list[dict] = []
-        self._initialization_lock = asyncio.Lock()
+        self.mcp_tools: dict[str, List[dict]] = {}
+        self.search_tools: List[dict] = []
+        self._is_loaded = False
 
-    @classmethod
-    def get_instance(cls) -> 'MCPToolsCache':
-        """Get the singleton instance of MCPToolsCache."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+    def _is_initialized(self) -> bool:
+        """Check if tools are initialized"""
+        return self._is_loaded
 
-    async def initialize(
+    async def fetch_mcp_tools(
         self,
-        dict_mcp_config: dict[str, MCPConfig],
-        dict_search_engine_config: dict[str, SearchEngineConfig],
+        dict_mcp_config: Dict[str, MCPConfig],
         sid: Optional[str] = None,
         mnemonic: Optional[str] = None,
-    ) -> None:
-        """Initialize MCP tools and search tools. This should be called once during server startup."""
-        async with self._initialization_lock:
-            if self._initialized:
-                logger.info('MCP tools cache already initialized, skipping')
-                return
-
-            logger.info('Initializing MCP tools cache...')
-
-            try:
-
-                async def get_mcp_tools() -> list[dict]:
-                    if dict_mcp_config:
-                        return await fetch_mcp_tools_from_config(
-                            dict_mcp_config, sid=sid, mnemonic=mnemonic
-                        )
-                    return []
-
-                async def get_search_tools() -> list[dict]:
-                    if dict_search_engine_config:
-                        return await fetch_search_tools_from_config(
-                            dict_search_engine_config, sid=sid, mnemonic=mnemonic
-                        )
-                    return []
-
-                # Fetch both MCP and search tools in parallel
-                results = await asyncio.gather(
-                    get_mcp_tools(),
-                    get_search_tools(),
-                    return_exceptions=True,
-                )
-
-                mcp_result: Union[list[dict], BaseException] = results[0]
-                search_result: Union[list[dict], BaseException] = results[1]
-
-                # Handle results
-                self._mcp_tools = (
-                    mcp_result if not isinstance(mcp_result, BaseException) else []
-                )
-                self._search_tools = (
-                    search_result
-                    if not isinstance(search_result, BaseException)
-                    else []
-                )
-
-                if isinstance(mcp_result, BaseException):
-                    logger.error(f'Error fetching MCP tools: {mcp_result}')
-                else:
-                    logger.info(f'Cached {len(self._mcp_tools)} MCP tools')
-
-                if isinstance(search_result, BaseException):
-                    logger.error(f'Error fetching search tools: {search_result}')
-                else:
-                    logger.info(f'Cached {len(self._search_tools)} search tools')
-
-                self._initialized = True
-                logger.info('MCP tools cache initialization completed successfully')
-
-            except Exception as e:
-                logger.error(f'Error initializing MCP tools cache: {e}')
-                raise
-
-    def get_mcp_tools(self) -> list[dict]:
-        """Get cached MCP tools."""
-        if not self._initialized:
-            logger.warning('MCP tools cache not initialized, returning empty list')
-            return []
-        return self._mcp_tools.copy()
-
-    def get_search_tools(self) -> list[dict]:
-        """Get cached search tools."""
-        if not self._initialized:
-            logger.warning('Search tools cache not initialized, returning empty list')
-            return []
-        return self._search_tools.copy()
-
-    def is_initialized(self) -> bool:
-        """Check if the cache has been initialized."""
-        return self._initialized
-
-    async def refresh(
-        self,
-        dict_mcp_config: dict[str, MCPConfig],
-        dict_search_engine_config: dict[str, SearchEngineConfig],
-        sid: Optional[str] = None,
-        mnemonic: Optional[str] = None,
-    ) -> None:
-        """Refresh the cached tools. Useful for updating tools without server restart."""
-        async with self._initialization_lock:
-            logger.info('Refreshing MCP tools cache...')
-            self._initialized = False
-            await self.initialize(
-                dict_mcp_config, dict_search_engine_config, sid, mnemonic
+    ):
+        async def connect_single_client(
+            name: str, mcp_config: MCPConfig
+        ) -> Optional[dict[str, List[dict]]]:
+            """Connect to a single MCP server and return the client or None on failure."""
+            logger.info(
+                f'Initializing MCP {name} agent for {mcp_config.url} with {mcp_config.mode} connection...'
             )
 
+            if f'search_engine_{name}' in dict_mcp_config:
+                return None
 
-@lru_cache(maxsize=1)
-def get_mcp_tools_cache() -> MCPToolsCache:
-    """Get the singleton MCPToolsCache instance."""
-    return MCPToolsCache.get_instance()
+            client = MCPClient(name=name)
+            tools = []
+            try:
+                await client.connect_sse(mcp_config.url, sid, mnemonic)
+                for tool in client.tools:
+                    mcp_tools = tool.to_param()
+                    tools.append(mcp_tools)
+                return {name: tools}
+            except Exception as e:
+                logger.error(f'Failed to connect to {mcp_config.url}: {str(e)}')
+                return {name: []}
+
+        connection_tasks = [
+            connect_single_client(name, mcp_config)
+            for name, mcp_config in dict_mcp_config.items()
+        ]
+
+        results = await asyncio.gather(*connection_tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f'Unexpected error during MCP client connection: {result}')
+            elif result is not None and isinstance(result, dict):
+                self.mcp_tools.update(result)
+
+    async def fetch_search_tools(
+        self,
+        dict_search_config: Dict[str, SearchEngineConfig],
+        sid: Optional[str] = None,
+        mnemonic: Optional[str] = None,
+    ):
+        self.search_tools = await fetch_search_tools_from_config(
+            dict_search_config, sid, mnemonic
+        )
+
+    async def initialize_tools(
+        self,
+        dict_mcp_config: Dict[str, MCPConfig],
+        dict_search_config: Dict[str, SearchEngineConfig],
+        sid: Optional[str] = None,
+        mnemonic: Optional[str] = None,
+    ):
+        """Initialize and load all tools"""
+        if self._is_loaded:
+            return
+
+        logger.info('Loading MCP and Search tools...')
+        await self.fetch_mcp_tools(dict_mcp_config, sid, mnemonic)
+        await self.fetch_search_tools(dict_search_config, sid, mnemonic)
+        self._is_loaded = True
+
+    @property
+    def is_loaded(self) -> bool:
+        """Check if tools are loaded"""
+        return self._is_loaded
+
+    def get_flat_mcp_tools(
+        self, disabled_mcp_names: Optional[Set[str]] = None
+    ) -> List[dict]:
+        """Get flat list of MCP tools"""
+        if not disabled_mcp_names:
+            return [tool for tools in self.mcp_tools.values() for tool in tools]
+        else:
+            res = []
+            for name, tools in self.mcp_tools.items():
+                if name not in disabled_mcp_names:
+                    res.extend(tools)
+            return res
+
+    def get_search_tools(self) -> List[dict]:
+        """Get search tools"""
+        return self.search_tools
+
+
+mcp_tools_cache = MCPToolsCache()

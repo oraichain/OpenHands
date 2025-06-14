@@ -23,11 +23,12 @@ from openhands.events.observation.error import ErrorObservation
 from openhands.events.serialization import event_from_dict, event_to_dict
 from openhands.events.stream import EventStreamSubscriber
 from openhands.llm.llm import LLM
-from openhands.mcp import fetch_mcp_tools_from_config
-from openhands.mcp.utils import fetch_search_tools_from_config
+from openhands.server.mcp_cache import mcp_tools_cache
 from openhands.server.session.agent_session import AgentSession
 from openhands.server.settings import Settings
 from openhands.storage.files import FileStore
+
+# from openhands.server.mcp_cache import mcp_tools_cache
 
 ROOM_KEY = 'room:{sid}'
 
@@ -107,7 +108,6 @@ class Session:
         research_mode: str | None = None,
     ):
         # Lazy import to avoid circular import
-        from openhands.server.shared import mcp_tools_cache
 
         start_time = time.time()
         self.agent_session.event_stream.add_event(
@@ -162,57 +162,39 @@ class Session:
 
             self.logger.info(f'Enabling default condenser: {default_condenser_config}')
             agent_config.condenser = default_condenser_config
-
-        # if mcp_disable:
-        #     for key in mcp_disable:
-        #         if key in self.config.dict_mcp_config and mcp_disable[key]:
-        #             del self.config.dict_mcp_config[key]
+        mcp_disable_set = (
+            set(key for key, disabled in mcp_disable.items() if disabled)
+            if mcp_disable
+            else None
+        )
 
         workspace_mount_path_in_sandbox_store_in_session = (
             self.config.workspace_mount_path_in_sandbox_store_in_session
         )
         if self.config.runtime == 'local':
             workspace_mount_path_in_sandbox_store_in_session = False
-
-        start_connect_time = time.time()
-
-        # Use cached MCP tools if available, otherwise fetch them
-        if research_mode == ResearchMode.FOLLOW_UP:
-            mcp_tools = []
-        elif mcp_tools_cache.is_initialized():
-            self.logger.info('Using cached MCP tools')
-            mcp_tools = mcp_tools_cache.get_mcp_tools()
-            # Filter tools based on mcp_disable if necessary
-            if mcp_disable:
-                # Since tools are already cached, we need to filter them based on disabled configs
-                disabled_configs = {k for k, v in mcp_disable.items() if v}
-                mcp_tools = [
-                    tool
-                    for tool in mcp_tools
-                    if not any(
-                        disabled in tool.get('name', '')
-                        for disabled in disabled_configs
-                    )
-                ]
-        else:
-            # fallback to fetch search tools
-            mcp_tools = await fetch_mcp_tools_from_config(
-                self.config.dict_mcp_config, sid=self.sid, mnemonic=mnemonic
-            )
-
-        self.logger.info(
-            f'process mcp time: {time.time() - start_connect_time} seconds'
+        self.logger.info(f'Initializing tools cache: {mcp_tools_cache.is_loaded}')
+        # Initialize tools cache if not loaded
+        if not mcp_tools_cache.is_loaded:
+            await mcp_tools_cache.initialize_tools(
+                self.config.dict_mcp_config,
+                self.config.dict_search_engine_config,
+                sid=self.sid,
+                mnemonic=mnemonic,
+            )  # Get tools, filter disabled MCPs and research mode
+        mcp_tools = (
+            []
+            if research_mode == ResearchMode.FOLLOW_UP
+            else mcp_tools_cache.get_flat_mcp_tools(mcp_disable_set)
         )
 
-        if research_mode == ResearchMode.FOLLOW_UP:
-            search_tools = []
-        elif mcp_tools_cache.is_initialized():
-            search_tools = mcp_tools_cache.get_search_tools()
-        else:
-            # fallback to fetch search tools
-            search_tools = await fetch_search_tools_from_config(
-                self.config.dict_search_engine_config, sid=self.sid, mnemonic=mnemonic
-            )
+        # Search tools already included in mcp_tools
+        search_tools = (
+            []
+            if research_mode == ResearchMode.FOLLOW_UP
+            else mcp_tools_cache.get_search_tools()
+        )
+        self.logger.info(f'MCP tools: {len(mcp_tools)} tools loaded')
 
         a2a_manager: A2AManager = A2AManager(agent_config.a2a_server_urls)
         try:
@@ -229,6 +211,7 @@ class Session:
             workspace_mount_path_in_sandbox_store_in_session,
             a2a_manager,
             routing_llms=routing_llms,
+            enable_streaming=self.config.conversation.enable_streaming,
         )
         agent.set_mcp_tools(mcp_tools)
         agent.set_search_tools(search_tools)

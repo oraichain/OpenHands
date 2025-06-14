@@ -12,7 +12,6 @@ class MessageAction(Action):
     action: str = ActionType.MESSAGE
     security_risk: ActionSecurityRisk | None = None
     mode: str | None = None
-    streaming: bool | None = False
 
     @property
     def message(self) -> str:

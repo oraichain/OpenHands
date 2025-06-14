@@ -25,6 +25,7 @@ from openhands.events.action.a2a_action import (
     A2ASendTaskAction,
 )
 from openhands.events.action.mcp import McpAction
+from openhands.events.action.message import StreamingMessageAction
 from openhands.events.event import Event, RecallType
 from openhands.events.observation import (
     AgentCondensationObservation,
@@ -327,6 +328,13 @@ class ConversationMemory:
                 Message(
                     role=role,  # type: ignore[arg-type]
                     content=content,
+                )
+            ]
+        elif isinstance(action, StreamingMessageAction):
+            return [
+                Message(
+                    role='assistant',
+                    content=[TextContent(text=action.content)],
                 )
             ]
         elif isinstance(action, CmdRunAction) and action.source == 'user':

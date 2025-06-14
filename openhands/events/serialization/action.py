@@ -126,7 +126,14 @@ def action_from_dict(action: dict) -> Action:
     args = handle_action_deprecated_args(args)
 
     try:
-        decoded_action = action_class(**args)
+        # Filter args to only include valid parameters for the action class
+        import inspect
+
+        sig = inspect.signature(action_class)
+        valid_params = set(sig.parameters.keys())
+        filtered_args = {k: v for k, v in args.items() if k in valid_params}
+
+        decoded_action = action_class(**filtered_args)
         if 'timeout' in action:
             blocking = args.get('blocking', False)
             decoded_action.set_hard_timeout(action['timeout'], blocking=blocking)
