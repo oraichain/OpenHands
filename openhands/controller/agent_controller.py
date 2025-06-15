@@ -58,6 +58,7 @@ from openhands.events.action import (
     IPythonRunCellAction,
     MessageAction,
     NullAction,
+    StreamingMessageAction,
 )
 from openhands.events.action.agent import CondensationAction, RecallAction
 
@@ -106,6 +107,8 @@ TRAFFIC_CONTROL_REMINDER = (
     "Please click on resume button if you'd like to continue, or start a new task."
 )
 
+NO_ACTION_WAS_RETURN = 'No action was returned'
+
 
 class AgentController:
     id: str
@@ -125,6 +128,7 @@ class AgentController:
         NullObservation,
         ChangeAgentStateAction,
         AgentStateChangedObservation,
+        StreamingMessageAction,
     )
     _cached_first_user_message: MessageAction | None = None
     a2a_manager: A2AManager | None = None
@@ -745,7 +749,6 @@ class AgentController:
         elif action.source == EventSource.AGENT:
             # If the agent is waiting for a response, set the appropriate state
             if action.wait_for_response:
-                # I think this is finished user input
                 await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
 
     def _reset(self) -> None:
@@ -1012,11 +1015,11 @@ class AgentController:
             action = self._replay_manager.step()
         else:
             try:
-                action = self.agent.step(self.state)
-                if action is None:
-                    raise LLMNoActionError('No action was returned')
+                step_result = self.agent.step(self.state)
+                if step_result is None:
+                    raise LLMNoActionError(NO_ACTION_WAS_RETURN)
+                action = step_result
                 action._source = EventSource.AGENT  # type: ignore [attr-defined]
-
                 config = load_app_config()
                 if config.enable_evaluation and isinstance(action, AgentFinishAction):
                     print('AgentFinishAction', action)
@@ -1078,7 +1081,6 @@ class AgentController:
 
             except (
                 LLMMalformedActionError,
-                LLMNoActionError,
                 LLMResponseError,
                 FunctionCallValidationError,
                 FunctionCallNotExistsError,
@@ -1090,6 +1092,10 @@ class AgentController:
                     EventSource.AGENT,
                 )
                 return
+            except LLMNoActionError:
+                await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
+                return
+
             except (ContextWindowExceededError, BadRequestError, OpenAIError) as e:
                 # FIXME: this is a hack until a litellm fix is confirmed
                 # Check if this is a nested context window error
