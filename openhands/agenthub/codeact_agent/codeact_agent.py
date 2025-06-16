@@ -519,7 +519,9 @@ class CodeActAgent(Agent):
             )
             # Process streaming response and populate pending_actions
         if self.enable_streaming:
-            call_async_from_sync(self._handle_streaming_response, 15, response)
+            call_async_from_sync(
+                self._handle_streaming_response, 15, response, params["tools"]
+            )
             if self.pending_actions:
                 logger.info(
                     f"Returning first of {len(self.pending_actions)} pending actions from streaming"
