@@ -560,11 +560,6 @@ def test_select_tools_based_on_mode_duplicate_tools(agent: CodeActAgent):
     # Should deduplicate tools
     tool_names = [tool['function']['name'] for tool in tools]
     assert tool_names.count('duplicate_tool_mcp_tool_call') == 1
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> release
 
 
 def test_select_tools_based_on_mode_deep_research(agent: CodeActAgent):
@@ -704,7 +699,6 @@ def test_select_tools_based_on_mode_a2a_tools(agent: CodeActAgent):
     tool_names = [tool['function']['name'] for tool in tools]
     assert 'a2a_list_remote_agents' in tool_names
     assert 'a2a_send_task' in tool_names
-<<<<<<< HEAD
 
 
 def test_mcp_tool_not_found():
@@ -720,8 +714,8 @@ def test_mcp_tool_not_found():
                         {
                             'id': 'tool_call_10',
                             'function': {
-                                'name': 'unavailable_tool_mcp_tool_call', 
-                                'arguments': '{"arg1": "value1"}'
+                                'name': 'unavailable_tool_mcp_tool_call',
+                                'arguments': '{"arg1": "value1"}',
                             },
                         }
                     ],
@@ -740,7 +734,7 @@ def test_mcp_tool_not_found():
     assert len(actions) == 1
     assert isinstance(actions[0], AgentThinkAction)
     assert 'MCP tool unavailable_tool is not available' in actions[0].thought
-    assert 'Please check the available tools and retry with an existing tool' in actions[0].thought
->>>>>>> Stashed changes
-=======
->>>>>>> release
+    assert (
+        'Please check the available tools and retry with an existing tool'
+        in actions[0].thought
+    )
