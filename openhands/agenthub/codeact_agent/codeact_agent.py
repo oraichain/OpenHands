@@ -174,19 +174,16 @@ class CodeActAgent(Agent):
             ]
             selected_tools.extend(unique_search_tools)
 
-<<<<<<< HEAD
         logger.debug(f"Selected tools: {selected_tools}")
-=======
-        logger.debug(f'Selected tools: {selected_tools}')
+
         # NOTE:only for anthropic model, we need to set the cache_control for the tool list
-        if 'claude' in self.llm.config.model and len(selected_tools) > 0:
+        if "claude" in self.llm.config.model and len(selected_tools) > 0:
             # Remove any existing cache_control first
             for tool in selected_tools:
-                if 'cache_control' in tool:
-                    del tool['cache_control']
+                if "cache_control" in tool:
+                    del tool["cache_control"]
             # Add cache_control to last element so it is persistent
-            selected_tools[-1]['cache_control'] = {'type': 'ephemeral'}
->>>>>>> release
+            selected_tools[-1]["cache_control"] = {"type": "ephemeral"}
         return selected_tools
 
     def step(self, state: State) -> Action:
@@ -245,52 +242,43 @@ class CodeActAgent(Agent):
         if len(convert_knowledge_to_list) > 0:
             formatted_messages.append(
                 {
-                    'role': 'assistant',
-                    'content': [
+                    "role": "assistant",
+                    "content": [
                         {
-                            'type': 'text',
-                            'text': "User's Knowledge base is in <knowledge_base></knowledge_base> tag\n",
+                            "type": "text",
+                            "text": "User's Knowledge base is in <knowledge_base></knowledge_base> tag\n",
                         },
                         {
-                            'type': 'text',
-                            'text': f'<knowledge_base>{json.dumps(convert_knowledge_to_list)}</knowledge_base>',
+                            "type": "text",
+                            "text": f"<knowledge_base>{json.dumps(convert_knowledge_to_list)}</knowledge_base>",
                         },
                         {
-                            'type': 'text',
-                            'text': "Use it for user info's reference if needed.",
+                            "type": "text",
+                            "text": "Use it for user info's reference if needed.",
                         },
                     ],
                 }
             )
-        current_date = datetime.now().strftime('%Y-%m-%d')
+        current_date = datetime.now().strftime("%Y-%m-%d")
         formatted_messages.append(
             {
-                'role': 'assistant',
-                'content': [
+                "role": "assistant",
+                "content": [
                     {
-                        'type': 'text',
-                        'text': f'Current date is {current_date}. Ignore anything that contradicts this.',
+                        "type": "text",
+                        "text": f"Current date is {current_date}. Ignore anything that contradicts this.",
                     },
                 ],
             }
         )
         params: dict = {
-<<<<<<< HEAD
-            "messages": self.llm.format_messages_for_llm(messages),
-=======
-            'messages': formatted_messages,
->>>>>>> release
+            "messages": formatted_messages,
         }
         params["extra_body"] = {"metadata": state.to_llm_metadata(agent_name=self.name)}
         # if chat mode, we need to use the search tools
-<<<<<<< HEAD
         params["tools"] = self._select_tools_based_on_mode(research_mode)
+        params["tools"] = check_tools(params["tools"], self.llm.config)
         logger.debug(f"Messages: {messages}")
-=======
-        params['tools'] = self._select_tools_based_on_mode(research_mode)
-        params['tools'] = check_tools(params['tools'], self.llm.config)
-        logger.debug(f'Messages: {messages}')
->>>>>>> release
         last_message = messages[-1]
         response = None
         if (
