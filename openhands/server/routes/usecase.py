@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field, ValidationError, validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from openhands.server.modules.conversation import conversation_module
 from openhands.server.static import SortBy
@@ -30,7 +30,7 @@ class GetUsecasesRequest(BaseModel):
     prioritized_usecase_ids: list[str] = []
     sort_by: SortBy = SortBy.total_view_7d
 
-    @validator('limit')
+    @field_validator('limit')
     def validate_limit(cls, v):
         if v > 100:
             return 100

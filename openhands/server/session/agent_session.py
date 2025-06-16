@@ -212,7 +212,7 @@ class AgentSession:
         finally:
             self._starting = False
             success = finished and runtime_connected
-            self.logger.info(
+            self.logger.debug(
                 f"Agent session start: {
                     json.dumps(
                         {

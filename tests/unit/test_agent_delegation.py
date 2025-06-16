@@ -225,6 +225,9 @@ async def test_delegation_flow(
         dummy_message._source = EventSource.USER
         await parent_controller._on_event(dummy_message)
 
+        # Give time for the async cleanup to complete
+        await asyncio.sleep(0.1)
+
         # Verify parent is cleaned up
         assert (
             parent_controller.delegate is None
