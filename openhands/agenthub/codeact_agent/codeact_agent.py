@@ -2,9 +2,9 @@ import json
 import os
 from collections import deque
 from copy import deepcopy
-from datetime import datetime
 from typing import Optional, override
-
+from datetime import datetime
+from openhands.llm.llm import check_tools
 from httpx import request
 
 import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
@@ -24,7 +24,7 @@ from openhands.events.action import (
 )
 from openhands.events.action.message import MessageAction
 from openhands.events.event import Event, EventSource
-from openhands.llm.llm import LLM, check_tools
+from openhands.llm.llm import LLM
 from openhands.llm.streaming_llm import StreamingLLM
 from openhands.memory.condenser import Condenser
 from openhands.memory.condenser.condenser import Condensation, View
@@ -212,7 +212,7 @@ class CodeActAgent(Agent):
             selected_tools[-1]["cache_control"] = {"type": "ephemeral"}
         return selected_tools
 
-    async def _handle_streaming_response(self, streaming_response):
+    async def _handle_streaming_response(self, streaming_response, tools: list[dict]):
         """Handle streaming response - both accumulate in pending_actions AND yield chunks immediately"""
         # Accumulate streaming data
         accumulated_tool_calls = {}  # tool_call_id -> partial tool call data
@@ -344,6 +344,7 @@ class CodeActAgent(Agent):
                         mock_response,
                         self.session_id,
                         self.workspace_mount_path_in_sandbox_store_in_session,
+                        tools=tools,
                     )
 
                     for action in actions:
@@ -529,7 +530,7 @@ class CodeActAgent(Agent):
                 response,
                 state.session_id,
                 self.workspace_mount_path_in_sandbox_store_in_session,
-                params["tools"],
+                tools=params["tools"],
             )
             logger.debug(f"Actions after response_to_actions: {actions}")
             for action in actions:
