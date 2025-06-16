@@ -5,12 +5,10 @@ from openhands.events.observation.observation import Observation
 
 
 @dataclass
-class MCPObservation(Observation):
-    """This data class represents the result of a MCP Server operation."""
+class CreditErrorObservation(Observation):
+    """This data class represents the result of a credit check."""
 
-    observation: str = ObservationType.MCP
-    tool_call_id: str | None = None
-    name: str | None = None
+    observation: str = ObservationType.CREDIT_ERROR
 
     @property
     def message(self) -> str:

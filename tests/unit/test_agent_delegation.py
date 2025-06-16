@@ -32,7 +32,7 @@ def mock_event_stream():
     """Creates an event stream in memory."""
     sid = f'test-{uuid4()}'
     file_store = InMemoryFileStore({})
-    return EventStream(sid=sid, file_store=file_store)
+    return EventStream(sid=sid, file_store=file_store, max_delay_time=0)
 
 
 @pytest.fixture
@@ -224,6 +224,9 @@ async def test_delegation_flow(
         dummy_message = MessageAction(content='Dummy event to check delegate status')
         dummy_message._source = EventSource.USER
         await parent_controller._on_event(dummy_message)
+
+        # Give time for the async cleanup to complete
+        await asyncio.sleep(0.1)
 
         # Verify parent is cleaned up
         assert (
