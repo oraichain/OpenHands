@@ -733,7 +733,9 @@ def test_mcp_tool_not_found():
     actions = response_to_actions(mock_response, tools=available_tools)
     assert len(actions) == 1
     assert isinstance(actions[0], AgentThinkAction)
-    assert 'MCP tool unavailable_tool is not available' in actions[0].thought
+    assert (
+        'MCP tool unavailable_tool_mcp_tool_call is not available' in actions[0].thought
+    )
     assert (
         'Please check the available tools and retry with an existing tool'
         in actions[0].thought
