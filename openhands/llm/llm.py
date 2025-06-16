@@ -78,6 +78,7 @@ FUNCTION_CALLING_SUPPORTED_MODELS = [
     'Qwen3-235B-A22B-fp8-tput',
     'grok-3-mini',
     'grok-3-mini-beta',
+    'skylark-prod-250415',
 ]
 
 REASONING_EFFORT_SUPPORTED_MODELS = [
@@ -229,7 +230,7 @@ class LLM(RetryMixin, DebugMixin):
 
             messages: list[dict[str, Any]] | dict[str, Any] = []
             mock_function_calling = not self.is_function_calling_active()
-            logger.info(f'Mock function calling: {mock_function_calling}')
+            logger.debug(f'Mock function calling: {mock_function_calling}')
             # Add session_id and user_id as span attributes if they exist
             try:
                 span = trace.get_current_span()
@@ -882,7 +883,7 @@ def transform_messages_for_gemini(messages):
                 message['content'] = message['content'][0]['text']
             else:
                 logger.warning(
-                    f'content format in message not matched for gemini: {message["content"]}'
+                    f"content format in message not matched for gemini: {message['content']}"
                 )
 
     return messages
