@@ -55,17 +55,12 @@ async def create_mcp_clients(
     sid: Optional[str] = None,
     mnemonic: Optional[str] = None,
 ) -> list[MCPClient]:
-<<<<<<< HEAD
     """Create MCP clients with concurrent connections for better performance."""
 
     async def connect_single_client(
         name: str, mcp_config: MCPConfig
     ) -> Optional[MCPClient]:
         """Connect to a single MCP server and return the client or None on failure."""
-=======
-    # Initialize SSE connections
-    async def connect_client(name: str, mcp_config: MCPConfig) -> Optional[MCPClient]:
->>>>>>> fix/return-think-action-instead-raise-error
         logger.info(
             f'Initializing MCP {name} agent for {mcp_config.url} with {mcp_config.mode} connection...'
         )
@@ -89,7 +84,6 @@ async def create_mcp_clients(
                 )
             return None
 
-<<<<<<< HEAD
     # Create connection tasks for all MCP configs concurrently
     connection_tasks = [
         connect_single_client(name, mcp_config)
@@ -106,23 +100,6 @@ async def create_mcp_clients(
             logger.error(f'Unexpected error during MCP client connection: {result}')
         elif result is not None and isinstance(result, MCPClient):
             mcp_clients.append(result)
-=======
-    # Create tasks for all clients
-    tasks = [
-        connect_client(name, mcp_config) for name, mcp_config in dict_mcp_config.items()
-    ]
-
-    # Run all connection attempts concurrently, ignoring exceptions
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    # Filter out exceptions and None results
-    mcp_clients: list[MCPClient] = [
-        r
-        for r in results
-        if not isinstance(r, Exception)
-        and not isinstance(r, BaseException)
-        and r is not None
-    ]
->>>>>>> fix/return-think-action-instead-raise-error
 
     return mcp_clients
 
