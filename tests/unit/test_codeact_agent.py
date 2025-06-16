@@ -22,13 +22,13 @@ from openhands.agenthub.codeact_agent.tools.browser import (
 from openhands.agenthub.codeact_agent.tools.finish import FinishTool
 from openhands.controller.state.state import State
 from openhands.core.config import AgentConfig, LLMConfig
-from openhands.core.exceptions import FunctionCallNotExistsError
 from openhands.core.message import ImageContent, Message, TextContent
 from openhands.core.schema.research import ResearchMode
 from openhands.events.action import (
     CmdRunAction,
     MessageAction,
 )
+from openhands.events.action.agent import AgentThinkAction
 from openhands.events.event import EventSource
 from openhands.events.observation.commands import (
     CmdOutputObservation,
@@ -235,8 +235,13 @@ def test_response_to_actions_invalid_tool():
         ],
     )
 
-    with pytest.raises(FunctionCallNotExistsError):
-        response_to_actions(mock_response)
+    action = response_to_actions(mock_response)
+    assert isinstance(action[0], AgentThinkAction)
+    print(action[0].thought)
+    assert (
+        action[0].thought
+        == 'Invalid tool\nTool invalid_tool is not registered. (arguments: {}). Please check the tool name and retry with an existing tool.'
+    )
 
 
 def test_step_with_no_pending_actions(mock_state: State):
@@ -703,3 +708,42 @@ def test_select_tools_based_on_mode_a2a_tools(agent: CodeActAgent):
     tool_names = [tool['function']['name'] for tool in tools]
     assert 'a2a_list_remote_agents' in tool_names
     assert 'a2a_send_task' in tool_names
+
+
+def test_mcp_tool_not_found():
+    """Test that MCP tool not found returns AgentThinkAction instead of raising error."""
+    # Test response with MCP tool call that's not in available tools
+    mock_response = ModelResponse(
+        id='mock-id',
+        choices=[
+            {
+                'message': {
+                    'content': 'Using MCP tool',
+                    'tool_calls': [
+                        {
+                            'id': 'tool_call_10',
+                            'function': {
+                                'name': 'unavailable_tool_mcp_tool_call',
+                                'arguments': '{"arg1": "value1"}',
+                            },
+                        }
+                    ],
+                }
+            }
+        ],
+    )
+
+    # Available tools list without the MCP tool
+    available_tools = [
+        {'function': {'name': 'execute_bash', 'description': 'Execute bash command'}},
+        {'function': {'name': 'think', 'description': 'Think'}},
+    ]
+
+    actions = response_to_actions(mock_response, tools=available_tools)
+    assert len(actions) == 1
+    assert isinstance(actions[0], AgentThinkAction)
+    assert 'MCP tool unavailable_tool is not available' in actions[0].thought
+    assert (
+        'Please check the available tools and retry with an existing tool'
+        in actions[0].thought
+    )
