@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING, Optional, Type
 
 if TYPE_CHECKING:
     from openhands.controller.state.state import State
@@ -37,6 +37,8 @@ class Agent(ABC):
         a2a_manager: A2AManager | None = None,
         **kwargs,
     ):
+        from openhands.events.stream import EventStream
+
         self.llm = llm
         self.config = config
         self._complete = False
@@ -50,6 +52,7 @@ class Agent(ABC):
         self.system_prompt: str = ''
         self.user_prompt: str = ''
         self.knowledge_base: dict[str, dict] = {}
+        self.event_stream: 'EventStream' | None = None
 
     @property
     def complete(self) -> bool:
@@ -61,7 +64,7 @@ class Agent(ABC):
         return self._complete
 
     @abstractmethod
-    def step(self, state: 'State') -> 'Action':
+    def step(self, state: 'State') -> Optional['Action']:
         """Starts the execution of the assigned instruction. This method should
         be implemented by subclasses to define the specific execution logic.
         """
@@ -171,3 +174,6 @@ class Agent(ABC):
             for k in knowledge_base:
                 if k.get('chunkId', None):
                     self.knowledge_base[k['chunkId']] = k
+
+    def set_event_stream(self, event_stream) -> None:
+        self.event_stream = event_stream
