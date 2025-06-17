@@ -237,15 +237,14 @@ def response_to_actions(
                 )
                 logger.info(f'Original action name: {original_action_name}')
 
-                # Check if this MCP tool (by original name) is in the available tools list
                 tool_found = any(
-                    tool.get('function', {}).get('name') == original_action_name
+                    tool.get('function', {}).get('name') == tool_call.function.name
                     for tool in tools or []
                 )
 
                 if not tool_found:
                     action = AgentThinkAction(
-                        thought=f'MCP tool {original_action_name} is not available. Please check the available tools and retry with an existing tool.'
+                        thought=f'MCP tool {tool_call.function.name} is not available. Please check the available tools and retry with an existing tool.'
                     )
                 else:
                     arguments = json.loads(tool_call.function.arguments)
