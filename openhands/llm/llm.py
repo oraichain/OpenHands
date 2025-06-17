@@ -771,12 +771,22 @@ class LLM(RetryMixin, DebugMixin):
             cost = float(cost)
             logger.debug(f'Got response_cost from response: {cost}')
 
+        # Update _hidden_params to fix cost calculation for litellm_proxy models
+        if hasattr(response, '_hidden_params'):
+            if response._hidden_params is None:
+                response._hidden_params = {}
+            response._hidden_params['custom_llm_provider'] = None
+        else:
+            response._hidden_params = {'custom_llm_provider': None}
+
         try:
+            #
             if cost is None:
                 try:
                     cost = litellm_completion_cost(
                         completion_response=response, **extra_kwargs
                     )
+                    logger.info(f'Got cost from litellm: {cost}')
                 except Exception as e:
                     logger.error(f'Error getting cost from litellm: {e}')
 
