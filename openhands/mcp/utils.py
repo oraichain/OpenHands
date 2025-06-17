@@ -60,7 +60,8 @@ async def create_mcp_clients(
         logger.info(
             f'Initializing MCP {name} agent for {mcp_config.url} with {mcp_config.mode} connection...'
         )
-        # check if the name in a search engine config
+
+        # Skip if this is a search engine config
         if f'search_engine_{name}' in dict_mcp_config:
             return None
 

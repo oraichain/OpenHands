@@ -175,6 +175,7 @@ class CodeActAgent(Agent):
             selected_tools.extend(unique_search_tools)
 
         logger.debug(f'Selected tools: {selected_tools}')
+
         # NOTE:only for anthropic model, we need to set the cache_control for the tool list
         if 'claude' in self.llm.config.model and len(selected_tools) > 0:
             # Remove any existing cache_control first
@@ -330,6 +331,7 @@ class CodeActAgent(Agent):
             response,
             state.session_id,
             self.workspace_mount_path_in_sandbox_store_in_session,
+            tools=params['tools'],
         )
         logger.debug(f'Actions after response_to_actions: {actions}')
         for action in actions:
