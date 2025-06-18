@@ -32,7 +32,7 @@ from openhands.server.routes.security import app as security_api_router
 from openhands.server.routes.settings import app as settings_router
 from openhands.server.routes.trajectory import app as trajectory_router
 from openhands.server.routes.usecase import app as usecase_api_router
-from openhands.server.shared import config, conversation_manager
+from openhands.server.shared import conversation_manager
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +46,9 @@ async def _lifespan(app: FastAPI):
         # Initialize database connection
         await init(engine)
         await init_initial_data()
-        await mcp_tools_cache.initialize_tools(
-            config.dict_mcp_config, config.dict_search_engine_config
-        )
+        # await mcp_tools_cache.initialize_tools(
+        #     config.dict_mcp_config, config.dict_search_engine_config
+        # )
 
         if not mcp_tools_cache.is_loaded:
             config = load_app_config()

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from openhands.core.schema import ActionType
 from openhands.events.action.action import Action, ActionSecurityRisk
@@ -53,6 +54,7 @@ class StreamingMessageAction(Action):
     action: str = ActionType.STREAMING_MESSAGE
     wait_for_response: bool = False
     streaming: bool = True
+    enable_process_llm: Optional[bool] = True
 
     @property
     def message(self) -> str:
