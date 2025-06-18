@@ -1,20 +1,20 @@
 import os
+
+import socketio
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
 if os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT'):
     # httpx instrumentation need start before any httpx client is created
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
     HTTPXClientInstrumentor().instrument()
 
-
-import socketio
-from fastapi.middleware.cors import CORSMiddleware
-
-from openhands.server.app import app as base_app
-from openhands.server.listen_socket import sio
-from openhands.server.middleware import (
+from openhands.server.app import app as base_app  # noqa
+from openhands.server.listen_socket import sio  # noqa
+from openhands.server.middleware import (  # noqa
     AttachConversationMiddleware,
     CacheControlMiddleware,
     CheckUserActivationMiddleware,
