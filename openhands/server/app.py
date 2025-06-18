@@ -47,9 +47,10 @@ async def _lifespan(app: FastAPI):
         # Initialize database connection
         await init(engine)
         await init_initial_data()
-        await mcp_tools_cache.initialize_tools(
-            config.dict_mcp_config, config.dict_search_engine_config
-        )
+        if not mcp_tools_cache.is_loaded:
+            await mcp_tools_cache.initialize_tools(
+                config.dict_mcp_config, config.dict_search_engine_config
+            )
 
         # Start conversation manager
         async with conversation_manager:

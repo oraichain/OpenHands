@@ -371,7 +371,7 @@ class Session:
             if controller is not None and not agent_session.is_closed():
                 await controller.set_agent_state_to(AgentState.ERROR)
             self.logger.info(
-                'Agent status error',
+                f'Agent status error: {message}',
                 extra={'signal': 'agent_status_error'},
             )
         await self.send(
