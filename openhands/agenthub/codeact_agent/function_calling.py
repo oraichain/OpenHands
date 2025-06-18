@@ -287,6 +287,7 @@ def response_to_actions(
                 function_name=tool_call.function.name,
                 model_response=response,
                 total_calls_in_response=len(assistant_msg.tool_calls),
+                enable_show_thought=enable_think,
             )
             actions.append(action)
     else:

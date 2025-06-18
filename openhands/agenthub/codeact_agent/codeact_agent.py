@@ -295,7 +295,9 @@ class CodeActAgent(Agent):
                     # Only set wait_for_response=True if we don't have tool calls to process
                     wait_for_response = not has_tool_calls
                     stream_action = StreamingMessageAction(
-                        content=delta.content, wait_for_response=wait_for_response
+                        content=delta.content,
+                        wait_for_response=wait_for_response,
+                        enable_process_llm=False,
                     )
                     if self.event_stream is not None:
                         self.event_stream.add_event(stream_action, EventSource.AGENT)
