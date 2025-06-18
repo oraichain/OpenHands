@@ -2,6 +2,8 @@ import logging
 import warnings
 from contextlib import asynccontextmanager
 
+from openhands.core.config.utils import load_app_config
+
 with warnings.catch_warnings():
     warnings.simplefilter('ignore')
 
@@ -47,6 +49,12 @@ async def _lifespan(app: FastAPI):
         await mcp_tools_cache.initialize_tools(
             config.dict_mcp_config, config.dict_search_engine_config
         )
+
+        if not mcp_tools_cache.is_loaded:
+            config = load_app_config()
+            await mcp_tools_cache.initialize_tools(
+                config.dict_mcp_config, config.dict_search_engine_config
+            )
 
         # Start conversation manager
         async with conversation_manager:

@@ -44,6 +44,8 @@ class MCPToolsCache:
                 for tool in client.tools:
                     mcp_tools = tool.to_param()
                     tools.append(mcp_tools)
+                # Always disconnect clients to clean up resources
+                await client.disconnect()
                 return {name: tools}
             except Exception as e:
                 logger.error(f'Failed to connect to {mcp_config.url}: {str(e)}')

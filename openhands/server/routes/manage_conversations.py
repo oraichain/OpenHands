@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -252,6 +253,7 @@ async def new_conversation(request: Request, data: InitSessionRequest):
             if threadData:
                 raw_followup_conversation_id = threadData['conversationId']
 
+        start_time = time.time()
         conversation_id = await _create_new_conversation(
             user_id,
             provider_tokens,
@@ -271,7 +273,12 @@ async def new_conversation(request: Request, data: InitSessionRequest):
             raw_followup_conversation_id=raw_followup_conversation_id,
         )
 
+        end_time = time.time()
+        logger.info(
+            f'Time taken to create new conversation: {end_time - start_time} seconds'
+        )
         if conversation_id and user_id is not None:
+            start_time = time.time()
             await create_thread(
                 space_id,
                 thread_follow_up,
@@ -282,6 +289,8 @@ async def new_conversation(request: Request, data: InitSessionRequest):
                 followup_discover_id,
                 data.research_mode,
             )
+            end_time = time.time()
+            logger.info(f'Time taken to create thread: {end_time - start_time} seconds')
             metadata: dict[str, Any] = {}
             metadata['hidden_prompt'] = True
             if space_id is not None:
@@ -292,6 +301,7 @@ async def new_conversation(request: Request, data: InitSessionRequest):
                 metadata['raw_followup_conversation_id'] = raw_followup_conversation_id
             if data.research_mode and data.research_mode == ResearchMode.FOLLOW_UP:
                 metadata['research_mode'] = ResearchMode.FOLLOW_UP
+            start_time = time.time()
             await conversation_module._update_conversation_visibility(
                 conversation_id,
                 False,
@@ -300,7 +310,10 @@ async def new_conversation(request: Request, data: InitSessionRequest):
                 '',
                 'available',
             )
-
+            end_time = time.time()
+            logger.info(
+                f'Time taken to update conversation visibility: {end_time - start_time} seconds'
+            )
         return JSONResponse(
             content={'status': 'ok', 'conversation_id': conversation_id}
         )
