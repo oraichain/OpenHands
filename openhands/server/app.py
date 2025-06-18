@@ -2,6 +2,8 @@ import logging
 import warnings
 from contextlib import asynccontextmanager
 
+from openhands.core.config.utils import load_app_config
+
 with warnings.catch_warnings():
     warnings.simplefilter('ignore')
 
@@ -14,6 +16,7 @@ from openhands import __version__
 from openhands.server.backend_pre_start import init
 from openhands.server.db import database, engine
 from openhands.server.initial_data import init as init_initial_data
+from openhands.server.mcp_cache import mcp_tools_cache
 from openhands.server.routes.auth import app as auth_router
 from openhands.server.routes.conversation import app as conversation_api_router
 from openhands.server.routes.feedback import app as feedback_api_router
@@ -43,6 +46,12 @@ async def _lifespan(app: FastAPI):
         # Initialize database connection
         await init(engine)
         await init_initial_data()
+
+        if not mcp_tools_cache.is_loaded:
+            config = load_app_config()
+            await mcp_tools_cache.initialize_tools(
+                config.dict_mcp_config, config.dict_search_engine_config
+            )
 
         # Start conversation manager
         async with conversation_manager:

@@ -223,7 +223,7 @@ class CodeActAgent(Agent):
 
         async for chunk in streaming_response:
             last_chunk = chunk
-            logger.info(f'Streaming chunk: {chunk}')
+            logger.debug(f'Streaming chunk: {chunk}')
             delta = chunk.choices[0].delta
             # Handle tool call chunks - ACCUMULATE
             if hasattr(delta, 'tool_calls') and delta.tool_calls:
