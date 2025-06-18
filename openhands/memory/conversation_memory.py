@@ -329,7 +329,7 @@ class ConversationMemory:
                     content=content,
                 )
             ]
-        elif isinstance(action, StreamingMessageAction):
+        elif isinstance(action, StreamingMessageAction) and action.enable_process_llm:
             return [
                 Message(
                     role='assistant',

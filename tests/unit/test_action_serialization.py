@@ -77,6 +77,7 @@ def test_agent_finish_action_serialization_deserialization():
             'thought': '',
             'task_completed': None,
             'final_thought': '',
+            'enable_think': True,
         },
     }
     serialization_deserialization(original_action_dict, AgentFinishAction)

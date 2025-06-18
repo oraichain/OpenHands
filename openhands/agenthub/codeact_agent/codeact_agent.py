@@ -3,7 +3,7 @@ import os
 from collections import deque
 from copy import deepcopy
 from datetime import datetime
-from typing import Optional, override
+from typing import Any, Optional, override
 
 from httpx import request
 
@@ -221,6 +221,9 @@ class CodeActAgent(Agent):
         has_tool_calls = False  # Track if we accumulated any tool calls
         accumulated_content = ''  # Track assistant content
 
+        # For streaming "finish" or "think" function message content
+        streaming_function_calls: dict[str, Any] = {}  # tool_call_id -> streaming state
+
         async for chunk in streaming_response:
             last_chunk = chunk
             logger.debug(f'Streaming chunk: {chunk}')
@@ -253,6 +256,8 @@ class CodeActAgent(Agent):
                         if tool_call_index in index_to_id_map:
                             # We've seen this index before, use the existing tool call
                             target_id = index_to_id_map[tool_call_index]
+                            if target_id not in accumulated_tool_calls:
+                                continue
                             target_tool_call = accumulated_tool_calls[target_id]
                         else:
                             # New index without ID - create new tool call
@@ -274,6 +279,15 @@ class CodeActAgent(Agent):
                             target_tool_call['function']['arguments'] += (
                                 func_delta.arguments
                             )
+
+                            # Check if this is a "finish" or "think" function and stream the message content
+                            function_name = target_tool_call['function']['name']
+                            if function_name in ['finish']:
+                                self._stream_function_message(
+                                    target_id,
+                                    func_delta.arguments,
+                                    streaming_function_calls,
+                                )
             else:
                 if delta.content:
                     accumulated_content += delta.content
@@ -299,7 +313,7 @@ class CodeActAgent(Agent):
                     # A tool call needs both name and arguments to be valid
                     has_name = tool_call_data['function']['name'].strip()
                     has_args = tool_call_data['function']['arguments'].strip()
-
+                    logger.debug(f'Tool call data: {has_name} {has_args}')
                     if has_name and has_args:
                         formatted_tool_calls.append(
                             {
@@ -330,7 +344,9 @@ class CodeActAgent(Agent):
                             {
                                 'message': {
                                     'role': 'assistant',
-                                    'content': None,
+                                    'content': accumulated_content
+                                    if accumulated_content
+                                    else None,
                                     'tool_calls': formatted_tool_calls,
                                 },
                                 'index': 0,
@@ -345,6 +361,7 @@ class CodeActAgent(Agent):
                         self.session_id,
                         self.workspace_mount_path_in_sandbox_store_in_session,
                         tools=tools,
+                        enable_think=False,
                     )
 
                     for action in actions:
@@ -359,6 +376,102 @@ class CodeActAgent(Agent):
                     or 'Error processing tool calls from streaming response',
                 )
                 self.pending_actions.append(fallback_action)
+
+    def _stream_function_message(
+        self, tool_call_id: str, arguments_chunk: str, streaming_function_calls: dict
+    ):
+        """Stream message content from finish/think function calls as they arrive"""
+        # Initialize tracking for this tool call if not exists
+        if tool_call_id not in streaming_function_calls:
+            streaming_function_calls[tool_call_id] = {
+                'buffer': '',
+                'msg_start': -1,
+                'streamed': 0,
+            }
+
+        state = streaming_function_calls[tool_call_id]
+        state['buffer'] += arguments_chunk
+
+        # Find message start if not found yet
+        if state['msg_start'] == -1:
+            # Look for "message" pattern with flexible whitespace
+            for pattern in ['"message":', '"message" :', '"message": ', '"message" : ']:
+                if pattern in state['buffer']:
+                    start = state['buffer'].find(pattern) + len(pattern)
+                    # Skip whitespace and find opening quote
+                    while (
+                        start < len(state['buffer'])
+                        and state['buffer'][start].isspace()
+                    ):
+                        start += 1
+                    if start < len(state['buffer']) and state['buffer'][start] == '"':
+                        state['msg_start'] = start + 1
+                        break
+
+        # Stream message content if we found the start
+        if state['msg_start'] != -1:
+            content = state['buffer'][state['msg_start'] :]
+            end_quote = self._find_unescaped_quote(content)
+
+            if end_quote != -1:
+                content = content[:end_quote]
+
+            # Stream new content
+            if len(content) > state['streamed']:
+                new_content = content[state['streamed'] :]
+                safe_content = self._get_safe_content(new_content)
+                if safe_content:
+                    self._emit_streaming_content(safe_content)
+                    state['streamed'] += len(safe_content)
+
+    def _get_safe_content(self, content: str) -> str:
+        """Extract content safe to stream (avoid partial escapes)"""
+        if not content:
+            return ''
+
+        # Don't stream if ends with backslash or incomplete unicode
+        if content.endswith('\\'):
+            return content[:-1] if len(content) > 1 else ''
+
+        import re
+
+        if re.search(r'\\u[0-9a-fA-F]{0,3}$', content):
+            match = re.search(r'(.*?)\\u[0-9a-fA-F]{0,3}$', content)
+            return match.group(1) if match else ''
+
+        return content
+
+    def _find_unescaped_quote(self, text: str) -> int:
+        """Find first unescaped quote position"""
+        for i, char in enumerate(text):
+            if char == '"':
+                # Count preceding backslashes
+                backslashes = 0
+                j = i - 1
+                while j >= 0 and text[j] == '\\':
+                    backslashes += 1
+                    j -= 1
+                # Even number of backslashes means quote is not escaped
+                if backslashes % 2 == 0:
+                    return i
+        return -1
+
+    def _emit_streaming_content(self, content: str):
+        """Emit streaming content through event stream"""
+        if content and self.event_stream:
+            try:
+                import json
+
+                decoded = json.loads(f'"{content}"')
+                action = StreamingMessageAction(
+                    content=decoded, wait_for_response=False, enable_process_llm=False
+                )
+                self.event_stream.add_event(action, EventSource.AGENT)
+            except json.JSONDecodeError:
+                action = StreamingMessageAction(
+                    content=content, wait_for_response=False, enable_process_llm=False
+                )
+                self.event_stream.add_event(action, EventSource.AGENT)
 
     def step(self, state: State) -> Optional[Action]:
         """Performs one step using the CodeAct Agent.

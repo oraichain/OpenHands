@@ -749,3 +749,246 @@ def test_mcp_tool_not_found():
         'Please check the available tools and retry with an existing tool'
         in actions[0].thought
     )
+
+
+def test_stream_function_message_simple_case(agent: CodeActAgent):
+    """Test streaming a simple finish/think function message."""
+    # Mock event stream
+    agent.event_stream = Mock()
+
+    streaming_calls = {}
+
+    # Test complete message in one chunk
+    chunk = '{"message": "Hello world"}'
+    agent._stream_function_message('tool_1', chunk, streaming_calls)
+
+    # Should find message start and emit content
+    assert streaming_calls['tool_1']['msg_start'] != -1
+    assert agent.event_stream.add_event.called
+
+    # Check the emitted content
+    call_args = agent.event_stream.add_event.call_args[0]
+    action = call_args[0]
+    assert action.content == 'Hello world'
+
+
+def test_stream_function_message_chunked_pattern(agent: CodeActAgent):
+    """Test streaming when the "message": pattern is split across chunks."""
+    agent.event_stream = Mock()
+    streaming_calls = {}
+
+    # Chunk 1: partial pattern
+    agent._stream_function_message('tool_1', '{"mess', streaming_calls)
+    assert streaming_calls['tool_1']['msg_start'] == -1  # Not found yet
+    assert not agent.event_stream.add_event.called
+
+    # Chunk 2: complete pattern + content start
+    agent._stream_function_message('tool_1', 'age": "Hello', streaming_calls)
+    assert streaming_calls['tool_1']['msg_start'] != -1  # Found now
+    assert agent.event_stream.add_event.called
+
+    # Reset mock for next test
+    agent.event_stream.add_event.reset_mock()
+
+    # Chunk 3: more content
+    agent._stream_function_message('tool_1', ' world"', streaming_calls)
+    assert agent.event_stream.add_event.called
+
+
+def test_stream_function_message_whitespace_variations(agent: CodeActAgent):
+    """Test handling different whitespace variations in message pattern."""
+    agent.event_stream = Mock()
+    test_cases = [
+        '"message":"Hello"',
+        '"message" :"Hello"',
+        '"message": "Hello"',
+        '"message" : "Hello"',
+    ]
+
+    for i, chunk in enumerate(test_cases):
+        streaming_calls = {}
+        tool_id = f'tool_{i}'
+
+        agent._stream_function_message(tool_id, chunk, streaming_calls)
+
+        assert streaming_calls[tool_id]['msg_start'] != -1
+        assert agent.event_stream.add_event.called
+
+        # Check content was extracted correctly
+        call_args = agent.event_stream.add_event.call_args[0]
+        action = call_args[0]
+        assert action.content == 'Hello'
+
+        agent.event_stream.add_event.reset_mock()
+
+
+def test_stream_function_message_json_escapes(agent: CodeActAgent):
+    """Test handling of JSON escape sequences."""
+    agent.event_stream = Mock()
+    streaming_calls = {}
+
+    # Test with escaped quotes and newlines
+    chunk = '{"message": "He said \\"Hello\\nWorld\\""}'
+    agent._stream_function_message('tool_1', chunk, streaming_calls)
+
+    assert agent.event_stream.add_event.called
+    call_args = agent.event_stream.add_event.call_args[0]
+    action = call_args[0]
+    # Should decode JSON escapes
+    assert action.content == 'He said "Hello\nWorld"'
+
+
+def test_stream_function_message_partial_escapes(agent: CodeActAgent):
+    """Test that partial escape sequences are not streamed."""
+    agent.event_stream = Mock()
+    streaming_calls = {}
+
+    # First chunk ends with backslash (partial escape)
+    agent._stream_function_message('tool_1', '{"message": "Hello\\', streaming_calls)
+
+    # Should not stream content ending with backslash
+    if agent.event_stream.add_event.called:
+        call_args = agent.event_stream.add_event.call_args[0]
+        action = call_args[0]
+        assert not action.content.endswith('\\')
+
+
+def test_stream_function_message_unicode_escapes(agent: CodeActAgent):
+    """Test handling of partial unicode escape sequences."""
+    agent.event_stream = Mock()
+    streaming_calls = {}
+
+    # Test incomplete unicode escape
+    agent._stream_function_message(
+        'tool_1', '{"message": "Hello \\u12', streaming_calls
+    )
+
+    # Should not stream incomplete unicode
+    if agent.event_stream.add_event.called:
+        call_args = agent.event_stream.add_event.call_args[0]
+        action = call_args[0]
+        assert not action.content.endswith('\\u12')
+
+
+def test_stream_function_message_multiple_chunks(agent: CodeActAgent):
+    """Test streaming content across multiple chunks."""
+    agent.event_stream = Mock()
+    streaming_calls = {}
+
+    chunks = [
+        '{"message": "This is',
+        ' a long message',
+        ' that spans',
+        ' multiple chunks"}',
+    ]
+
+    for chunk in chunks:
+        agent._stream_function_message('tool_1', chunk, streaming_calls)
+
+    # Should have been called multiple times
+    assert agent.event_stream.add_event.call_count >= 1
+
+    # Check that content is streamed incrementally
+    state = streaming_calls['tool_1']
+    assert (
+        'This is a long message that spans multiple chunks'
+        in state['buffer'][state['msg_start'] :]
+    )
+
+
+def test_get_safe_content(agent: CodeActAgent):
+    """Test the _get_safe_content helper method."""
+    # Test normal content
+    assert agent._get_safe_content('Hello world') == 'Hello world'
+
+    # Test empty content
+    assert agent._get_safe_content('') == ''
+
+    # Test content ending with backslash
+    assert agent._get_safe_content('Hello\\') == 'Hello'
+    assert agent._get_safe_content('\\') == ''
+
+    # Test incomplete unicode
+    assert agent._get_safe_content('Hello \\u12') == 'Hello '
+    assert agent._get_safe_content('Hello \\u') == 'Hello '
+    assert agent._get_safe_content('Hello \\u1') == 'Hello '
+    assert agent._get_safe_content('Hello \\u123') == 'Hello '
+
+    # Test complete unicode (should pass through)
+    assert agent._get_safe_content('Hello \\u1234') == 'Hello \\u1234'
+
+
+def test_find_unescaped_quote(agent: CodeActAgent):
+    """Test the _find_unescaped_quote helper method."""
+    # Test simple quote
+    assert agent._find_unescaped_quote('Hello"world') == 5
+
+    # Test escaped quote
+    assert agent._find_unescaped_quote('Hello\\"world"') == 12
+
+    # Test multiple escaped quotes
+    assert agent._find_unescaped_quote('He said \\"Hello\\" to me"') == 23
+
+    # Test no quote
+    assert agent._find_unescaped_quote('Hello world') == -1
+
+    # Test double backslash (not escaping quote)
+    assert agent._find_unescaped_quote('Hello\\\\"world') == 7
+
+
+def test_emit_streaming_content(agent: CodeActAgent):
+    """Test the _emit_streaming_content method."""
+    agent.event_stream = Mock()
+
+    # Test valid content
+    agent._emit_streaming_content('Hello world')
+    assert agent.event_stream.add_event.called
+
+    call_args = agent.event_stream.add_event.call_args[0]
+    action = call_args[0]
+    assert action.content == 'Hello world'
+    assert action.wait_for_response is False
+
+    # Test with JSON escapes
+    agent.event_stream.add_event.reset_mock()
+    agent._emit_streaming_content('Hello\\nworld')
+
+    call_args = agent.event_stream.add_event.call_args[0]
+    action = call_args[0]
+    assert action.content == 'Hello\nworld'  # Should be decoded
+
+
+def test_stream_function_message_no_event_stream(agent: CodeActAgent):
+    """Test streaming when event_stream is None."""
+    agent.event_stream = None
+    streaming_calls = {}
+
+    # Should not raise error
+    agent._stream_function_message('tool_1', '{"message": "Hello"}', streaming_calls)
+
+    # State should still be tracked
+    assert 'tool_1' in streaming_calls
+    assert streaming_calls['tool_1']['msg_start'] != -1
+
+
+def test_stream_function_message_concurrent_calls(agent: CodeActAgent):
+    """Test handling multiple concurrent function calls."""
+    agent.event_stream = Mock()
+    streaming_calls = {}
+
+    # Simulate two concurrent tool calls
+    agent._stream_function_message(
+        'tool_1', '{"message": "Message 1"}', streaming_calls
+    )
+    agent._stream_function_message(
+        'tool_2', '{"message": "Message 2"}', streaming_calls
+    )
+
+    # Both should be tracked separately
+    assert 'tool_1' in streaming_calls
+    assert 'tool_2' in streaming_calls
+    assert streaming_calls['tool_1']['msg_start'] != -1
+    assert streaming_calls['tool_2']['msg_start'] != -1
+
+    # Both should emit content
+    assert agent.event_stream.add_event.call_count == 2

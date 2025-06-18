@@ -63,6 +63,7 @@ def response_to_actions(
     sid: str | None = None,
     workspace_mount_path_in_sandbox_store_in_session: bool = True,
     tools: list[dict] | None = None,
+    enable_think: bool = True,
 ) -> list[Action]:
     actions: list[Action] = []
     assert len(response.choices) == 1, 'Only one choice is supported for now'
@@ -118,13 +119,14 @@ def response_to_actions(
                 )
 
             # ================================================
-            # AgentFinishAction
+            # AgentFinishActionc
             # ================================================
             elif tool_call.function.name == FinishTool['function']['name']:
                 logger.debug(f'FinishTool: {arguments}')
                 action = AgentFinishAction(
                     final_thought=arguments.get('message', ''),
                     task_completed=arguments.get('task_completed', None),
+                    enable_think=enable_think,
                 )
 
             # ================================================
