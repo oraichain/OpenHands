@@ -253,7 +253,6 @@ async def new_conversation(request: Request, data: InitSessionRequest):
             if threadData:
                 raw_followup_conversation_id = threadData['conversationId']
 
-        start_time = time.time()
         conversation_id, conversation_title = await _create_new_conversation(
             user_id,
             provider_tokens,
