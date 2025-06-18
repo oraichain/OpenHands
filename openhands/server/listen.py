@@ -1,4 +1,13 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+if os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT'):
+    # httpx instrumentation need start before any httpx client is created
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+    HTTPXClientInstrumentor().instrument()
+
 
 import socketio
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,16 +61,14 @@ app = socketio.ASGIApp(sio, other_asgi_app=base_app)
 if os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT'):
     from opentelemetry.instrumentation.asyncio import AsyncioInstrumentor
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
     from opentelemetry.instrumentation.threading import ThreadingInstrumentor
     from traceloop.sdk import Traceloop
 
     FastAPIInstrumentor.instrument_app(base_app)
     AsyncioInstrumentor().instrument()
-    HTTPXClientInstrumentor().instrument()
     ThreadingInstrumentor().instrument()
 
-if os.getenv('TRACELOOP_BASE_URL'):
-    Traceloop.init(
-        disable_batch=False, app_name=os.getenv('OTEL_SERVICE_NAME', 'openhands')
-    )
+    if os.getenv('TRACELOOP_BASE_URL'):
+        Traceloop.init(
+            disable_batch=False, app_name=os.getenv('OTEL_SERVICE_NAME', 'openhands')
+        )
