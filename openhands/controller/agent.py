@@ -53,6 +53,7 @@ class Agent(ABC):
         self.user_prompt: str = ''
         self.knowledge_base: dict[str, dict] = {}
         self.event_stream: 'EventStream' | None = None
+        self.session_id: str | None = kwargs.get('session_id', None)
 
     @property
     def complete(self) -> bool:

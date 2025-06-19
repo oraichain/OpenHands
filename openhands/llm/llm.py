@@ -764,6 +764,7 @@ class LLM(RetryMixin, DebugMixin):
 
         # try directly get response_cost from response
         _hidden_params = getattr(response, '_hidden_params', {})
+
         cost = _hidden_params.get('additional_headers', {}).get(
             'llm_provider-x-litellm-response-cost', None
         )
@@ -773,11 +774,18 @@ class LLM(RetryMixin, DebugMixin):
 
         # Update _hidden_params to fix cost calculation for litellm_proxy models
         if hasattr(response, '_hidden_params'):
+            custom_llm_provider = None
+            if 'claude' in self.config.model:
+                custom_llm_provider = 'anthropic'
+            elif 'gemini' in self.config.model:
+                custom_llm_provider = 'google'
+            elif 'gpt' in self.config.model:
+                custom_llm_provider = 'openai'
             if response._hidden_params is None:
                 response._hidden_params = {}
-            response._hidden_params['custom_llm_provider'] = 'anthropic'
+            response._hidden_params['custom_llm_provider'] = custom_llm_provider
         else:
-            response._hidden_params = {'custom_llm_provider': 'anthropic'}
+            response._hidden_params = {'custom_llm_provider': None}
 
         try:
             #
