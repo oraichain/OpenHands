@@ -794,7 +794,7 @@ class LLM(RetryMixin, DebugMixin):
                     cost = litellm_completion_cost(
                         completion_response=response, **extra_kwargs
                     )
-                    logger.info(f'Got cost from litellm: {cost}')
+                    logger.debug(f'Got cost from litellm: {cost}')
                 except Exception as e:
                     logger.error(f'Error getting cost from litellm: {e}')
 

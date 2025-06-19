@@ -5,7 +5,6 @@ from typing import Any, Callable
 
 with warnings.catch_warnings():
     warnings.simplefilter('ignore')
-    import litellm
 from litellm import stream_chunk_builder
 from opentelemetry import trace
 from traceloop.sdk.decorators import workflow
@@ -13,14 +12,9 @@ from traceloop.sdk.decorators import workflow
 from openhands.core.exceptions import UserCancelledError
 from openhands.core.logger import openhands_logger as logger
 from openhands.llm.async_llm import LLM_RETRY_EXCEPTIONS, AsyncLLM
-from openhands.llm.fn_call_converter import (
-    convert_fncall_messages_to_non_fncall_messages,
-)
 from openhands.llm.llm import (
-    FORMATTED_MODELS,
     MODELS_USING_MAX_COMPLETION_TOKENS,
     REASONING_EFFORT_SUPPORTED_MODELS,
-    transform_messages_for_llama,
 )
 
 
@@ -49,6 +43,7 @@ class StreamingLLM(AsyncLLM):
             temperature=self.config.temperature,
             top_p=self.config.top_p,
             drop_params=self.config.drop_params,
+            seed=self.config.seed,
             stream=True,  # Ensure streaming is enabled
         )
 
@@ -64,8 +59,6 @@ class StreamingLLM(AsyncLLM):
         )
         async def async_streaming_completion_wrapper(*args: Any, **kwargs: Any) -> Any:
             messages: list[dict[str, Any]] | dict[str, Any] = []
-            mock_function_calling = not self.is_function_calling_active()
-
             try:
                 span = trace.get_current_span()
                 if self.session_id:
@@ -89,23 +82,6 @@ class StreamingLLM(AsyncLLM):
 
             # ensure we work with a list of messages
             messages = messages if isinstance(messages, list) else [messages]
-            # if the agent or caller has defined tools, and we mock via prompting, convert the messages
-            if mock_function_calling and 'tools' in kwargs:
-                messages = convert_fncall_messages_to_non_fncall_messages(
-                    messages,
-                    kwargs['tools'],
-                    add_in_context_learning_example=bool(
-                        'openhands-lm' not in self.config.model
-                    ),
-                    research_mode=kwargs.get('research_mode', None),
-                )
-                # logger.debug(f'Messages before transform: {messages}')
-                if self.config.model.split('/')[-1] in FORMATTED_MODELS:
-                    logger.debug('Transforming messages for llama')
-                    messages = transform_messages_for_llama(messages)
-
-                # logger.debug(f'Messages: {messages}')
-                kwargs['messages'] = messages
 
             # if we have no messages, something went very wrong
             if not messages:
@@ -118,7 +94,6 @@ class StreamingLLM(AsyncLLM):
                 kwargs['reasoning_effort'] = self.config.reasoning_effort
 
             self.log_prompt(messages)
-            litellm.modify_params = self.config.modify_params
 
             # if we're not using litellm proxy, remove the extra_body
             if 'litellm_proxy' not in self.config.model:
