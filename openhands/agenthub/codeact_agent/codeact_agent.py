@@ -297,7 +297,7 @@ class CodeActAgent(Agent):
                     stream_action = StreamingMessageAction(
                         content=delta.content,
                         wait_for_response=wait_for_response,
-                        enable_process_llm=False,
+                        enable_process_llm=True,
                     )
                     if self.event_stream is not None:
                         self.event_stream.add_event(stream_action, EventSource.AGENT)
