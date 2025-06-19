@@ -75,6 +75,7 @@ class CodeActAgent(Agent):
         a2a_manager: A2AManager | None = None,
         routing_llms: dict[str, LLM] | None = None,
         enable_streaming: bool = False,
+        session_id: str | None = None,
     ) -> None:
         """Initializes a new instance of the CodeActAgent class.
 
@@ -107,6 +108,7 @@ class CodeActAgent(Agent):
             prompt_dir=os.path.join(os.path.dirname(__file__), 'prompts'),
         )
         self.enable_streaming = enable_streaming
+        self.session_id = session_id
 
         # Create a ConversationMemory instance
         self.conversation_memory = ConversationMemory(self.config, self.prompt_manager)
@@ -116,7 +118,6 @@ class CodeActAgent(Agent):
         logger.info(f'Using condenser: {type(self.condenser)}')
         self.routing_llms = routing_llms
         self.search_tools: list[dict] = []
-        self.session_id: str | None = None
         self.streaming_llm = (
             StreamingLLM(
                 config=self.llm.config,
@@ -223,7 +224,6 @@ class CodeActAgent(Agent):
 
         # For streaming "finish" or "think" function message content
         streaming_function_calls: dict[str, Any] = {}  # tool_call_id -> streaming state
-
         async for chunk in streaming_response:
             last_chunk = chunk
             logger.debug(f'Streaming chunk: {chunk}')
@@ -297,12 +297,19 @@ class CodeActAgent(Agent):
                     stream_action = StreamingMessageAction(
                         content=delta.content,
                         wait_for_response=wait_for_response,
-                        enable_process_llm=True,
+                        enable_process_llm=False,
                     )
                     if self.event_stream is not None:
                         self.event_stream.add_event(stream_action, EventSource.AGENT)
 
         # AFTER streaming is complete, process accumulated data
+        if accumulated_content and not has_tool_calls:
+            message_action = MessageAction(
+                content=accumulated_content,
+                wait_for_response=False,
+                enable_think=False,
+            )
+            self.pending_actions.append(message_action)
 
         # FIRST: Process tool calls (if any)
         if accumulated_tool_calls:
@@ -567,6 +574,8 @@ class CodeActAgent(Agent):
         # if chat mode, we need to use the search tools
         params['tools'] = self._select_tools_based_on_mode(research_mode)
         params['tools'] = check_tools(params['tools'], self.llm.config)
+        if self.enable_streaming:
+            params['stream_options'] = {'include_usage': True}
         logger.debug(f'Messages: {messages}')
         last_message = messages[-1]
         response = None

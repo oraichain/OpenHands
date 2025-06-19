@@ -212,6 +212,7 @@ class Session:
             a2a_manager,
             routing_llms=routing_llms,
             enable_streaming=self.config.conversation.enable_streaming,
+            session_id=self.sid,
         )
         agent.set_mcp_tools(mcp_tools)
         agent.set_search_tools(search_tools)
