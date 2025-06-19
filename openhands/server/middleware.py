@@ -17,7 +17,6 @@ from openhands.server.auth import get_user_id
 from openhands.server.modules.conversation import conversation_module
 from openhands.server.thesis_auth import (
     ThesisUser,
-    UserStatus,
     get_user_detail_from_thesis_auth_server,
 )
 from openhands.server.types import SessionMiddlewareInterface
@@ -231,6 +230,7 @@ class CheckUserActivationMiddleware(BaseHTTPMiddleware):
             '/api/options/security-analyzers',
             '/api/options/use-cases',
             '/api/options/use-cases/conversations',
+            '/api/options/update-empty-titles',
             '/api/options/conversations',
             '/api/invitation/',
             '/api/user/status',
@@ -279,11 +279,11 @@ class CheckUserActivationMiddleware(BaseHTTPMiddleware):
                 content={'detail': 'User not found'},
             )
 
-        if user.whitelisted != UserStatus.WHITELISTED:
-            return JSONResponse(
-                status_code=403,
-                content={'detail': 'User account is not activated'},
-            )
+        # if user.whitelisted != UserStatus.WHITELISTED:
+        #     return JSONResponse(
+        #         status_code=403,
+        #         content={'detail': 'User account is not activated'},
+        #     )
         return await call_next(request)
 
 
@@ -301,6 +301,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             '/api/options/use-cases',
             '/api/options/use-cases/conversations',
             '/api/options/conversations',
+            '/api/options/update-empty-titles',
             '/api/usecases',
         ]
 
