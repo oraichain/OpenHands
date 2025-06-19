@@ -576,7 +576,7 @@ class CodeActAgent(Agent):
         params['tools'] = check_tools(params['tools'], self.llm.config)
         if self.enable_streaming:
             params['stream_options'] = {'include_usage': True}
-        logger.debug(f'Messages: {messages}')
+        logger.info(f'Messages: {messages}')
         last_message = messages[-1]
         response = None
         if (
@@ -620,26 +620,20 @@ class CodeActAgent(Agent):
                 response = (
                     self.llm.completion(**params)
                     if not self.streaming_llm
-                    else self.streaming_llm.async_streaming_completion(
-                        **params, stream=True
-                    )
+                    else self.streaming_llm.async_streaming_completion(**params)
                 )
             else:
                 response = (
                     self.routing_llms['simple'].completion(**params)
                     if not self.streaming_routing_llm
-                    else self.streaming_routing_llm.async_streaming_completion(
-                        **params, stream=True
-                    )
+                    else self.streaming_routing_llm.async_streaming_completion(**params)
                 )
         else:
             # Use streaming response
             response = (
                 self.llm.completion(**params)
                 if not self.streaming_llm
-                else self.streaming_llm.async_streaming_completion(
-                    **params, stream=True
-                )
+                else self.streaming_llm.async_streaming_completion(**params)
             )
             # Process streaming response and populate pending_actions
         if self.enable_streaming:
