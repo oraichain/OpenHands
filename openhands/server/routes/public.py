@@ -416,3 +416,11 @@ async def select_file(
     finally:
         if session:
             await shared.conversation_manager.detach_from_conversation(session)
+
+
+@app.put('/update-empty-titles')
+async def update_empty_titles(
+    x_key_oh: str = Depends(verify_thesis_backend_server),
+) -> dict[str, Any]:
+    result = await conversation_module.update_empty_conversation_titles(config)
+    return result
