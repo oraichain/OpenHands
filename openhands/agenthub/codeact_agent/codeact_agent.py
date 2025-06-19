@@ -297,12 +297,19 @@ class CodeActAgent(Agent):
                     stream_action = StreamingMessageAction(
                         content=delta.content,
                         wait_for_response=wait_for_response,
-                        enable_process_llm=True,
+                        enable_process_llm=False,
                     )
                     if self.event_stream is not None:
                         self.event_stream.add_event(stream_action, EventSource.AGENT)
 
         # AFTER streaming is complete, process accumulated data
+        if accumulated_content and not has_tool_calls:
+            message_action = MessageAction(
+                content=accumulated_content,
+                wait_for_response=False,
+                enable_think=False,
+            )
+            self.pending_actions.append(message_action)
 
         # FIRST: Process tool calls (if any)
         if accumulated_tool_calls:

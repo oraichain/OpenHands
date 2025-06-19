@@ -775,9 +775,9 @@ class LLM(RetryMixin, DebugMixin):
         if hasattr(response, '_hidden_params'):
             if response._hidden_params is None:
                 response._hidden_params = {}
-            response._hidden_params['custom_llm_provider'] = None
+            response._hidden_params['custom_llm_provider'] = 'anthropic'
         else:
-            response._hidden_params = {'custom_llm_provider': None}
+            response._hidden_params = {'custom_llm_provider': 'anthropic'}
 
         try:
             #
