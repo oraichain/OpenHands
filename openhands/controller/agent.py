@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional, Type
 
+from openhands.llm.streaming_llm import StreamingLLM
+
 if TYPE_CHECKING:
     from openhands.controller.state.state import State
     from openhands.core.config import AgentConfig
@@ -53,6 +55,9 @@ class Agent(ABC):
         self.user_prompt: str = ''
         self.knowledge_base: dict[str, dict] = {}
         self.event_stream: 'EventStream' | None = None
+        self.session_id: str | None = kwargs.get('session_id', None)
+        self.enable_streaming: bool = kwargs.get('enable_streaming', False)
+        self.streaming_llm: StreamingLLM | None = None
 
     @property
     def complete(self) -> bool:

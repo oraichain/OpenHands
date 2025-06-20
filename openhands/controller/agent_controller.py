@@ -1527,9 +1527,15 @@ class AgentController:
         """
         # Create a minimal metrics object with just what the frontend needs
         metrics = Metrics(model_name=self.agent.llm.metrics.model_name)
-        metrics.accumulated_cost = self.agent.llm.metrics.accumulated_cost
+        metrics.accumulated_cost = (
+            self.agent.streaming_llm.metrics.accumulated_cost
+            if self.agent.streaming_llm
+            else self.agent.llm.metrics.accumulated_cost
+        )
         metrics._accumulated_token_usage = (
-            self.agent.llm.metrics.accumulated_token_usage
+            self.agent.streaming_llm.metrics.accumulated_token_usage
+            if self.agent.streaming_llm
+            else self.agent.llm.metrics.accumulated_token_usage
         )
 
         action.llm_metrics = metrics
@@ -1537,10 +1543,16 @@ class AgentController:
         # Log the metrics information for debugging
         # Get the latest usage directly from the agent's metrics
         latest_usage = None
-        if self.agent.llm.metrics.token_usages:
+        if self.agent.streaming_llm and self.agent.streaming_llm.metrics.token_usages:
+            latest_usage = self.agent.streaming_llm.metrics.token_usages[-1]
+        elif self.agent.llm.metrics.token_usages:
             latest_usage = self.agent.llm.metrics.token_usages[-1]
 
-        accumulated_usage = self.agent.llm.metrics.accumulated_token_usage
+        accumulated_usage = (
+            self.agent.llm.metrics.accumulated_token_usage
+            if not self.agent.streaming_llm
+            else self.agent.streaming_llm.metrics.accumulated_token_usage
+        )
         self.log(
             'info',
             f'Action metrics - accumulated_cost: {metrics.accumulated_cost}, '

@@ -13,6 +13,7 @@ class MessageAction(Action):
     action: str = ActionType.MESSAGE
     security_risk: ActionSecurityRisk | None = None
     mode: str | None = None
+    enable_think: Optional[bool] = True  # type: ignore
 
     @property
     def message(self) -> str:

@@ -51,6 +51,7 @@ def test_event_props_serialization_deserialization():
             'image_urls': None,
             'wait_for_response': False,
             'mode': None,
+            'enable_think': True,
         },
     }
     serialization_deserialization(original_action_dict, MessageAction)
@@ -64,6 +65,7 @@ def test_message_action_serialization_deserialization():
             'image_urls': None,
             'wait_for_response': False,
             'mode': None,
+            'enable_think': True,
         },
     }
     serialization_deserialization(original_action_dict, MessageAction)
