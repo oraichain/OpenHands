@@ -653,7 +653,9 @@ class LLM(RetryMixin, DebugMixin):
 
             cache_hit_tokens = (
                 prompt_tokens_details.cached_tokens
-                if prompt_tokens_details and prompt_tokens_details.cached_tokens
+                if prompt_tokens_details
+                and prompt_tokens_details.cached_tokens
+                and prompt_tokens_details.cached_tokens > 0
                 else cache_read_input_tokens
             )
             if cache_hit_tokens:
