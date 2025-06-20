@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 with warnings.catch_warnings():
     warnings.simplefilter('ignore')
+import aiohttp
 from litellm import stream_chunk_builder
 from opentelemetry import trace
 from traceloop.sdk.decorators import workflow
@@ -15,6 +16,15 @@ from openhands.llm.async_llm import LLM_RETRY_EXCEPTIONS, AsyncLLM
 from openhands.llm.llm import (
     MODELS_USING_MAX_COMPLETION_TOKENS,
     REASONING_EFFORT_SUPPORTED_MODELS,
+)
+
+# Extended retry exceptions to include HTTP transfer encoding errors
+STREAMING_RETRY_EXCEPTIONS = LLM_RETRY_EXCEPTIONS + (
+    aiohttp.ClientPayloadError,  # Response payload is not completed
+    aiohttp.ClientError,  # General client errors
+    aiohttp.http_exceptions.TransferEncodingError,  # Transfer encoding issues
+    ConnectionResetError,  # Connection reset by peer
+    ConnectionError,  # General connection errors
 )
 
 
@@ -52,7 +62,7 @@ class StreamingLLM(AsyncLLM):
         @workflow(name='llm_streaming_completion')
         @self.retry_decorator(
             num_retries=self.config.num_retries,
-            retry_exceptions=LLM_RETRY_EXCEPTIONS,
+            retry_exceptions=STREAMING_RETRY_EXCEPTIONS,  # Use extended exception list
             retry_min_wait=self.config.retry_min_wait,
             retry_max_wait=self.config.retry_max_wait,
             retry_multiplier=self.config.retry_multiplier,
@@ -101,7 +111,6 @@ class StreamingLLM(AsyncLLM):
 
             try:
                 # Directly call and await litellm_acompletion
-
                 resp = await self.async_streaming_completion_unwrapped(*args, **kwargs)
                 chunks = []
                 # For streaming we iterate over the chunks
@@ -141,6 +150,15 @@ class StreamingLLM(AsyncLLM):
             except UserCancelledError:
                 logger.debug('LLM request cancelled by user.')
                 raise
+            except (
+                aiohttp.ClientPayloadError,
+                aiohttp.ClientError,
+                aiohttp.http_exceptions.TransferEncodingError,
+                ConnectionResetError,
+                ConnectionError,
+            ) as e:
+                logger.warning(f'HTTP streaming error occurred, will be retried: {e}')
+                raise  # Re-raise to trigger retry mechanism
             except Exception as e:
                 logger.error(f'Completion Error occurred:\n{e}')
                 raise
