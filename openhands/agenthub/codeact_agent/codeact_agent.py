@@ -24,6 +24,7 @@ from openhands.events.action import (
 )
 from openhands.events.action.message import MessageAction
 from openhands.events.event import Event, EventSource
+from openhands.events.observation.mcp import MCPObservation
 from openhands.llm.llm import LLM, check_tools
 from openhands.llm.streaming_llm import StreamingLLM
 from openhands.memory.condenser import Condenser
@@ -574,6 +575,12 @@ class CodeActAgent(Agent):
         # if chat mode, we need to use the search tools
         params['tools'] = self._select_tools_based_on_mode(research_mode)
         params['tools'] = check_tools(params['tools'], self.llm.config)
+        for event in condensed_history:
+            if isinstance(event, MCPObservation):
+                if 'mongodb' in event.content:
+                    params['tools'] = [FinishTool]
+                    break
+
         if self.enable_streaming:
             params['stream_options'] = {'include_usage': True}
         logger.info(f'Messages: {messages}')
