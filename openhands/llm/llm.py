@@ -78,6 +78,7 @@ FUNCTION_CALLING_SUPPORTED_MODELS = [
     'Qwen3-235B-A22B-fp8-tput',
     'grok-3-mini',
     'grok-3-mini-beta',
+    'claude-sonnet-4-20250514',
 ]
 
 REASONING_EFFORT_SUPPORTED_MODELS = [
