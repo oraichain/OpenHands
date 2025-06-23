@@ -8,7 +8,6 @@ with warnings.catch_warnings():
 import aiohttp
 from litellm import stream_chunk_builder
 from opentelemetry import trace
-from traceloop.sdk.decorators import workflow
 
 from openhands.core.exceptions import UserCancelledError
 from openhands.core.logger import openhands_logger as logger
@@ -17,6 +16,7 @@ from openhands.llm.llm import (
     MODELS_USING_MAX_COMPLETION_TOKENS,
     REASONING_EFFORT_SUPPORTED_MODELS,
 )
+from openhands.utils.tracing_utils import context_api, streaming_llm_workflow
 
 # Extended retry exceptions to include HTTP transfer encoding errors
 STREAMING_RETRY_EXCEPTIONS = LLM_RETRY_EXCEPTIONS + (
@@ -59,7 +59,7 @@ class StreamingLLM(AsyncLLM):
 
         self.async_streaming_completion_unwrapped = self._async_streaming_completion
 
-        @workflow(name='llm_streaming_completion')
+        @streaming_llm_workflow(name='llm_completion')
         @self.retry_decorator(
             num_retries=self.config.num_retries,
             retry_exceptions=STREAMING_RETRY_EXCEPTIONS,  # Use extended exception list
@@ -69,8 +69,12 @@ class StreamingLLM(AsyncLLM):
         )
         async def async_streaming_completion_wrapper(*args: Any, **kwargs: Any) -> Any:
             messages: list[dict[str, Any]] | dict[str, Any] = []
+            span = None
+            ctx_token = None
             try:
                 span = trace.get_current_span()
+                ctx = trace.set_span_in_context(span)
+                ctx_token = context_api.attach(ctx)
                 if self.session_id:
                     span.set_attribute('session_id', self.session_id)
                 if self.user_id:
@@ -135,17 +139,24 @@ class StreamingLLM(AsyncLLM):
                     cost = self._post_completion(resp)
                     if cost and resp.get('usage'):
                         resp['usage']['cost'] = cost
-                        span.set_attribute('llm.cost', cost)
+                        if span:
+                            span.set_attribute('llm.cost', cost)
 
                     # Add cost and token usage to the current span
                     usage = resp.get('usage')
                     if usage:
                         prompt_tokens = usage.get('prompt_tokens', 0)
                         completion_tokens = usage.get('completion_tokens', 0)
-                        span.set_attribute('llm.usage.prompt_tokens', prompt_tokens)
-                        span.set_attribute(
-                            'llm.usage.completion_tokens', completion_tokens
-                        )
+                        if span:
+                            span.set_attribute('llm.usage.prompt_tokens', prompt_tokens)
+                            span.set_attribute(
+                                'llm.usage.completion_tokens', completion_tokens
+                            )
+
+                if span:
+                    span.end()
+                if ctx_token:
+                    context_api.detach(ctx_token)
 
             except UserCancelledError:
                 logger.debug('LLM request cancelled by user.')

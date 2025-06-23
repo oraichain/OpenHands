@@ -760,7 +760,7 @@ def test_stream_function_message_simple_case(agent: CodeActAgent):
 
     # Test complete message in one chunk
     chunk = '{"message": "Hello world"}'
-    agent._stream_function_message('tool_1', chunk, streaming_calls)
+    agent._stream_function_message('tool_1', chunk, streaming_calls, None)
 
     # Should find message start and emit content
     assert streaming_calls['tool_1']['msg_start'] != -1
@@ -778,12 +778,12 @@ def test_stream_function_message_chunked_pattern(agent: CodeActAgent):
     streaming_calls = {}
 
     # Chunk 1: partial pattern
-    agent._stream_function_message('tool_1', '{"mess', streaming_calls)
+    agent._stream_function_message('tool_1', '{"mess', streaming_calls, None)
     assert streaming_calls['tool_1']['msg_start'] == -1  # Not found yet
     assert not agent.event_stream.add_event.called
 
     # Chunk 2: complete pattern + content start
-    agent._stream_function_message('tool_1', 'age": "Hello', streaming_calls)
+    agent._stream_function_message('tool_1', 'age": "Hello', streaming_calls, None)
     assert streaming_calls['tool_1']['msg_start'] != -1  # Found now
     assert agent.event_stream.add_event.called
 
@@ -791,7 +791,7 @@ def test_stream_function_message_chunked_pattern(agent: CodeActAgent):
     agent.event_stream.add_event.reset_mock()
 
     # Chunk 3: more content
-    agent._stream_function_message('tool_1', ' world"', streaming_calls)
+    agent._stream_function_message('tool_1', ' world"', streaming_calls, None)
     assert agent.event_stream.add_event.called
 
 
