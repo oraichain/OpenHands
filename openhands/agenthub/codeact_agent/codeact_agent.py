@@ -213,7 +213,9 @@ class CodeActAgent(Agent):
             selected_tools[-1]['cache_control'] = {'type': 'ephemeral'}
         return selected_tools
 
-    async def _handle_streaming_response(self, streaming_response, tools: list[dict]):
+    async def _handle_streaming_response(
+        self, streaming_response, tools: list[dict], research_mode: str | None
+    ):
         """Handle streaming response - both accumulate in pending_actions AND yield chunks immediately"""
         # Accumulate streaming data
         accumulated_tool_calls = {}  # tool_call_id -> partial tool call data
@@ -287,6 +289,7 @@ class CodeActAgent(Agent):
                                     target_id,
                                     func_delta.arguments,
                                     streaming_function_calls,
+                                    research_mode,
                                 )
             else:
                 if delta.content:
@@ -387,7 +390,11 @@ class CodeActAgent(Agent):
                 self.pending_actions.append(fallback_action)
 
     def _stream_function_message(
-        self, tool_call_id: str, arguments_chunk: str, streaming_function_calls: dict
+        self,
+        tool_call_id: str,
+        arguments_chunk: str,
+        streaming_function_calls: dict,
+        research_mode: str | None,
     ):
         """Stream message content from finish/think function calls as they arrive"""
         # Initialize tracking for this tool call if not exists
@@ -430,7 +437,9 @@ class CodeActAgent(Agent):
                 new_content = content[state['streamed'] :]
                 safe_content = self._get_safe_content(new_content)
                 if safe_content:
-                    self._emit_streaming_content(safe_content)
+                    # dont stream final_thought when we are in follow_up mode
+                    if research_mode != ResearchMode.FOLLOW_UP:
+                        self._emit_streaming_content(safe_content)
                     state['streamed'] += len(safe_content)
 
     def _get_safe_content(self, content: str) -> str:
@@ -638,7 +647,11 @@ class CodeActAgent(Agent):
             # Process streaming response and populate pending_actions
         if self.enable_streaming:
             call_async_from_sync(
-                self._handle_streaming_response, 15, response, params['tools']
+                self._handle_streaming_response,
+                15,
+                response,
+                params['tools'],
+                research_mode,
             )
             if self.pending_actions:
                 logger.info(
