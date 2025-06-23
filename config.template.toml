@@ -345,10 +345,13 @@ runtime_binding_address = "0.0.0.0"
 # The type of condenser to use. Available options:
 # - "noop": No condensing, keeps full history (default)
 # - "observation_masking": Keeps full event structure but masks older observations
+# - "browser_output_masking": Masks older browser observations to reduce token usage
 # - "recent": Keeps only recent events and discards older ones
 # - "llm": Uses an LLM to summarize conversation history
 # - "amortized": Intelligently forgets older events while preserving important context
 # - "llm_attention": Uses an LLM to prioritize most relevant context
+# - "task_completion": Keeps only essential events from completed tasks
+# - "task_completion_browser": Combines task completion and browser output condensation
 type = "noop"
 
 # Examples for each condenser type (uncomment and modify as needed):
@@ -361,14 +364,19 @@ type = "noop"
 # Number of most-recent events where observations will not be masked
 #attention_window = 100
 
-# 3. Recent Events Condenser
+# 3. Browser Output Masking Condenser
+#type = "browser_output_masking"
+# Number of most recent browser observations to keep in full detail
+#attention_window = 1
+
+# 4. Recent Events Condenser
 #type = "recent"
 # Number of initial events to always keep (typically includes task description)
 #keep_first = 1
 # Maximum number of events to keep in history
 #max_events = 100
 
-# 4. LLM Summarizing Condenser
+# 5. LLM Summarizing Condenser
 #type = "llm"
 # Reference to an LLM config to use for summarization
 #llm_config = "condenser"
@@ -377,14 +385,14 @@ type = "noop"
 # Maximum size of history before triggering summarization
 #max_size = 100
 
-# 5. Amortized Forgetting Condenser
+# 6. Amortized Forgetting Condenser
 #type = "amortized"
 # Number of initial events to always keep (typically includes task description)
 #keep_first = 1
 # Maximum size of history before triggering forgetting
 #max_size = 100
 
-# 6. LLM Attention Condenser
+# 7. LLM Attention Condenser
 #type = "llm_attention"
 # Reference to an LLM config to use for attention scoring
 #llm_config = "condenser"
@@ -392,6 +400,18 @@ type = "noop"
 #keep_first = 1
 # Maximum size of history before triggering attention mechanism
 #max_size = 100
+
+# 8. Task Completion Condenser
+#type = "task_completion"
+# Number of initial events to always keep (typically includes task description)
+#keep_first = 1
+
+# 9. Task Completion + Browser Output Condenser (Composite)
+#type = "task_completion_browser"
+# Number of initial events to always keep (typically includes task description)
+#keep_first = 1
+# Number of most recent browser observations to keep in full detail
+#browser_attention_window = 1
 
 # Example of a custom LLM configuration for condensers that require an LLM
 # If not provided, it falls back to the default LLM
