@@ -394,7 +394,7 @@ class CodeActAgent(Agent):
         tool_call_id: str,
         arguments_chunk: str,
         streaming_function_calls: dict,
-        research_mode: str | None,
+        research_mode: str | None = None,
     ):
         """Stream message content from finish/think function calls as they arrive"""
         # Initialize tracking for this tool call if not exists
