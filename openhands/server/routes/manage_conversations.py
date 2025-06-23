@@ -209,7 +209,7 @@ async def _create_new_conversation(
     )
     logger.info(f'Finished initializing conversation {conversation_id}')
 
-    return conversation_id
+    return conversation_id, conversation_title
 
 
 @app.post('/conversations')
@@ -252,9 +252,8 @@ async def new_conversation(request: Request, data: InitSessionRequest):
             threadData = await get_thread_by_id(thread_follow_up)
             if threadData:
                 raw_followup_conversation_id = threadData['conversationId']
-
         start_time = time.time()
-        conversation_id = await _create_new_conversation(
+        conversation_id, conversation_title = await _create_new_conversation(
             user_id,
             provider_tokens,
             selected_repository,
@@ -307,7 +306,7 @@ async def new_conversation(request: Request, data: InitSessionRequest):
                 False,
                 user_id,
                 metadata,
-                '',
+                conversation_title,
                 'available',
             )
             end_time = time.time()
@@ -353,6 +352,7 @@ async def search_conversations(
     page_id: str | None = None,
     limit: int = 20,
     page: int = 1,
+    keyword: str | None = None,
 ) -> ConversationInfoResultSet:
     user_id = get_user_id(request)
     conversation_store = await ConversationStoreImpl.get_instance(
@@ -362,10 +362,10 @@ async def search_conversations(
     # get conversation visibility by user id
     visible_conversations = (
         await conversation_module._get_conversation_visibility_by_user_id(
-            user_id, page, limit
+            user_id, page, limit, keyword
         )
     )
-    if len(visible_conversations) == 0:
+    if len(visible_conversations['items']) == 0:
         return ConversationInfoResultSet(results=[], next_page_id=None)
     visible_conversation_ids = [
         conversation['conversation_id']
@@ -527,6 +527,7 @@ async def update_conversation(
 
     metadata.title = title
     await conversation_store.save_metadata(metadata)
+    await conversation_module._update_title_conversation(conversation_id, title)
     return True
 
 
