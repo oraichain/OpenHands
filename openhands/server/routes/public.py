@@ -391,6 +391,12 @@ async def select_file(
         elif isinstance(observation, ErrorObservation):
             logger.error(f'Error opening file {file}: {observation}')
 
+        if isinstance(observation, FileReadObservation):
+            content = observation.content
+            return {'code': content}
+        elif isinstance(observation, ErrorObservation):
+            logger.error(f'Error opening file {file}: {observation}')
+
             if 'ERROR_BINARY_FILE' in observation.message:
                 try:
                     async with aiofiles.open(file, 'rb') as f:
