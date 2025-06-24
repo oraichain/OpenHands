@@ -309,7 +309,7 @@ class CodeActAgent(Agent):
         if accumulated_content and not has_tool_calls:
             message_action = MessageAction(
                 content=accumulated_content,
-                wait_for_response=False,
+                wait_for_response=True,
                 enable_think=False,
             )
             self.pending_actions.append(message_action)
