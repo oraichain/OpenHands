@@ -1,26 +1,18 @@
 import json
-from enum import Enum
 from typing import List, Optional
 
-from openhands.core.database import get_db_pool
+from openhands.core.database import db_pool
 from openhands.core.logger import openhands_logger as logger
 from openhands.storage.files import FileStore
 from openhands.storage.locations import parse_conversation_path
 
 
-class PathType(Enum):
-    EVENTS = 'events'
-    METADATA = 'metadata'
-
-
 class DatabaseFileStore(FileStore):
-    def __init__(self) -> None:
-        self.pool = get_db_pool()
-
     def write(self, path: str, contents: str | bytes) -> None:
         """Write contents to database based on path type."""
         try:
             parsed_path = parse_conversation_path(path)
+            logger.info(f'Parsed path: {parsed_path}')
             if parsed_path is None:
                 logger.error(f'Failed to parse conversation path: {path}')
                 return
@@ -32,16 +24,16 @@ class DatabaseFileStore(FileStore):
 
             conn = None
             try:
-                conn = self.pool.get_connection()
+                conn = db_pool.get_connection()
                 if not conn:
                     logger.error('Failed to get database connection from pool')
                     return
 
                 cursor = conn.cursor()
 
-                if path_type == PathType.EVENTS:
+                if path_type == 'events':
                     self._write_event(cursor, session_id, event_id, contents)
-                elif path_type == PathType.METADATA:
+                elif path_type == 'metadata':
                     self._write_metadata(cursor, session_id, contents, user_id)
                 else:
                     logger.warning(f'Unsupported path type for write: {path_type}')
@@ -58,7 +50,7 @@ class DatabaseFileStore(FileStore):
                 raise
             finally:
                 if conn:
-                    self.pool.release_connection(conn)
+                    db_pool.release_connection(conn)
 
         except Exception as e:
             logger.error(f'Error writing to database for path {path}: {str(e)}')
@@ -162,16 +154,16 @@ class DatabaseFileStore(FileStore):
 
             conn = None
             try:
-                conn = self.pool.get_connection()
+                conn = db_pool.get_connection()
                 if not conn:
                     logger.error('Failed to get database connection from pool')
                     raise ConnectionError('Could not connect to database')
 
                 cursor = conn.cursor()
 
-                if path_type == PathType.EVENTS:
+                if path_type == 'events':
                     result = self._read_event(cursor, session_id, event_id)
-                elif path_type == PathType.METADATA:
+                elif path_type == 'metadata':
                     user_id = parsed_path['user_id']
                     result = self._read_metadata(cursor, session_id, user_id)
                 else:
@@ -186,7 +178,7 @@ class DatabaseFileStore(FileStore):
                 raise
             finally:
                 if conn:
-                    self.pool.release_connection(conn)
+                    db_pool.release_connection(conn)
 
         except Exception as e:
             logger.error(f'Error reading from database for path {path}: {str(e)}')
@@ -237,14 +229,14 @@ class DatabaseFileStore(FileStore):
 
             conn = None
             try:
-                conn = self.pool.get_connection()
+                conn = db_pool.get_connection()
                 if not conn:
                     logger.error('Failed to get database connection from pool')
                     return []
 
                 cursor = conn.cursor()
 
-                if path_type == PathType.EVENTS:
+                if path_type == 'events':
                     result = self._list_events_for_conversation(cursor, session_id)
                 else:
                     logger.warning(f'Listing not supported for path type: {path_type}')
@@ -258,7 +250,7 @@ class DatabaseFileStore(FileStore):
                 return []
             finally:
                 if conn:
-                    self.pool.release_connection(conn)
+                    db_pool.release_connection(conn)
 
         except Exception as e:
             logger.error(f'Error listing database for path {path}: {str(e)}')
@@ -292,16 +284,16 @@ class DatabaseFileStore(FileStore):
 
             conn = None
             try:
-                conn = self.pool.get_connection()
+                conn = db_pool.get_connection()
                 if not conn:
                     logger.error('Failed to get database connection from pool')
                     return
 
                 cursor = conn.cursor()
 
-                if path_type == PathType.EVENTS:
+                if path_type == 'events':
                     self._delete_event(cursor, session_id, event_id)
-                elif path_type == PathType.METADATA:
+                elif path_type == 'metadata':
                     user_id = parsed_path['user_id']
                     self._delete_metadata(cursor, session_id, user_id)
                 else:
@@ -321,7 +313,7 @@ class DatabaseFileStore(FileStore):
                 raise
             finally:
                 if conn:
-                    self.pool.release_connection(conn)
+                    db_pool.release_connection(conn)
 
         except Exception as e:
             logger.error(f'Error deleting from database for path {path}: {str(e)}')

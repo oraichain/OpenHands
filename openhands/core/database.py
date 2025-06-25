@@ -1,5 +1,4 @@
 import os
-from functools import lru_cache
 
 from psycopg2.pool import ThreadedConnectionPool
 
@@ -72,6 +71,4 @@ class DBConnectionPool:
             self._pool = None
 
 
-@lru_cache(maxsize=1)
-def get_db_pool():
-    return DBConnectionPool()
+db_pool = DBConnectionPool()
