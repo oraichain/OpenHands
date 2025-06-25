@@ -410,13 +410,23 @@ async def search_conversations(
 async def get_conversation(
     conversation_id: str, request: Request
 ) -> ConversationInfo | None:
+    user_id = get_user_id(request)
     conversation_store = await ConversationStoreImpl.get_instance(
-        config, get_user_id(request), get_github_user_id(request)
+        config, user_id, get_github_user_id(request)
     )
     try:
         metadata = await conversation_store.get_metadata(conversation_id)
         is_running = await conversation_manager.is_agent_loop_running(conversation_id)
         conversation_info = await _get_conversation_info(metadata, is_running)
+        if not conversation_info:
+            logger.error(
+                f'get_conversation: conversation {conversation_id} not found, attach_to_conversation returned None',
+                extra={'session_id': conversation_id, 'user_id': user_id},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Conversation {conversation_id} with user {user_id} not found',
+            )
         # existed_conversation = await conversation_module._get_conversation_by_id(
         #     conversation_id, str(get_user_id(request))
         # )
