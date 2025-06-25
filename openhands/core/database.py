@@ -1,6 +1,6 @@
 import os
 
-from psycopg2.pool import ThreadedConnectionPool
+from psycopg_pool import ConnectionPool
 
 from openhands.core.logger import openhands_logger as logger
 
@@ -33,15 +33,14 @@ class DBConnectionPool:
                 host = os.getenv('POSTGRES_HOST', 'localhost')
                 port = os.getenv('POSTGRES_PORT', '5432')
 
+                # Build connection string for psycopg3
+                conninfo = f'host={host} port={port} dbname={database} user={user} password={password}'
+
                 # Create a connection pool
-                self._pool = ThreadedConnectionPool(
-                    minconn=2,
-                    maxconn=10,
-                    user=user,
-                    password=password,
-                    database=database,
-                    host=host,
-                    port=port,
+                self._pool = ConnectionPool(
+                    conninfo=conninfo,
+                    min_size=2,
+                    max_size=10,
                 )
                 logger.info('Database connection pool initialized successfully')
             except Exception as e:
@@ -67,7 +66,7 @@ class DBConnectionPool:
     def close_pool(self):
         """Close the connection pool."""
         if self._pool:
-            self._pool.closeall()
+            self._pool.close()
             self._pool = None
 
 

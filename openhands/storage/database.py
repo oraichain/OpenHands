@@ -1,6 +1,8 @@
 import json
 from typing import List, Optional
 
+import psycopg
+
 from openhands.core.database import db_pool
 from openhands.core.logger import openhands_logger as logger
 from openhands.storage.files import FileStore
@@ -22,26 +24,26 @@ class DatabaseFileStore(FileStore):
             event_id = parsed_path['event_id']
             path_type = parsed_path['type']
 
-            conn = None
+            conn: psycopg.Connection | None = None
             try:
                 conn = db_pool.get_connection()
                 if not conn:
                     logger.error('Failed to get database connection from pool')
                     return
 
-                cursor = conn.cursor()
+                with conn.cursor() as cursor:
+                    if path_type == 'events':
+                        self._write_event(cursor, session_id, event_id, contents)
+                    elif path_type == 'metadata':
+                        self._write_metadata(cursor, session_id, contents, user_id)
+                    else:
+                        logger.warning(f'Unsupported path type for write: {path_type}')
+                        return
 
-                if path_type == 'events':
-                    self._write_event(cursor, session_id, event_id, contents)
-                elif path_type == 'metadata':
-                    self._write_metadata(cursor, session_id, contents, user_id)
-                else:
-                    logger.warning(f'Unsupported path type for write: {path_type}')
-                    return
-
-                conn.commit()
-                cursor.close()
-                logger.debug(f'Successfully wrote {path_type} for session {session_id}')
+                    conn.commit()
+                    logger.debug(
+                        f'Successfully wrote {path_type} for session {session_id}'
+                    )
 
             except Exception as e:
                 if conn:
@@ -58,7 +60,7 @@ class DatabaseFileStore(FileStore):
 
     def _write_event(
         self,
-        cursor,
+        cursor: psycopg.Cursor,
         conversation_id: str,
         event_id: int,
         contents: str | bytes,
@@ -97,7 +99,7 @@ class DatabaseFileStore(FileStore):
 
     def _write_metadata(
         self,
-        cursor,
+        cursor: psycopg.Cursor,
         conversation_id: str,
         contents: str | bytes,
         user_id: Optional[str],
@@ -152,25 +154,23 @@ class DatabaseFileStore(FileStore):
             event_id = parsed_path['event_id']
             path_type = parsed_path['type']
 
-            conn = None
+            conn: psycopg.Connection | None = None
             try:
                 conn = db_pool.get_connection()
                 if not conn:
                     logger.error('Failed to get database connection from pool')
                     raise ConnectionError('Could not connect to database')
 
-                cursor = conn.cursor()
+                with conn.cursor() as cursor:
+                    if path_type == 'events':
+                        result = self._read_event(cursor, session_id, event_id)
+                    elif path_type == 'metadata':
+                        user_id = parsed_path['user_id']
+                        result = self._read_metadata(cursor, session_id, user_id)
+                    else:
+                        logger.warning(f'Unsupported path type for read: {path_type}')
+                        raise FileNotFoundError(f'Unsupported path type: {path_type}')
 
-                if path_type == 'events':
-                    result = self._read_event(cursor, session_id, event_id)
-                elif path_type == 'metadata':
-                    user_id = parsed_path['user_id']
-                    result = self._read_metadata(cursor, session_id, user_id)
-                else:
-                    logger.warning(f'Unsupported path type for read: {path_type}')
-                    raise FileNotFoundError(f'Unsupported path type: {path_type}')
-
-                cursor.close()
                 return result
 
             except Exception as e:
@@ -184,7 +184,9 @@ class DatabaseFileStore(FileStore):
             logger.error(f'Error reading from database for path {path}: {str(e)}')
             raise
 
-    def _read_event(self, cursor, conversation_id: str, event_id: int) -> str:
+    def _read_event(
+        self, cursor: psycopg.Cursor, conversation_id: str, event_id: int
+    ) -> str:
         """Read event data from conversation_events table."""
         cursor.execute(
             'SELECT metadata FROM conversation_events WHERE conversation_id = %s AND event_id = %s',
@@ -227,22 +229,22 @@ class DatabaseFileStore(FileStore):
             session_id = parsed_path['session_id']
             path_type = parsed_path['type']
 
-            conn = None
+            conn: psycopg.Connection | None = None
             try:
                 conn = db_pool.get_connection()
                 if not conn:
                     logger.error('Failed to get database connection from pool')
                     return []
 
-                cursor = conn.cursor()
+                with conn.cursor() as cursor:
+                    if path_type == 'events':
+                        result = self._list_events_for_conversation(cursor, session_id)
+                    else:
+                        logger.warning(
+                            f'Listing not supported for path type: {path_type}'
+                        )
+                        result = []
 
-                if path_type == 'events':
-                    result = self._list_events_for_conversation(cursor, session_id)
-                else:
-                    logger.warning(f'Listing not supported for path type: {path_type}')
-                    result = []
-
-                cursor.close()
                 return result
 
             except Exception as e:
@@ -256,7 +258,9 @@ class DatabaseFileStore(FileStore):
             logger.error(f'Error listing database for path {path}: {str(e)}')
             return []
 
-    def _list_events_for_conversation(self, cursor, conversation_id: str) -> List[str]:
+    def _list_events_for_conversation(
+        self, cursor: psycopg.Cursor, conversation_id: str
+    ) -> List[str]:
         """List all metadata entries for a conversation from conversation_events table."""
         cursor.execute(
             'SELECT metadata FROM conversation_events WHERE conversation_id = %s ORDER BY created_at',
@@ -282,29 +286,27 @@ class DatabaseFileStore(FileStore):
             event_id = parsed_path['event_id']
             path_type = parsed_path['type']
 
-            conn = None
+            conn: psycopg.Connection | None = None
             try:
                 conn = db_pool.get_connection()
                 if not conn:
                     logger.error('Failed to get database connection from pool')
                     return
 
-                cursor = conn.cursor()
+                with conn.cursor() as cursor:
+                    if path_type == 'events':
+                        self._delete_event(cursor, session_id, event_id)
+                    elif path_type == 'metadata':
+                        user_id = parsed_path['user_id']
+                        self._delete_metadata(cursor, session_id, user_id)
+                    else:
+                        logger.warning(f'Unsupported path type for delete: {path_type}')
+                        return
 
-                if path_type == 'events':
-                    self._delete_event(cursor, session_id, event_id)
-                elif path_type == 'metadata':
-                    user_id = parsed_path['user_id']
-                    self._delete_metadata(cursor, session_id, user_id)
-                else:
-                    logger.warning(f'Unsupported path type for delete: {path_type}')
-                    return
-
-                conn.commit()
-                cursor.close()
-                logger.debug(
-                    f'Successfully deleted {path_type} for session {session_id}'
-                )
+                    conn.commit()
+                    logger.debug(
+                        f'Successfully deleted {path_type} for session {session_id}'
+                    )
 
             except Exception as e:
                 if conn:
@@ -319,7 +321,9 @@ class DatabaseFileStore(FileStore):
             logger.error(f'Error deleting from database for path {path}: {str(e)}')
             raise
 
-    def _delete_event(self, cursor, conversation_id: str, event_id: int) -> None:
+    def _delete_event(
+        self, cursor: psycopg.Cursor, conversation_id: str, event_id: int
+    ) -> None:
         """Delete event from conversation_events table."""
         cursor.execute(
             'DELETE FROM conversation_events WHERE conversation_id = %s AND event_id = %s',
@@ -327,7 +331,7 @@ class DatabaseFileStore(FileStore):
         )
 
     def _delete_metadata(
-        self, cursor, conversation_id: str, user_id: Optional[str]
+        self, cursor: psycopg.Cursor, conversation_id: str, user_id: Optional[str]
     ) -> None:
         """Delete conversation metadata (set metadata to empty)."""
         cursor.execute(
