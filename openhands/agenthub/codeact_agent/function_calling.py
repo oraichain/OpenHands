@@ -324,6 +324,7 @@ def response_to_actions(
             MessageAction(
                 content=str(assistant_msg.content) if assistant_msg.content else '',
                 wait_for_response=True,
+                enable_think=enable_think,
             )
         )
 
