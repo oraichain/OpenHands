@@ -50,6 +50,7 @@ def parse_conversation_path(path: str) -> dict | None:
     user_agent_state_pattern = re.compile(
         r'^users/(?P<user_id>[^/]+)/conversations/(?P<session_id>[^/]+)/agent_state\.pkl$'
     )
+    user_settings_pattern = re.compile(r'^users/(?P<user_id>[^/]+)/settings\.json$')
 
     # Non-user-specific patterns
     event_pattern = re.compile(
@@ -66,6 +67,7 @@ def parse_conversation_path(path: str) -> dict | None:
         (user_metadata_pattern, 'metadata'),
         (user_init_pattern, 'init'),
         (user_agent_state_pattern, 'agent_state'),
+        (user_settings_pattern, 'settings'),
         (event_pattern, 'events'),
         (metadata_pattern, 'metadata'),
         (init_pattern, 'init'),
@@ -78,7 +80,7 @@ def parse_conversation_path(path: str) -> dict | None:
             d = m.groupdict()
             return {
                 'user_id': d.get('user_id'),
-                'session_id': d['session_id'],
+                'session_id': d.get('session_id'),
                 'event_id': int(d['event_id'])
                 if 'event_id' in d and d['event_id'] is not None
                 else None,
