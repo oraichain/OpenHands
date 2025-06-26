@@ -18,6 +18,7 @@ from openhands.events.action import (
     FileReadAction,
     IPythonRunCellAction,
     MessageAction,
+    PlanningAction,
 )
 from openhands.events.action.a2a_action import (
     A2AListRemoteAgentsAction,
@@ -335,6 +336,20 @@ class ConversationMemory:
         #             content=[TextContent(text=action.content)],
         #         )
         #     ]
+
+        # Planning prompt
+        elif isinstance(action, PlanningAction):
+            role = 'user' if action.source == 'user' else 'assistant'
+            content = [TextContent(text=action.content or '')]
+            if role not in ('user', 'system', 'assistant', 'tool'):
+                raise ValueError(f'Invalid role: {role}')
+            return [
+                Message(
+                    role=role,
+                    content=content,
+                )
+            ]
+
         elif isinstance(action, CmdRunAction) and action.source == 'user':
             content = [
                 TextContent(text=f'User executed the command:\n{action.command}')

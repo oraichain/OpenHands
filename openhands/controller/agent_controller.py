@@ -58,6 +58,7 @@ from openhands.events.action import (
     IPythonRunCellAction,
     MessageAction,
     NullAction,
+    PlanningAction,
     StreamingMessageAction,
 )
 from openhands.events.action.agent import CondensationAction, RecallAction
@@ -220,6 +221,7 @@ class AgentController:
         self.raw_followup_conversation_id = raw_followup_conversation_id
         self.followup_conversation_events = []
         print(f'raw_followup_conversation_id: {self.raw_followup_conversation_id}')
+        self.planning = False
 
     async def close(self, set_stop_state=True) -> None:
         """Closes the agent controller, canceling any ongoing tasks and unsubscribing from the event stream.
@@ -441,6 +443,10 @@ class AgentController:
         if hasattr(event, 'hidden') and event.hidden:
             return
 
+        self.log(
+            'debug',
+            f'Processing event: {event}, current state: {self.get_agent_state()}',
+        )
         # Give others a little chance
         await asyncio.sleep(0.01)
 
@@ -454,6 +460,9 @@ class AgentController:
             await self._handle_observation(event)
 
         if self.should_step(event):
+            self.log(
+                'debug', f'should_step return True for event: {event}, call self.step()'
+            )
             self.step()
 
         # Retrieve conversation and embedding mem0
@@ -747,8 +756,41 @@ class AgentController:
             # this is source=USER because the user message is the trigger for the microagent retrieval
             self.event_stream.add_event(recall_action, EventSource.USER)
 
-            if self.get_agent_state() != AgentState.RUNNING:
+            # Planning Action
+            if (
+                action.mode == ResearchMode.DEEP_RESEARCH
+                # and is_first_user_message
+            ):
+                from openhands.server.planning.planning import optimize_prompt
+
+                self.log('info', f'Research mode: {action.mode}')
+                logger.info(f'Original user prompt: {action.content}')
+                # if action.content != "/start_research":
+                #     await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
+                #     pass
+                # else:
+                #     pass
+                planning = await optimize_prompt(action.content)
+                logger.info(f'Optimized user prompt: {planning}')
+                planning_action = PlanningAction(content=planning)
+                self.event_stream.add_event(planning_action, EventSource.AGENT)
+                action.content = planning
+                await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
+                logger.info(f'Set agent state to {self.get_agent_state()}')
+                logger.debug(
+                    f'Pending action before state change: {self._pending_action}'
+                )
+                self.planning = True
+
+            if self.get_agent_state() != AgentState.RUNNING and not self.planning:
                 await self.set_agent_state_to(AgentState.RUNNING)
+
+            if self.planning:
+                self.log(
+                    'info',
+                    f'Planning mode is active, agent state is {self.get_agent_state()}',
+                )
+                self.planning = False
 
         elif action.source == EventSource.AGENT:
             # If the agent is waiting for a response, set the appropriate state
@@ -976,6 +1018,7 @@ class AgentController:
 
     async def _step(self) -> None:
         """Executes a single step of the parent or delegate agent. Detects stuck agents and limits on the number of iterations and the task budget."""
+        self.log('info', f'Starting step, current_state={self.get_agent_state()}')
         if self.get_agent_state() != AgentState.RUNNING:
             return
 

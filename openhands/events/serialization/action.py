@@ -28,6 +28,7 @@ from openhands.events.action.files import (
 )
 from openhands.events.action.mcp import McpAction
 from openhands.events.action.message import MessageAction, StreamingMessageAction
+from openhands.events.action.planning import PlanningAction
 
 actions = (
     NullAction,
@@ -45,6 +46,7 @@ actions = (
     RecallAction,
     ChangeAgentStateAction,
     MessageAction,
+    PlanningAction,
     CondensationAction,
     McpAction,
     A2AListRemoteAgentsAction,
