@@ -38,6 +38,10 @@ def parse_conversation_path(path: str) -> dict | None:
     Returns a dict with keys: user_id, session_id, event_id, type
     """
     # User-specific patterns
+    list_user_events_pattern = re.compile(
+        r'^users/(?P<user_id>[^/]+)/conversations/(?P<session_id>[^/]+)/events/$'
+    )
+
     user_event_pattern = re.compile(
         r'^users/(?P<user_id>[^/]+)/conversations/(?P<session_id>[^/]+)/events/(?P<event_id>\d+)\.json$'
     )
@@ -53,6 +57,7 @@ def parse_conversation_path(path: str) -> dict | None:
     user_settings_pattern = re.compile(r'^users/(?P<user_id>[^/]+)/settings\.json$')
 
     # Non-user-specific patterns
+    list_events_pattern = re.compile(r'^sessions/(?P<session_id>[^/]+)/events/$')
     event_pattern = re.compile(
         r'^sessions/(?P<session_id>[^/]+)/events/(?P<event_id>\d+)\.json$'
     )
@@ -72,6 +77,8 @@ def parse_conversation_path(path: str) -> dict | None:
         (metadata_pattern, 'metadata'),
         (init_pattern, 'init'),
         (agent_state_pattern, 'agent_state'),
+        (list_user_events_pattern, 'events'),
+        (list_events_pattern, 'events'),
     ]
 
     for pattern, typ in patterns:

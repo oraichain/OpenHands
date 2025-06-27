@@ -40,6 +40,28 @@ CREATE TABLE IF NOT EXISTS conversation_events (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create compound index for conversation_events (conversation_id, event_id)
+CREATE INDEX IF NOT EXISTS idx_conversation_events_conversation_event
+ON conversation_events(conversation_id, event_id);
+
+CREATE TABLE IF NOT EXISTS user_settings (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR NOT NULL,
+    settings JSONB
+);
+
+-- Create index for user_settings.user_id if it doesn't exist
+CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
+
+CREATE TABLE IF NOT EXISTS agent_states (
+    id SERIAL PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_states_conversation_id ON agent_states(conversation_id);
 
 -- Check if configs column exists, if not add it
 DO $$
