@@ -16,9 +16,9 @@ from openhands.events.action import (
     CmdRunAction,
     FileEditAction,
     FileReadAction,
+    HumanFeedbackAction,
     IPythonRunCellAction,
     MessageAction,
-    PlanningAction,
 )
 from openhands.events.action.a2a_action import (
     A2AListRemoteAgentsAction,
@@ -337,10 +337,10 @@ class ConversationMemory:
         #         )
         #     ]
 
-        # Planning prompt
-        elif isinstance(action, PlanningAction):
+        # Human Feedback
+        elif isinstance(action, HumanFeedbackAction):
             role = 'user' if action.source == 'user' else 'assistant'
-            content = [TextContent(text=action.content or '')]
+            content = [TextContent(text=action.human_feedback_questions or '')]
             if role not in ('user', 'system', 'assistant', 'tool'):
                 raise ValueError(f'Invalid role: {role}')
             return [

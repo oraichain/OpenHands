@@ -1,8 +1,5 @@
-import asyncio
-import json
 import logging
 import os
-import time
 from typing import AsyncGenerator
 
 from dotenv import load_dotenv
@@ -79,59 +76,16 @@ class PromptRefiner:
             yield f'Error: {e}'
 
 
-REWRITE_QUERY_PROMPT = get_prompt_template('rewrite_query')
 HUMAN_FEEDBACK = get_prompt_template('human_feedback')
 PLANNING_PROMPT = get_prompt_template('plan')
-
-
-async def optimize_prompt(prompt: str) -> str:
-    """
-    Optimize the prompt using the specified system prompt.
-
-    Args:
-        prompt (str): The raw user prompt to be optimized.
-
-    Returns:
-        str: The optimized prompt.
-    """
-    refiner = PromptRefiner()
-    start_time = time.perf_counter()
-    try:
-        decide_to_rewrite = await refiner.generate_response(
-            prompt=prompt, system_prompt=HUMAN_FEEDBACK
-        )
-        result_dict = json.loads(decide_to_rewrite)
-        logger.info(
-            f'Execution time of decide to rewrite prompt: {time.perf_counter() - start_time:.4f} seconds'
-        )
-        if result_dict.get('rewrite') == 0:
-            logger.info('Prompt does not need rewriting')
-            return prompt
-        else:
-            result = await refiner.generate_response(
-                prompt=prompt, system_prompt=REWRITE_QUERY_PROMPT
-            )
-            logger.info('Prompt need to optimized')
-            logger.info(
-                f'Execution time of optimize prompt: {time.perf_counter() - start_time:.4f} seconds'
-            )
-            return result
-    except Exception as e:
-        logger.error(f'Error optimizing prompt: {e}')
-        return f'Error optimizing prompt: {e}'
-
 
 agent = PromptRefiner(model=REWRITE_LLM_NAME)
 
 
-async def test_gen_response():
-    result = await agent.generate_response(
-        prompt='give me the top 1 best memecoin', system_prompt=HUMAN_FEEDBACK
-    )
-    logger.info(f'Generated response: {result}')
+async def human_feedback(prompt: str) -> str:
+    result = await agent.generate_response(prompt=prompt, system_prompt=HUMAN_FEEDBACK)
+    return result
 
-
-asyncio.run(test_gen_response())
 
 # asyncio.run(optimize_prompt("Analyze a farming pool on Raydium and assess its risk level."))
 

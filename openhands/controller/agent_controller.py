@@ -55,10 +55,10 @@ from openhands.events.action import (
     AgentRejectAction,
     ChangeAgentStateAction,
     CmdRunAction,
+    HumanFeedbackAction,
     IPythonRunCellAction,
     MessageAction,
     NullAction,
-    PlanningAction,
     StreamingMessageAction,
 )
 from openhands.events.action.agent import CondensationAction, RecallAction
@@ -221,7 +221,6 @@ class AgentController:
         self.raw_followup_conversation_id = raw_followup_conversation_id
         self.followup_conversation_events = []
         print(f'raw_followup_conversation_id: {self.raw_followup_conversation_id}')
-        self.planning = False
 
     async def close(self, set_stop_state=True) -> None:
         """Closes the agent controller, canceling any ongoing tasks and unsubscribing from the event stream.
@@ -497,6 +496,12 @@ class AgentController:
                 )
                 await self.delegate.set_agent_state_to(AgentState.RUNNING)
             return
+        elif isinstance(action, HumanFeedbackAction):
+            self.log(
+                'debug',
+                'Human feedback action is received, so we will search for WORKSPACE_CONTEXT',
+            )
+            await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
 
         elif isinstance(action, AgentFinishAction):
             self.state.outputs = action.outputs
@@ -684,6 +689,27 @@ class AgentController:
                     if events and len(events) > 0:
                         self.agent.update_agent_knowledge_base(events)
 
+    async def _combine_prompt_with_feedback(
+        self, original_prompt: str, questions: str, answers: str
+    ) -> str:
+        """
+        Combine the original prompt with the human feedback questions and answers.
+
+        Args:
+            original_prompt (str): The original prompt.
+            questions (str): The human feedback questions.
+            answers (str): The user's answers to the human feedback questions.
+
+        Returns:
+            str: The enhanced prompt.
+        """
+        # Process to generate the enhanced prompt and the message told the user that we will conduct a research
+        return (
+            f'User original input: {original_prompt} \n'
+            + f'Clarify intent questions: {questions} \n'
+            + f'User answers for questions: {answers}'
+        )
+
     async def _handle_message_action(self, action: MessageAction) -> None:
         """Handles message actions from the event stream.
 
@@ -738,59 +764,58 @@ class AgentController:
                     )
                     return
 
-            first_user_message = self._first_user_message()
-            is_first_user_message = (
-                action.id == first_user_message.id if first_user_message else False
-            )
-            recall_type = (
-                RecallType.WORKSPACE_CONTEXT
-                if is_first_user_message
-                else RecallType.KNOWLEDGE
-            )
-
-            # update new knowledge base with the user message
-            await self._search_knowledge(action.content)
-
-            recall_action = RecallAction(query=action.content, recall_type=recall_type)
-            self._pending_action = recall_action
-            # this is source=USER because the user message is the trigger for the microagent retrieval
-            self.event_stream.add_event(recall_action, EventSource.USER)
-
-            # Planning Action
-            if (
-                action.mode == ResearchMode.DEEP_RESEARCH
-                # and is_first_user_message
-            ):
-                from openhands.server.planning.planning import optimize_prompt
-
-                self.log('info', f'Research mode: {action.mode}')
-                logger.info(f'Original user prompt: {action.content}')
-                # if action.content != "/start_research":
-                #     await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
-                #     pass
-                # else:
-                #     pass
-                planning = await optimize_prompt(action.content)
-                logger.info(f'Optimized user prompt: {planning}')
-                planning_action = PlanningAction(content=planning)
-                self.event_stream.add_event(planning_action, EventSource.AGENT)
-                action.content = planning
-                await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
-                logger.info(f'Set agent state to {self.get_agent_state()}')
-                logger.debug(
-                    f'Pending action before state change: {self._pending_action}'
+            if isinstance(self._pending_action, HumanFeedbackAction):
+                enhanced_prompt = await self._combine_prompt_with_feedback(
+                    self._pending_action.original_prompt,
+                    self._pending_action.human_feedback_questions,
+                    action.content,
                 )
-                self.planning = True
 
-            if self.get_agent_state() != AgentState.RUNNING and not self.planning:
+                enhanced_action = MessageAction(content=enhanced_prompt)
+                recall_type = RecallType.WORKSPACE_CONTEXT
+                recall_action = RecallAction(
+                    query=enhanced_action.content, recall_type=recall_type
+                )
+                self._pending_action = recall_action
+                self.event_stream.add_event(recall_action, EventSource.USER)
+
+            else:
+                first_user_message = self._first_user_message()
+                is_first_user_message = (
+                    action.id == first_user_message.id if first_user_message else False
+                )
+
+                if is_first_user_message:
+                    from openhands.server.planning.planning import human_feedback
+
+                    feedback_questions = await human_feedback(action.content)
+                    if feedback_questions:
+                        feedback_action = HumanFeedbackAction(
+                            human_feedback_questions=feedback_questions,
+                            original_prompt=action.content,
+                            wait_for_response=True,
+                        )
+                        # self._pending_action = feedback_action
+                        self.event_stream.add_event(feedback_action, EventSource.AGENT)
+
+                        # await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
+                        return
+
+                recall_type = RecallType.KNOWLEDGE
+
+                # update new knowledge base with the user message
+                await self._search_knowledge(action.content)
+
+                recall_action = RecallAction(
+                    query=action.content, recall_type=recall_type
+                )
+                self._pending_action = recall_action
+                # this is source=USER because the user message is the trigger for the microagent retrieval
+                self.event_stream.add_event(recall_action, EventSource.USER)
+
+            if self.get_agent_state() != AgentState.RUNNING:
+                self.log('debug', 'Setting agent state to RUNNING')
                 await self.set_agent_state_to(AgentState.RUNNING)
-
-            if self.planning:
-                self.log(
-                    'info',
-                    f'Planning mode is active, agent state is {self.get_agent_state()}',
-                )
-                self.planning = False
 
         elif action.source == EventSource.AGENT:
             # If the agent is waiting for a response, set the appropriate state

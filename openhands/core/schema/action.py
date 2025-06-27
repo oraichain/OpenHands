@@ -10,8 +10,8 @@ class ActionType(str, Enum):
     """Represents a streaming message chunk for UI display only.
     """
 
-    PLANNING = 'planning'
-    """Represents a planning message."""
+    HUMAN_FEEDBACK = 'human_feedback'
+    """Represents a additional information from user about their initial prompt."""
 
     START = 'start'
     """Starts a new development task OR send chat from the user. Only sent by the client.

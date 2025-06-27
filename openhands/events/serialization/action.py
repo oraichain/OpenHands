@@ -26,9 +26,9 @@ from openhands.events.action.files import (
     FileReadAction,
     FileWriteAction,
 )
+from openhands.events.action.human_feedback import HumanFeedbackAction
 from openhands.events.action.mcp import McpAction
 from openhands.events.action.message import MessageAction, StreamingMessageAction
-from openhands.events.action.planning import PlanningAction
 
 actions = (
     NullAction,
@@ -46,7 +46,7 @@ actions = (
     RecallAction,
     ChangeAgentStateAction,
     MessageAction,
-    PlanningAction,
+    HumanFeedbackAction,
     CondensationAction,
     McpAction,
     A2AListRemoteAgentsAction,
