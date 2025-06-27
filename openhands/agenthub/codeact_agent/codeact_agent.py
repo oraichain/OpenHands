@@ -284,7 +284,7 @@ class CodeActAgent(Agent):
 
                             # Check if this is a "finish" or "think" function and stream the message content
                             function_name = target_tool_call['function']['name']
-                            if function_name in ['finish']:
+                            if function_name in ['finish', 'think']:
                                 self._stream_function_message(
                                     target_id,
                                     func_delta.arguments,
@@ -401,13 +401,13 @@ class CodeActAgent(Agent):
                         if isinstance(action, AgentFinishAction):
                             content = ''
                             if action.task_completed == 'partial':
-                                content = '\nI believe that the task was **completed partially**.'
+                                content = '\n\nI believe that the task was **completed partially**.'
                             elif action.task_completed == 'false':
                                 content = (
-                                    '\nI believe that the task was **not completed**.'
+                                    '\n\nI believe that the task was **not completed**.'
                                 )
                             elif action.task_completed == 'true':
-                                content = '\nI believe that the task was **completed successfully**.'
+                                content = '\n\nI believe that the task was **completed successfully**.'
                             if content and self.event_stream:
                                 self.event_stream.add_event(
                                     StreamingMessageAction(
@@ -441,16 +441,23 @@ class CodeActAgent(Agent):
             streaming_function_calls[tool_call_id] = {
                 'buffer': '',
                 'msg_start': -1,
-                'streamed': 0,
+                'msg_streamed': 0,
+                'thought_start': -1,
+                'thought_streamed': 0,
             }
 
         state = streaming_function_calls[tool_call_id]
         state['buffer'] += arguments_chunk
 
-        # Find message start if not found yet
-        if state['msg_start'] == -1:
-            # Look for "message" pattern with flexible whitespace
-            for pattern in ['"message":', '"message" :', '"message": ', '"message" : ']:
+        # Helper function to find field start
+        def find_field_start(field_name: str) -> int:
+            patterns = [
+                f'"{field_name}":',
+                f'"{field_name}" :',
+                f'"{field_name}": ',
+                f'"{field_name}" : ',
+            ]
+            for pattern in patterns:
                 if pattern in state['buffer']:
                     start = state['buffer'].find(pattern) + len(pattern)
                     # Skip whitespace and find opening quote
@@ -460,26 +467,41 @@ class CodeActAgent(Agent):
                     ):
                         start += 1
                     if start < len(state['buffer']) and state['buffer'][start] == '"':
-                        state['msg_start'] = start + 1
-                        break
+                        return start + 1
+            return -1
+
+        # Find message start if not found yet
+        if state['msg_start'] == -1:
+            state['msg_start'] = find_field_start('message')
+
+        # Find thought start if not found yet
+        if state['thought_start'] == -1:
+            state['thought_start'] = find_field_start('thought')
+
+        # Helper function to stream field content
+        def stream_field_content(field_start_key: str, streamed_key: str):
+            if state[field_start_key] != -1:
+                content = state['buffer'][state[field_start_key] :]
+                end_quote = self._find_unescaped_quote(content)
+
+                if end_quote != -1:
+                    content = content[:end_quote]
+
+                # Stream new content
+                if len(content) > state[streamed_key]:
+                    new_content = content[state[streamed_key] :]
+                    safe_content = self._get_safe_content(new_content)
+                    if safe_content:
+                        # dont stream final_thought when we are in follow_up mode
+                        if research_mode != ResearchMode.FOLLOW_UP:
+                            self._emit_streaming_content(safe_content)
+                        state[streamed_key] += len(safe_content)
 
         # Stream message content if we found the start
-        if state['msg_start'] != -1:
-            content = state['buffer'][state['msg_start'] :]
-            end_quote = self._find_unescaped_quote(content)
+        stream_field_content('msg_start', 'msg_streamed')
 
-            if end_quote != -1:
-                content = content[:end_quote]
-
-            # Stream new content
-            if len(content) > state['streamed']:
-                new_content = content[state['streamed'] :]
-                safe_content = self._get_safe_content(new_content)
-                if safe_content:
-                    # dont stream final_thought when we are in follow_up mode
-                    if research_mode != ResearchMode.FOLLOW_UP:
-                        self._emit_streaming_content(safe_content)
-                    state['streamed'] += len(safe_content)
+        # Stream thought content if we found the start
+        stream_field_content('thought_start', 'thought_streamed')
 
     def _get_safe_content(self, content: str) -> str:
         """Extract content safe to stream (avoid partial escapes)"""
