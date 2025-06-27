@@ -79,9 +79,9 @@ class PromptRefiner:
             yield f'Error: {e}'
 
 
-DECIDE_REWRITE_PROMPT = get_prompt_template('decide_to_rewrite')
 REWRITE_QUERY_PROMPT = get_prompt_template('rewrite_query')
 HUMAN_FEEDBACK = get_prompt_template('human_feedback')
+PLANNING_PROMPT = get_prompt_template('plan')
 
 
 async def optimize_prompt(prompt: str) -> str:
@@ -98,7 +98,7 @@ async def optimize_prompt(prompt: str) -> str:
     start_time = time.perf_counter()
     try:
         decide_to_rewrite = await refiner.generate_response(
-            prompt=prompt, system_prompt=DECIDE_REWRITE_PROMPT
+            prompt=prompt, system_prompt=HUMAN_FEEDBACK
         )
         result_dict = json.loads(decide_to_rewrite)
         logger.info(
@@ -126,7 +126,7 @@ agent = PromptRefiner(model=REWRITE_LLM_NAME)
 
 async def test_gen_resposne():
     result = await agent.generate_response(
-        prompt='Who is donal trump', system_prompt=HUMAN_FEEDBACK
+        prompt='give me the top 1 best memecoin', system_prompt=HUMAN_FEEDBACK
     )
     logger.info(f'Generated response: {result}')
 
