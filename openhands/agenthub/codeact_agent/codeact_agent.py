@@ -372,8 +372,8 @@ class CodeActAgent(Agent):
                         mock_response,
                         self.session_id,
                         self.workspace_mount_path_in_sandbox_store_in_session,
-                        tools=tools,
-                        enable_think=False,
+                        tools,
+                        False,
                     )
 
                     for action in actions:
@@ -397,6 +397,26 @@ class CodeActAgent(Agent):
                                     EventSource.AGENT,
                                 )
                         self.pending_actions.append(action)
+
+                        if isinstance(action, AgentFinishAction):
+                            content = ''
+                            if action.task_completed == 'partial':
+                                content = '\nI believe that the task was **completed partially**.'
+                            elif action.task_completed == 'false':
+                                content = (
+                                    '\nI believe that the task was **not completed**.'
+                                )
+                            elif action.task_completed == 'true':
+                                content = '\nI believe that the task was **completed successfully**.'
+                            if content and self.event_stream:
+                                self.event_stream.add_event(
+                                    StreamingMessageAction(
+                                        content=content,
+                                        wait_for_response=True,
+                                        enable_process_llm=False,
+                                    ),
+                                    EventSource.AGENT,
+                                )
 
             except Exception as e:
                 logger.error(f'Error processing accumulated tool calls: {e}')
