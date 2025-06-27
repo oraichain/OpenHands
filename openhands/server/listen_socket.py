@@ -10,7 +10,7 @@ from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import (
     NullAction,
 )
-from openhands.events.action.agent import RecallAction
+from openhands.events.action.agent import AgentThinkAction, RecallAction
 from openhands.events.action.message import StreamingMessageAction
 from openhands.events.async_event_store_wrapper import AsyncEventStoreWrapper
 from openhands.events.observation import (
@@ -231,7 +231,13 @@ async def connect(connection_id: str, environ):
             logger.debug(f'oh_event: {event.__class__.__name__}')
             if isinstance(
                 event,
-                (NullAction, NullObservation, RecallAction, StreamingMessageAction),
+                (
+                    NullAction,
+                    NullObservation,
+                    RecallAction,
+                    StreamingMessageAction,
+                    AgentThinkAction,
+                ),
             ):
                 continue
             elif isinstance(event, AgentStateChangedObservation):
