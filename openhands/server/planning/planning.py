@@ -124,14 +124,14 @@ async def optimize_prompt(prompt: str) -> str:
 agent = PromptRefiner(model=REWRITE_LLM_NAME)
 
 
-async def test_gen_resposne():
+async def test_gen_response():
     result = await agent.generate_response(
         prompt='give me the top 1 best memecoin', system_prompt=HUMAN_FEEDBACK
     )
     logger.info(f'Generated response: {result}')
 
 
-asyncio.run(test_gen_resposne())
+asyncio.run(test_gen_response())
 
 # asyncio.run(optimize_prompt("Analyze a farming pool on Raydium and assess its risk level."))
 
