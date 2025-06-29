@@ -354,9 +354,6 @@ async def search_conversations(
     keyword: str | None = None,
 ) -> ConversationInfoResultSet:
     user_id = get_user_id(request)
-    conversation_store = await ConversationStoreImpl.get_instance(
-        config, user_id, get_github_user_id(request)
-    )
 
     # get conversation visibility by user id
     visible_conversations = (
@@ -366,24 +363,57 @@ async def search_conversations(
     )
     if len(visible_conversations['items']) == 0:
         return ConversationInfoResultSet(results=[], next_page_id=None)
-    visible_conversation_ids = [
-        conversation['conversation_id']
-        for conversation in visible_conversations['items']
-    ]
 
-    conversation_metadata_result_set = await conversation_store.search(
-        page_id, limit, filter_conversation_ids=visible_conversation_ids
-    )
-    # Filter out conversations older than max_age
-    now = datetime.now(timezone.utc)
-    max_age = config.conversation_max_age_seconds
-    filtered_results = [
-        conversation
-        for conversation in conversation_metadata_result_set.results
-        if hasattr(conversation, 'created_at')
-        and (now - conversation.created_at.replace(tzinfo=timezone.utc)).total_seconds()
-        <= max_age
-    ]
+    # Check if using database file store
+    if config.file_store == 'database':
+        # Use conversation records directly to create metadata objects
+        filtered_results = []
+        for conversation in visible_conversations['items']:
+            try:
+                # Create ConversationMetadata object from database record
+                conversation_metadata = ConversationMetadata(
+                    conversation_id=conversation.conversation_id,
+                    title=conversation.title or '',
+                    user_id=conversation.user_id,
+                    github_user_id=None,
+                    selected_repository=None,
+                    selected_branch=None,
+                    created_at=conversation.created_at,
+                    last_updated_at=conversation.created_at,
+                )
+                filtered_results.append(conversation_metadata)
+            except Exception as e:
+                logger.error(
+                    f'Error creating metadata for conversation {conversation.conversation_id}: {e}'
+                )
+                continue
+    else:
+        # Use existing file-based approach
+        conversation_store = await ConversationStoreImpl.get_instance(
+            config, user_id, get_github_user_id(request)
+        )
+
+        visible_conversation_ids = [
+            conversation.conversation_id
+            for conversation in visible_conversations['items']
+        ]
+
+        conversation_metadata_result_set = await conversation_store.search(
+            page_id, limit, filter_conversation_ids=visible_conversation_ids
+        )
+
+        # Filter out conversations older than max_age
+        now = datetime.now(timezone.utc)
+        max_age = config.conversation_max_age_seconds
+        filtered_results = [
+            conversation
+            for conversation in conversation_metadata_result_set.results
+            if hasattr(conversation, 'created_at')
+            and (
+                now - conversation.created_at.replace(tzinfo=timezone.utc)
+            ).total_seconds()
+            <= max_age
+        ]
 
     conversation_ids = set(
         conversation.conversation_id for conversation in filtered_results
@@ -399,7 +429,7 @@ async def search_conversations(
             )
             for conversation in filtered_results
         ),
-        next_page_id=conversation_metadata_result_set.next_page_id,
+        next_page_id=None,  # Database doesn't use page_id pagination
         total=visible_conversations['total'],
     )
     return result

@@ -11,6 +11,7 @@ from fastapi import (
 
 import openhands.agenthub  # noqa F401 (we import this to get the agents registered)
 from openhands import __version__
+from openhands.core.database import db_pool
 from openhands.server.backend_pre_start import init
 from openhands.server.db import database, engine
 from openhands.server.initial_data import init as init_initial_data
@@ -47,10 +48,7 @@ async def _lifespan(app: FastAPI):
         # Initialize database connection
         await init(engine)
         await init_initial_data()
-        if not mcp_tools_cache.is_loaded:
-            await mcp_tools_cache.initialize_tools(
-                config.dict_mcp_config, config.dict_search_engine_config
-            )
+        db_pool.init_pool()
 
         if not mcp_tools_cache.is_loaded:
             await mcp_tools_cache.initialize_tools(

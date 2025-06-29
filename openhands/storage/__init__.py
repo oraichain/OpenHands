@@ -1,3 +1,4 @@
+from openhands.storage.database import DatabaseFileStore
 from openhands.storage.files import FileStore
 from openhands.storage.google_cloud import GoogleCloudFileStore
 from openhands.storage.http import HTTPFileStore
@@ -19,4 +20,6 @@ def get_file_store(file_store: str, file_store_path: str | None = None) -> FileS
         if file_store_path is None:
             raise ValueError('file_store_path is required for HTTP file store')
         return HTTPFileStore(file_store_path)
+    elif file_store == 'database':
+        return DatabaseFileStore()
     return InMemoryFileStore()
