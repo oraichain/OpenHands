@@ -1493,3 +1493,937 @@ def test_history_restoration_after_truncation(mock_event_stream, mock_agent):
     assert len(new_controller.state.history) == saved_history_len
     assert new_controller.state.history[0] == first_msg
     assert new_controller.state.start_id == saved_start_id
+
+
+# Test cases for try_process_prompt_using_history_semantic_cache method
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_no_cache_enabled(mock_agent, mock_event_stream):
+    """Test when litellm.cache is None."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    with patch('litellm.cache', None):
+        result = await controller.try_process_prompt_using_history_semantic_cache(
+            action
+        )
+
+    assert result is None
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_miss(mock_agent, mock_event_stream):
+    """Test when cache returns None (cache miss)."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = None
+
+    with patch('litellm.cache', mock_cache):
+        result = await controller.try_process_prompt_using_history_semantic_cache(
+            action
+        )
+
+    assert result is None
+    mock_cache.async_get_cache.assert_called_once_with(prompt='Test message')
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_empty_response(mock_agent, mock_event_stream):
+    """Test when cache returns empty list."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = []
+
+    with patch('litellm.cache', mock_cache):
+        result = await controller.try_process_prompt_using_history_semantic_cache(
+            action
+        )
+
+    assert result is None
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_non_list_response(mock_agent, mock_event_stream):
+    """Test when cache returns non-list response."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = 'not a list'
+
+    with patch('litellm.cache', mock_cache):
+        result = await controller.try_process_prompt_using_history_semantic_cache(
+            action
+        )
+
+    assert result is None
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_only_user_message(mock_agent, mock_event_stream):
+    """Test when cached events contain only user message (nothing left after skipping first)."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    # Mock cached response with only user message
+    user_msg_dict = {
+        'action': 'message',
+        'source': 'user',
+        'args': {
+            'content': 'Test message',
+            'wait_for_response': False,
+            'enable_think': True,
+        },
+    }
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = [user_msg_dict]
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+            mock_from_dict.return_value = MessageAction(content='Test message')
+            mock_from_dict.return_value._source = EventSource.USER
+            result = await controller.try_process_prompt_using_history_semantic_cache(
+                action
+            )
+
+    assert result is None
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_no_matching_events(mock_agent, mock_event_stream):
+    """Test when cached events don't contain AgentFinishAction or MessageAction from agent."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    # Mock cached response with non-matching events
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'run',
+            'source': 'agent',
+            'args': {'command': 'ls', 'enable_think': True},
+        },
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+
+            def side_effect(event_dict):
+                if event_dict['action'] == 'message' and event_dict['source'] == 'user':
+                    msg = MessageAction(content='Test message')
+                    msg._source = EventSource.USER
+                    return msg
+                else:
+                    cmd = CmdRunAction(command='ls')
+                    cmd._source = EventSource.AGENT
+                    return cmd
+
+            mock_from_dict.side_effect = side_effect
+
+            with patch.object(controller, 'log') as mock_log:
+                await controller.try_process_prompt_using_history_semantic_cache(action)
+
+            # Should log info about cache hit but return None since no matching events
+            mock_log.assert_called_with(
+                'info', 'Cache hit for user message: 1 events found'
+            )
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_agent_finish_action_hit(mock_agent, mock_event_stream):
+    """Test successful cache hit with AgentFinishAction."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    # Mock cached response with AgentFinishAction
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'finish',
+            'source': 'agent',
+            'args': {
+                'outputs': {'result': 'done'},
+                'thought': '',
+                'enable_think': True,
+            },
+        },
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    from openhands.events.action import AgentFinishAction
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+
+            def side_effect(event_dict):
+                if event_dict['action'] == 'message':
+                    msg = MessageAction(content='Test message')
+                    msg._source = EventSource.USER
+                    return msg
+                else:
+                    finish_action = AgentFinishAction(outputs={'result': 'done'})
+                    finish_action._source = EventSource.AGENT
+                    return finish_action
+
+            mock_from_dict.side_effect = side_effect
+
+            with patch.object(controller, 'log') as mock_log:
+                await controller.try_process_prompt_using_history_semantic_cache(action)
+
+            # Should log cache hit
+            mock_log.assert_called_with(
+                'info', 'Cache hit for user message: 1 events found'
+            )
+
+    # Verify event was added to stream (should be called twice - once for action, once for state change)
+    assert mock_event_stream.add_event.call_count == 2
+
+    # Check the first call (the cached action)
+    first_call_args = mock_event_stream.add_event.call_args_list[0]
+    added_event, source = first_call_args[0]
+    assert isinstance(added_event, AgentFinishAction)
+    assert source == EventSource.AGENT
+    assert added_event.action_cached
+
+    # Verify state was updated
+    assert controller.state.iteration == 1
+    assert controller.state.local_iteration == 1
+    assert len(controller.state.history) == 1
+    assert controller.get_agent_state() == AgentState.AWAITING_USER_INPUT
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_message_action_hit(mock_agent, mock_event_stream):
+    """Test successful cache hit with MessageAction from agent."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    # Mock cached response with MessageAction from agent
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {
+                'content': 'Response message',
+                'wait_for_response': True,
+                'enable_think': True,
+            },
+        },
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+
+            def side_effect(event_dict):
+                if event_dict['source'] == 'user':
+                    msg = MessageAction(content='Test message')
+                    msg._source = EventSource.USER
+                    return msg
+                else:
+                    msg = MessageAction(
+                        content='Response message', wait_for_response=True
+                    )
+                    msg._source = EventSource.AGENT
+                    return msg
+
+            mock_from_dict.side_effect = side_effect
+
+            await controller.try_process_prompt_using_history_semantic_cache(action)
+
+    # Verify events were added (action + state change)
+    assert mock_event_stream.add_event.call_count == 2
+
+    # Check the first call (the cached action)
+    first_call_args = mock_event_stream.add_event.call_args_list[0]
+    added_event, source = first_call_args[0]
+    assert isinstance(added_event, MessageAction)
+    assert added_event.content == 'Response message'
+    assert source == EventSource.AGENT
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_multiple_events_picks_last(mock_agent, mock_event_stream):
+    """Test that it picks the last matching event when multiple are available."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    # Mock cached response with multiple agent events
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {
+                'content': 'First response',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'run',
+            'source': 'agent',
+            'args': {'command': 'ls', 'enable_think': True},
+        },
+        {
+            'action': 'finish',
+            'source': 'agent',
+            'args': {
+                'outputs': {'result': 'done'},
+                'thought': '',
+                'enable_think': True,
+            },
+        },
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    from openhands.events.action import AgentFinishAction
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+
+            def side_effect(event_dict):
+                if event_dict['action'] == 'message' and event_dict['source'] == 'user':
+                    msg = MessageAction(content='Test message')
+                    msg._source = EventSource.USER
+                    return msg
+                elif (
+                    event_dict['action'] == 'message'
+                    and event_dict['source'] == 'agent'
+                ):
+                    msg = MessageAction(content='First response')
+                    msg._source = EventSource.AGENT
+                    return msg
+                elif event_dict['action'] == 'run':
+                    cmd = CmdRunAction(command='ls')
+                    cmd._source = EventSource.AGENT
+                    return cmd
+                else:  # finish action
+                    finish_action = AgentFinishAction(outputs={'result': 'done'})
+                    finish_action._source = EventSource.AGENT
+                    return finish_action
+
+            mock_from_dict.side_effect = side_effect
+
+            await controller.try_process_prompt_using_history_semantic_cache(action)
+
+    # Should pick the AgentFinishAction (last in reversed order that matches criteria)
+    assert mock_event_stream.add_event.call_count == 2
+
+    # Check the first call (the cached action)
+    first_call_args = mock_event_stream.add_event.call_args_list[0]
+    added_event, _ = first_call_args[0]
+    assert isinstance(added_event, AgentFinishAction)
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_action_cached_attribute_handling(
+    mock_agent, mock_event_stream
+):
+    """Test handling of action_cached attribute."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {
+                'content': 'Response',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+
+            def side_effect(event_dict):
+                if event_dict['source'] == 'user':
+                    msg = MessageAction(content='Test message')
+                    msg._source = EventSource.USER
+                    return msg
+                else:
+                    msg = MessageAction(content='Response')
+                    msg._source = EventSource.AGENT
+                    # Test event that HAS action_cached attribute
+                    msg.action_cached = False
+                    return msg
+
+            mock_from_dict.side_effect = side_effect
+
+            await controller.try_process_prompt_using_history_semantic_cache(action)
+
+    # Verify action_cached was set to True
+    assert mock_event_stream.add_event.call_count == 2
+
+    # Check the first call (the cached action)
+    first_call_args = mock_event_stream.add_event.call_args_list[0]
+    added_event, _ = first_call_args[0]
+    assert added_event.action_cached
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_event_without_action_cached_attribute(
+    mock_agent, mock_event_stream
+):
+    """Test handling when event doesn't have action_cached attribute."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {
+                'content': 'Response',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+
+            def side_effect(event_dict):
+                if event_dict['source'] == 'user':
+                    msg = MessageAction(content='Test message')
+                    msg._source = EventSource.USER
+                    return msg
+                else:
+                    # Create a basic action without action_cached attribute
+                    msg = MessageAction(content='Response')
+                    msg._source = EventSource.AGENT
+                    # Explicitly remove action_cached if it exists
+                    if hasattr(msg, 'action_cached'):
+                        delattr(msg, 'action_cached')
+                    return msg
+
+            mock_from_dict.side_effect = side_effect
+
+            await controller.try_process_prompt_using_history_semantic_cache(action)
+
+    # Should still work, just won't set action_cached
+    assert mock_event_stream.add_event.call_count == 2
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_event_from_dict_exception(mock_agent, mock_event_stream):
+    """Test handling when event_from_dict raises an exception."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {'action': 'invalid', 'source': 'agent', 'args': {}},
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+            mock_from_dict.side_effect = ValueError('Invalid event dict')
+
+            with patch.object(controller, 'log') as mock_log:
+                result = (
+                    await controller.try_process_prompt_using_history_semantic_cache(
+                        action
+                    )
+                )
+
+            # Should log error and continue (check if error log was called with "Error using semantic cache")
+            error_logs = [
+                call
+                for call in mock_log.call_args_list
+                if call[0][0] == 'error' and 'Error using semantic cache' in call[0][1]
+            ]
+            assert len(error_logs) > 0
+
+    assert result is None
+    mock_event_stream.add_event.assert_not_called()
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_mixed_event_sources(mock_agent, mock_event_stream):
+    """Test with mixed event sources - should only process agent events."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    # Mix of user and agent events, with environment events
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'message',
+            'source': 'environment',
+            'args': {
+                'content': 'Environment msg',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Another user msg',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {
+                'content': 'Agent response',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+
+            def side_effect(event_dict):
+                msg = MessageAction(content=event_dict['args']['content'])
+                if event_dict['source'] == 'user':
+                    msg._source = EventSource.USER
+                elif event_dict['source'] == 'agent':
+                    msg._source = EventSource.AGENT
+                else:
+                    msg._source = EventSource.ENVIRONMENT
+                return msg
+
+            mock_from_dict.side_effect = side_effect
+
+            await controller.try_process_prompt_using_history_semantic_cache(action)
+
+    # Should only process the agent message (2 calls: action + state change)
+    assert mock_event_stream.add_event.call_count == 2
+
+    # Check the first call (the cached action)
+    first_call_args = mock_event_stream.add_event.call_args_list[0]
+    added_event, _ = first_call_args[0]
+    assert added_event.content == 'Agent response'
+    assert added_event._source == EventSource.AGENT
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_state_update_exception(mock_agent, mock_event_stream):
+    """Test handling when state update raises an exception."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {
+                'content': 'Response',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+
+            def side_effect(event_dict):
+                if event_dict['source'] == 'user':
+                    msg = MessageAction(content='Test message')
+                    msg._source = EventSource.USER
+                    return msg
+                else:
+                    msg = MessageAction(content='Response')
+                    msg._source = EventSource.AGENT
+                    return msg
+
+            mock_from_dict.side_effect = side_effect
+
+            # Mock update_state_before_step to raise exception
+            with patch.object(
+                controller,
+                'update_state_before_step',
+                side_effect=RuntimeError('State update failed'),
+            ):
+                with patch.object(controller, 'log') as mock_log:
+                    result = await controller.try_process_prompt_using_history_semantic_cache(
+                        action
+                    )
+
+                # Should log error about state update
+                mock_log.assert_any_call(
+                    'error', 'Error updating state before step: State update failed'
+                )
+                mock_log.assert_any_call(
+                    'info', 'Cache hit for user message: 1 events found'
+                )
+
+    # Event should still be processed despite the exception
+    assert result is None
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_async_get_cache_exception(mock_agent, mock_event_stream):
+    """Test handling when async_get_cache raises an exception."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.side_effect = RuntimeError('Cache access failed')
+
+    with patch('litellm.cache', mock_cache):
+        with patch.object(controller, 'log') as mock_log:
+            result = await controller.try_process_prompt_using_history_semantic_cache(
+                action
+            )
+
+        # Should log error
+        mock_log.assert_called_with(
+            'error', 'Error using semantic cache to process prompt: Cache access failed'
+        )
+
+    assert result is None
+    mock_event_stream.add_event.assert_not_called()
+
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_semantic_cache_event_id_reset(mock_agent, mock_event_stream):
+    """Test that Event.INVALID_ID is set on cached events."""
+    controller = AgentController(
+        agent=mock_agent,
+        event_stream=mock_event_stream,
+        max_iterations=10,
+        sid='test',
+        confirmation_mode=False,
+        headless_mode=True,
+    )
+
+    action = MessageAction(content='Test message')
+
+    cached_events = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {
+                'content': 'Test message',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {
+                'content': 'Response',
+                'wait_for_response': False,
+                'enable_think': True,
+            },
+        },
+    ]
+
+    mock_cache = AsyncMock()
+    mock_cache.async_get_cache.return_value = cached_events
+
+    from openhands.events.event import Event
+
+    with patch('litellm.cache', mock_cache):
+        with patch(
+            'openhands.events.serialization.event.event_from_dict'
+        ) as mock_from_dict:
+
+            def side_effect(event_dict):
+                if event_dict['source'] == 'user':
+                    msg = MessageAction(content='Test message')
+                    msg._source = EventSource.USER
+                    msg._id = 123  # Set some original ID
+                    return msg
+                else:
+                    msg = MessageAction(content='Response')
+                    msg._source = EventSource.AGENT
+                    msg._id = 456  # Set some original ID
+                    return msg
+
+            mock_from_dict.side_effect = side_effect
+
+            await controller.try_process_prompt_using_history_semantic_cache(action)
+
+    # Verify event ID was reset (check first call which is the cached action)
+    assert mock_event_stream.add_event.call_count == 2
+    first_call_args = mock_event_stream.add_event.call_args_list[0]
+    added_event, _ = first_call_args[0]
+    assert added_event.id == Event.INVALID_ID
+
+    await controller.close()
