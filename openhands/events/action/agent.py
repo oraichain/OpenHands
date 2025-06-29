@@ -44,6 +44,7 @@ class AgentFinishAction(Action):
     thought: str = ''
     action: str = ActionType.FINISH
     enable_think: Optional[bool] = True
+    action_cached: bool = False
 
     @property
     def message(self) -> str:

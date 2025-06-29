@@ -1,6 +1,9 @@
 import logging
+import os
 import warnings
 from contextlib import asynccontextmanager
+
+import litellm
 
 with warnings.catch_warnings():
     warnings.simplefilter('ignore')
@@ -8,6 +11,7 @@ with warnings.catch_warnings():
 from fastapi import (
     FastAPI,
 )
+from litellm.caching.caching import Cache
 
 import openhands.agenthub  # noqa F401 (we import this to get the agents registered)
 from openhands import __version__
@@ -49,6 +53,17 @@ async def _lifespan(app: FastAPI):
             await mcp_tools_cache.initialize_tools(
                 config.dict_mcp_config, config.dict_search_engine_config
             )
+
+        # add litellm cache
+        litellm.cache = Cache(
+            type='redis-semantic',
+            host=os.environ['REDIS_HOST'],
+            port=os.environ['REDIS_PORT'],
+            password=os.environ['REDIS_PASSWORD'],
+            similarity_threshold=0.8,  # similarity threshold for cache hits, 0 == no similarity, 1 = exact matches, 0.5 == 50% similarity
+            ttl=300,
+            redis_semantic_cache_embedding_model='text-embedding-3-large',  # this model is passed to litellm.embedding(), any litellm.embedding() model is supported here
+        )
 
         # Start conversation manager
         async with conversation_manager:

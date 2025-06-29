@@ -13,7 +13,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.14"
 litellm = { git = "https://github.com/oraichain/litellm.git", rev = "6dfc2089550f1be626bd5bed9fe9e991628fe82f" }
 aiohttp = ">=3.9.0,!=3.11.13"                               # Pin to avoid yanked version 3.11.13
 google-generativeai = "*"                                   # To use litellm with Gemini Pro API
@@ -90,7 +90,13 @@ traceloop-sdk = "0.24.0"
 PyYAML = "^6.0.1"
 mem0ai = "0.1.98"
 psycopg2-binary = "2.9.10"
-uvloop = "0.21.0"
+uvloop = "^0.21.0"
+# llm response caching
+redisvl = "^0.8.0"
+orjson = "^3.10.18"
+apscheduler = "^3.11.0"
+email-validator = "^2.2.0"
+fastapi_sso = "^0.18.0"
 
 json-schema-to-pydantic = "0.2.3"
 autogen_core = { git = "https://github.com/oraichain/autogen.git", subdirectory = "python/packages/autogen-core" }

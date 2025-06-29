@@ -50,6 +50,10 @@ class Event:
             return int(id_val) if id_val is not None else Event.INVALID_ID
         return Event.INVALID_ID
 
+    @id.setter
+    def id(self, value: int | None) -> None:
+        self._id = value
+
     @property
     def timestamp(self) -> str | None:
         if hasattr(self, '_timestamp') and isinstance(self._timestamp, str):

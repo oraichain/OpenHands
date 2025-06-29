@@ -80,6 +80,7 @@ from openhands.events.observation.a2a import (
 )
 from openhands.events.observation.credit import CreditErrorObservation
 from openhands.events.serialization.event import (
+    event_from_dict,
     event_to_dict,
     event_to_trajectory,
     truncate_content,
@@ -493,6 +494,8 @@ class AgentController:
             self.state.outputs = action.outputs
             self.state.metrics.merge(self.state.local_metrics)
             await self.set_agent_state_to(AgentState.FINISHED)
+            if not action.action_cached:
+                await self._cache_history_from_last_user_message()
 
             # TODO: add a new event to the event stream sync rag job
         elif isinstance(action, AgentRejectAction):
@@ -750,10 +753,50 @@ class AgentController:
             if self.get_agent_state() != AgentState.RUNNING:
                 await self.set_agent_state_to(AgentState.RUNNING)
 
+            response = await litellm.cache.async_get_cache(**{'prompt': action.content})
+            if response and isinstance(response, list) and len(response) > 0:
+                cached_events = [event_from_dict(event) for event in response]
+                # skip the first event, which is the user message
+                cached_events = cached_events[1:]
+                if cached_events and len(cached_events) > 0:
+                    # only add the last AgentFinishAction to the history, cuz it's the most valued one
+                    for event in reversed(cached_events):
+                        if (
+                            isinstance(event, Action)
+                            and event.source == EventSource.AGENT
+                            and (
+                                isinstance(event, AgentFinishAction)
+                                or isinstance(event, MessageAction)
+                            )
+                        ):
+                            try:
+                                self.update_state_before_step()
+                                # reset event id so we can add it to the event stream as new
+                                event.id = Event.INVALID_ID
+                                event.action_cached = True
+                                self.event_stream.add_event(event, EventSource.AGENT)
+                                self.state.history.append(event)
+                                await self.set_agent_state_to(
+                                    AgentState.AWAITING_USER_INPUT
+                                )
+                            except Exception as e:
+                                self.log(
+                                    'error',
+                                    f'Error updating state before step: {e}',
+                                )
+                            break
+                    self.log(
+                        'info',
+                        f'Cache hit for user message: {cached_events}',
+                    )
+                return
+
         elif action.source == EventSource.AGENT:
             # If the agent is waiting for a response, set the appropriate state
             if action.wait_for_response:
                 await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
+            if not action.action_cached:
+                await self._cache_history_from_last_user_message()
 
     def _reset(self) -> None:
         """Resets the agent controller."""
@@ -1610,3 +1653,55 @@ class AgentController:
             None,
         )
         return self._cached_first_user_message
+
+    def _get_last_user_message(self) -> tuple[MessageAction, int] | None:
+        for i in range(len(self.state.history) - 1, -1, -1):
+            event = self.state.history[i]
+            if isinstance(event, MessageAction) and event.source == EventSource.USER:
+                return event, i
+        return None
+
+    async def _cache_history_from_last_user_message(self) -> None:
+        try:
+            if not litellm.cache:
+                self.log(
+                    'debug',
+                    'No cache enabled, skipping cache history',
+                )
+                return
+
+            # Find the last user message by iterating from the end
+            result = self._get_last_user_message()
+
+            if result is None:
+                # No user message found, don't cache anything
+                return
+            last_user_message, last_user_message_index = result
+
+            # Cache events starting from the last user message
+            events_to_cache = [
+                event_to_dict(event)
+                for event in self.state.history[last_user_message_index:]
+            ]
+
+            # Use the user message content as prompt
+            prompt = last_user_message.content
+
+            # cache the entire response
+            already_cached = await litellm.cache.async_get_cache(**{'prompt': prompt})
+            self.log(
+                'info',
+                f'already_cached: {already_cached}',
+            )
+            if already_cached:
+                return
+
+            await litellm.cache.async_add_cache(
+                result=events_to_cache, **{'prompt': prompt}
+            )
+        except Exception as e:
+            self.log(
+                'warn',
+                f'Error caching history: {e}',
+            )
+            return
