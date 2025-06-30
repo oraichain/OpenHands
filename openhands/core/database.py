@@ -33,9 +33,7 @@ class DBConnectionPool:
                     'POSTGRES_PASSWORD'
                 )
                 database = os.getenv('PGBOUNCER_DB_NAME') or os.getenv('POSTGRES_DB')
-                host = os.getenv('PGBOUNCER_DB_HOST', 'localhost') or os.getenv(
-                    'POSTGRES_HOST'
-                )
+                host = os.getenv('PGBOUNCER_DB_HOST') or os.getenv('POSTGRES_HOST')
                 port = os.getenv('PGBOUNCER_DB_PORT') or os.getenv(
                     'POSTGRES_PORT', '5432'
                 )
