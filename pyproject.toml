@@ -90,7 +90,7 @@ traceloop-sdk = "0.24.0"
 PyYAML = "^6.0.1"
 mem0ai = "0.1.98"
 uvloop = "0.21.0"
-psycopg = "^3.2.9"
+psycopg = { version = "^3.1", extras = ["binary"] }
 psycopg_pool = "^3.2.0"
 
 json-schema-to-pydantic = "0.2.3"
