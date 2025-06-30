@@ -25,8 +25,26 @@ from openhands.utils.async_utils import call_sync_from_async
 from openhands.utils.search_utils import offset_to_page_id, page_id_to_offset
 
 conversation_metadata_type_adapter = TypeAdapter(ConversationMetadata)
-config_app = load_app_config()
-local_file_store = LocalFileStore(config_app.file_store_path)
+
+_config_app = None
+_local_file_store = None
+
+
+def get_config_app():
+    """Lazy loading of app config to prevent JWT secret creation during module import."""
+    global _config_app
+    if _config_app is None:
+        _config_app = load_app_config()
+    return _config_app
+
+
+def get_local_file_store():
+    """Lazy loading of local file store."""
+    global _local_file_store
+    if _local_file_store is None:
+        config = get_config_app()
+        _local_file_store = LocalFileStore(config.file_store_path)
+    return _local_file_store
 
 
 @dataclass
@@ -39,8 +57,11 @@ class FileConversationStore(ConversationStore):
         json_str = conversation_metadata_type_adapter.dump_json(metadata)
         path = self.get_conversation_metadata_filename(metadata.conversation_id)
         await call_sync_from_async(self.file_store.write, path, json_str)
-        if config_app.enable_write_to_local and config_app.file_store == 'database':
-            await call_sync_from_async(local_file_store.write, path, json_str)
+        if (
+            get_config_app().enable_write_to_local
+            and get_config_app().file_store == 'database'
+        ):
+            await call_sync_from_async(get_local_file_store().write, path, json_str)
 
     async def get_metadata(self, conversation_id: str) -> ConversationMetadata:
         path = self.get_conversation_metadata_filename(conversation_id)
