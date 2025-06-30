@@ -704,10 +704,15 @@ class AgentController:
             str: The enhanced prompt.
         """
         # Process to generate the enhanced prompt and the message told the user that we will conduct a research
+        instruction = """
+        Based on the user's original input and their responses to the clarification questions, your task is to synthesize a clear summary of their intent and preferences.
+        Then, inform the user that you will now proceed to conduct a focused search or analysis aligned with their clarified needs.
+        """
         return (
             f'User original input: {original_prompt} \n'
             + f'Clarify intent questions: {questions} \n'
-            + f'User answers for questions: {answers}'
+            + f'User answers for questions: {answers} \n'
+            + instruction
         )
 
     async def _handle_message_action(self, action: MessageAction) -> None:
@@ -770,7 +775,7 @@ class AgentController:
                     self._pending_action.human_feedback_questions,
                     action.content,
                 )
-
+                self.log('debug', f'Enhanced prompt: {enhanced_prompt}')
                 enhanced_action = MessageAction(content=enhanced_prompt)
                 recall_type = RecallType.WORKSPACE_CONTEXT
                 recall_action = RecallAction(
@@ -795,10 +800,8 @@ class AgentController:
                             original_prompt=action.content,
                             wait_for_response=True,
                         )
-                        # self._pending_action = feedback_action
+                        self._pending_action = feedback_action
                         self.event_stream.add_event(feedback_action, EventSource.AGENT)
-
-                        # await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
                         return
 
                 recall_type = RecallType.KNOWLEDGE
