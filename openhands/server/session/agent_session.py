@@ -65,16 +65,17 @@ class AgentSession:
         space_id: int | None = None,
         thread_follow_up: int | None = None,
         raw_followup_conversation_id: str | None = None,
+        config: AppConfig | None = None,
     ):
         """Initializes a new instance of the Session class
 
         Parameters:
         - sid: The session ID
         - file_store: Instance of the FileStore
+        - config: Application configuration (optional, will be loaded if not provided)
         """
 
         self.sid = sid
-        self.event_stream = EventStream(sid, file_store, user_id)
         self.file_store = file_store
         self._status_callback = status_callback
         self.user_id = user_id
@@ -84,6 +85,10 @@ class AgentSession:
         self.space_id = space_id
         self.thread_follow_up = thread_follow_up
         self.raw_followup_conversation_id = raw_followup_conversation_id
+
+        # Create event stream using factory - will be properly initialized when config is available
+
+        self.event_stream = EventStream(sid, file_store, user_id)
 
     async def start(
         self,

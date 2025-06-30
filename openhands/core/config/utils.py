@@ -23,6 +23,7 @@ from openhands.core.config.config_utils import (
 )
 from openhands.core.config.conversation_config import ConversationConfig
 from openhands.core.config.extended_config import ExtendedConfig
+from openhands.core.config.kafka_config import KafkaConfig
 from openhands.core.config.llm_config import LLMConfig
 from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.config.sandbox_config import SandboxConfig
@@ -221,7 +222,22 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
             # Re-raise ValueError from ConversationConfig.from_toml_section
             raise ValueError('Error in [conversation] section in config.toml')
 
-            # Process MCP sections if present
+    # Process kafka section if present
+    if 'kafka' in toml_config:
+        try:
+            kafka_mapping = KafkaConfig.from_toml_section(toml_config['kafka'])
+            # We only use the base kafka config for now
+            if 'kafka' in kafka_mapping:
+                cfg.kafka = kafka_mapping['kafka']
+        except (TypeError, KeyError, ValidationError) as e:
+            logger.openhands_logger.warning(
+                f'Cannot parse [kafka] config from toml, values have not been applied.\nError: {e}'
+            )
+        except ValueError:
+            # Re-raise ValueError from KafkaConfig.from_toml_section
+            raise ValueError('Error in [kafka] section in config.toml')
+
+    # Process MCP sections if present
     if 'mcp' in toml_config:
         try:
             cfg.dict_mcp_config = MCPConfig.from_toml_section(toml_config['mcp'])
@@ -328,6 +344,7 @@ def load_from_toml(cfg: AppConfig, toml_file: str = 'config.toml') -> None:
         'mcp',
         'search_engine',
         'conversation',
+        'kafka',
     }
     for key in toml_config:
         if key.lower() not in known_sections:

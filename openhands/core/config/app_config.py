@@ -12,6 +12,7 @@ from openhands.core.config.config_utils import (
 )
 from openhands.core.config.conversation_config import ConversationConfig
 from openhands.core.config.extended_config import ExtendedConfig
+from openhands.core.config.kafka_config import KafkaConfig
 from openhands.core.config.llm_config import LLMConfig
 from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.config.sandbox_config import SandboxConfig
@@ -57,6 +58,7 @@ class AppConfig(BaseModel):
         evaluation_endpoint_url: URL of the evaluation endpoint.
         evaluation_timeout: Timeout for the evaluation endpoint.
         enable_evaluation: Whether to enable the evaluation endpoint.
+        kafka: Kafka configuration for event streaming.
     """
 
     llms: dict[str, LLMConfig] = Field(default_factory=dict)
@@ -106,6 +108,7 @@ class AppConfig(BaseModel):
     )
     condenser: CondenserConfig = Field(default_factory=NoOpCondenserConfig)
     enable_microagents: bool = Field(default=True)
+    kafka: KafkaConfig = Field(default_factory=KafkaConfig)
 
     defaults_dict: ClassVar[dict] = {}
 

@@ -115,6 +115,55 @@ evaluation_endpoint_url = ""
 evaluation_timeout = 60
 enable_evaluation = false
 
+[kafka]
+# Enable Kafka for production event streaming
+enabled = true
+bootstrap_servers = "kafka-1.prod.example.com:9092,kafka-2.prod.example.com:9092,kafka-3.prod.example.com:9092"
+topic_prefix = "openhands"
+consumer_group_prefix = "openhands"
+
+[kafka.producer_config]
+acks = "all"
+enable_idempotence = true
+retries = 2147483647  # Integer.MAX_VALUE
+
+retry_backoff_ms = 100
+retry_backoff_max_ms = 32000
+max_in_flight_requests_per_connection = 5
+
+compression_type = "snappy"
+batch_size = 65536        # 64KB batches for better throughput
+linger_ms = 20           # Wait up to 20ms to fill batches
+
+# Memory settings
+buffer_memory = 67108864  # 64MB producer buffer
+max_block_ms = 60000     # Block for 60 seconds if buffer is full
+
+# === TIMEOUT SETTINGS ===
+request_timeout_ms = 30000      # 30 second request timeout
+delivery_timeout_ms = 120000    # 2 minute total delivery timeout
+
+[kafka.consumer_config]
+enable_auto_commit = false
+auto_offset_reset = "earliest"
+isolation_level = "read_committed"
+
+fetch_min_bytes = 50000          # Wait for at least 50KB
+fetch_max_wait_ms = 500          # But don't wait more than 500ms
+max_partition_fetch_bytes = 1048576  # 1MB max per partition
+
+max_poll_records = 100           # Process up to 100 records per poll
+max_poll_interval_ms = 300000    # 5 minutes max between polls
+
+session_timeout_ms = 45000       # 45 seconds
+heartbeat_interval_ms = 15000    # 15 seconds
+
+group_id_timeout_ms = 5000
+
+connections_max_idle_ms = 540000  # 9 minutes
+reconnect_backoff_ms = 50
+reconnect_backoff_max_ms = 1000
+
 #################################### LLM #####################################
 # Configuration for LLM models (group name starts with 'llm')
 # use 'llm' for the default LLM config

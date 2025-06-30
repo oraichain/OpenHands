@@ -126,6 +126,7 @@ opentelemetry-instrumentation-urllib3 = "0.46b0"
 pip = "^25.0.1"
 aiofiles = "^24.1.0"
 tritonclient = { extras = ["http"], version = "^2.56.0" }
+kafka-python = "^2.2.14"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "0.11.5"
