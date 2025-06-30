@@ -16,6 +16,7 @@ from openhands.events.serialization.event import event_from_dict, event_to_dict
 from openhands.io import json
 from openhands.server.modules import conversation_module
 from openhands.storage.files import FileStore
+from openhands.storage.local import LocalFileStore
 from openhands.utils.shutdown_listener import should_continue
 
 
@@ -199,9 +200,15 @@ class EventStream(EventStore):
                 self.file_store.write(
                     self._get_filename_for_id(event.id, self.user_id), json.dumps(data)
                 )
+                if config_app.enable_write_to_local:
+                    local_file_store = LocalFileStore(config_app.file_store_path)
+                    local_file_store.write(
+                        self._get_filename_for_id(event.id, self.user_id),
+                        json.dumps(data),
+                    )
 
             # Store the cache page last - if it is not present during reads then it will simply be bypassed.
-            if config_app.file_store != 'database':
+            if config_app.file_store != 'database' or config_app.enable_write_to_local:
                 self._store_cache_page(current_write_page)
         self._queue.put(event)
 

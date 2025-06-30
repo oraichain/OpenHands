@@ -20,6 +20,7 @@ from openhands.events.event import Event, EventSource
 from openhands.llm.metrics import Metrics
 from openhands.memory.view import View
 from openhands.storage.files import FileStore
+from openhands.storage.local import LocalFileStore
 from openhands.storage.locations import get_conversation_agent_state_filename
 
 config_app = load_app_config()
@@ -115,6 +116,14 @@ class State:
         if config_app.file_store == 'database':
             # Use JSON format for database storage
             self.save_to_session_json(sid, file_store, user_id)
+            if config_app.enable_write_to_local:
+                local_file_store = LocalFileStore(config_app.file_store_path)
+                pickled = pickle.dumps(self)
+                encoded = base64.b64encode(pickled).decode('utf-8')
+                local_file_store.write(
+                    get_conversation_agent_state_filename(sid, user_id), encoded
+                )
+
         else:
             # Use original pickle format for other file stores
             pickled = pickle.dumps(self)
