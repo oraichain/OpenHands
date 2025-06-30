@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import json
 import os
 import traceback
 import uuid
@@ -63,6 +64,7 @@ from openhands.events.action import (
 from openhands.events.action.agent import CondensationAction, RecallAction
 
 # Add new imports for event retrieval
+from openhands.events.action.mcp import McpAction
 from openhands.events.async_event_store_wrapper import AsyncEventStoreWrapper
 from openhands.events.event import Event
 from openhands.events.event_store import EventStore
@@ -516,12 +518,26 @@ class AgentController:
         # self.log(
         #     log_level, str(observation_to_print), extra={'msg_type': 'OBSERVATION'}
         # )
-
+        self.state.is_defi_search = False
         if observation.llm_metrics is not None:
             self.agent.llm.metrics.merge(observation.llm_metrics)
-
-        # this happens for runnable actions and microagent actions
         if self._pending_action and self._pending_action.id == observation.cause:
+            if isinstance(self._pending_action, McpAction):
+                raw_content = observation.content
+                parsed_content: dict = {}
+                if isinstance(raw_content, str):
+                    try:
+                        loaded_json = json.loads(raw_content)
+                        if isinstance(loaded_json, dict):
+                            parsed_content = loaded_json
+                    except json.JSONDecodeError:
+                        pass  # Let parsed_content remain {}
+
+                # The result of DefiSearch should be a list.
+                # This correctly checks if the 'DefiSearch' key exists and the list is not empty.
+                if parsed_content.get('DefiSearch'):
+                    print('DefiSearch successful, setting state to done.')
+                    self.state.is_defi_search = True
             if self.state.agent_state == AgentState.AWAITING_USER_CONFIRMATION:
                 return
             self._pending_action = None
