@@ -16,6 +16,7 @@ from openhands.events.serialization.event import event_from_dict, event_to_dict
 from openhands.io import json
 from openhands.server.modules import conversation_module
 from openhands.storage.files import FileStore
+from openhands.storage.local import LocalFileStore
 from openhands.utils.shutdown_listener import should_continue
 
 
@@ -199,13 +200,25 @@ class EventStream(EventStore):
                 self.file_store.write(
                     self._get_filename_for_id(event.id, self.user_id), json.dumps(data)
                 )
+                if (
+                    config_app.enable_write_to_local
+                    and config_app.file_store != 'local'
+                ):
+                    local_file_store = LocalFileStore(config_app.file_store_path)
+                    local_file_store.write(
+                        self._get_filename_for_id(event.id, self.user_id),
+                        json.dumps(data),
+                    )
 
             # Store the cache page last - if it is not present during reads then it will simply be bypassed.
-            if config_app.file_store != 'database':
+            if config_app.file_store != 'database' or config_app.enable_write_to_local:
                 self._store_cache_page(current_write_page)
         self._queue.put(event)
 
     def _store_cache_page(self, current_write_page: list[dict]):
+        from openhands.core.config import load_app_config
+
+        config_app = load_app_config()
         """Store a page in the cache. Reading individual events is slow when there are a lot of them, so we use pages."""
         if len(current_write_page) < self.cache_size:
             return
@@ -213,7 +226,11 @@ class EventStream(EventStore):
         end = start + self.cache_size
         contents = json.dumps(current_write_page)
         cache_filename = self._get_filename_for_cache(start, end)
-        self.file_store.write(cache_filename, contents)
+        if config_app.file_store != 'database':
+            self.file_store.write(cache_filename, contents)
+        else:
+            local_file_store = LocalFileStore(config_app.file_store_path)
+            local_file_store.write(cache_filename, contents)
 
     def set_secrets(self, secrets: dict[str, str]) -> None:
         self.secrets = secrets.copy()
