@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Optional, override
 
+import litellm  # noqa
 from httpx import request
 
 import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
@@ -22,8 +23,13 @@ from openhands.events.action import (
     AgentFinishAction,
     StreamingMessageAction,
 )
+from openhands.events.action.agent import (
+    AgentLLMResponseCacheAction,
+)
 from openhands.events.action.message import MessageAction
 from openhands.events.event import Event, EventSource
+from openhands.events.observation.agent import RecallObservation
+from openhands.events.serialization.event import event_from_dict
 from openhands.llm.llm import LLM, check_tools
 from openhands.llm.streaming_llm import StreamingLLM
 from openhands.memory.condenser import Condenser
@@ -531,6 +537,23 @@ class CodeActAgent(Agent):
         if self.pending_actions:
             return self.pending_actions.popleft()
 
+        if state.history and len(state.history) > 1:
+            # user message
+            last_event = state.history[-1]
+            user_message = state.history[-2]
+            if isinstance(last_event, RecallObservation) and len(state.history) > 2:
+                user_message = state.history[-3]
+            if (
+                user_message
+                and isinstance(user_message, MessageAction)
+                and user_message.source == EventSource.USER
+            ):
+                llm_response_cache_action = self.try_get_llm_response_from_cache(
+                    user_message
+                )
+                if llm_response_cache_action:
+                    return llm_response_cache_action
+
         # if we're done, go back
         latest_user_message = state.get_last_user_message()
 
@@ -804,3 +827,48 @@ class CodeActAgent(Agent):
             prev_role = msg.role
 
         return results
+
+    def try_get_llm_response_from_cache(
+        self, action: MessageAction
+    ) -> AgentLLMResponseCacheAction | None:
+        try:
+            response = (
+                litellm.cache.get_cache(**{'prompt': action.content})
+                if litellm.cache
+                else None
+            )
+            if response and isinstance(response, list) and len(response) > 0:
+                cached_events = [event_from_dict(event) for event in response]
+                # skip the first event, which is the user message
+                cached_events = cached_events[1:]
+                if cached_events and len(cached_events) > 0:
+                    # only add the last AgentFinishAction to the history, cuz it's the most valued one
+                    for event in reversed(cached_events):
+                        if (
+                            isinstance(event, Action)
+                            and event.source == EventSource.AGENT
+                            and (
+                                isinstance(event, AgentFinishAction)
+                                or isinstance(event, MessageAction)
+                            )
+                        ):
+                            return AgentLLMResponseCacheAction(
+                                response=event.content
+                                if isinstance(event, MessageAction)
+                                else event.final_thought
+                            )
+                    logger.info(
+                        f'Cache hit for user message: {len(cached_events)} events found'
+                    )
+                    return None
+            return None
+        except Exception as e:
+            logger.error(f'Error using semantic cache to process prompt: {e}')
+            return None
+
+    def _get_last_user_message(self, state: State) -> tuple[MessageAction, int] | None:
+        for i in range(len(state.history) - 1, -1, -1):
+            event = state.history[i]
+            if isinstance(event, MessageAction) and event.source == EventSource.USER:
+                return event, i
+        return None

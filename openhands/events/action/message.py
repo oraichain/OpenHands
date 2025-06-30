@@ -16,16 +16,6 @@ class MessageAction(Action):
     enable_think: Optional[bool] = True  # type: ignore
 
     @property
-    def action_cached(self) -> bool | None:
-        if not hasattr(self, '_action_cached'):
-            return None
-        return self._action_cached
-
-    @action_cached.setter
-    def action_cached(self, value: bool | None) -> None:
-        self._action_cached = value
-
-    @property
     def message(self) -> str:
         return self.content
 

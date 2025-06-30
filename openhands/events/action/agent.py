@@ -46,16 +46,6 @@ class AgentFinishAction(Action):
     enable_think: Optional[bool] = True
 
     @property
-    def action_cached(self) -> bool | None:
-        if not hasattr(self, '_action_cached'):
-            return None
-        return self._action_cached
-
-    @action_cached.setter
-    def action_cached(self, value: bool | None) -> None:
-        self._action_cached = value
-
-    @property
     def message(self) -> str:
         if self.thought != '':
             return self.thought
@@ -103,6 +93,23 @@ class AgentDelegateAction(Action):
     @property
     def message(self) -> str:
         return f"I'm asking {self.agent} for help with this task."
+
+
+@dataclass
+class AgentLLMResponseCacheAction(Action):
+    """An action where the agent caches the response.
+
+    Attributes:
+        response (str): The response to cache.
+        action (str): The action type, namely ActionType.RESPONSE_CACHE.
+    """
+
+    response: str = ''
+    action: str = ActionType.LLM_RESPONSE_CACHE
+
+    @property
+    def message(self) -> str:
+        return self.response
 
 
 @dataclass

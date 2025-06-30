@@ -60,7 +60,11 @@ from openhands.events.action import (
     NullAction,
     StreamingMessageAction,
 )
-from openhands.events.action.agent import CondensationAction, RecallAction
+from openhands.events.action.agent import (
+    AgentLLMResponseCacheAction,
+    CondensationAction,
+    RecallAction,
+)
 
 # Add new imports for event retrieval
 from openhands.events.async_event_store_wrapper import AsyncEventStoreWrapper
@@ -80,7 +84,6 @@ from openhands.events.observation.a2a import (
 )
 from openhands.events.observation.credit import CreditErrorObservation
 from openhands.events.serialization.event import (
-    event_from_dict,
     event_to_dict,
     event_to_trajectory,
     truncate_content,
@@ -494,8 +497,7 @@ class AgentController:
             self.state.outputs = action.outputs
             self.state.metrics.merge(self.state.local_metrics)
             await self.set_agent_state_to(AgentState.FINISHED)
-            if not action.action_cached:
-                await self._cache_history_from_last_user_message()
+            await self._cache_history_from_last_user_message()
 
             # TODO: add a new event to the event stream sync rag job
         elif isinstance(action, AgentRejectAction):
@@ -753,13 +755,10 @@ class AgentController:
             if self.get_agent_state() != AgentState.RUNNING:
                 await self.set_agent_state_to(AgentState.RUNNING)
 
-            await self.try_process_prompt_using_history_semantic_cache(action)
-
         elif action.source == EventSource.AGENT:
             # If the agent is waiting for a response, set the appropriate state
             if action.wait_for_response:
                 await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
-            if not action.action_cached:
                 await self._cache_history_from_last_user_message()
 
     def _reset(self) -> None:
@@ -1148,6 +1147,13 @@ class AgentController:
             self._prepare_metrics_for_frontend(action)
 
             self.event_stream.add_event(action, action._source)  # type: ignore [attr-defined]
+
+        if isinstance(action, AgentLLMResponseCacheAction):
+            self.event_stream.add_event(
+                StreamingMessageAction(content=action.response), EventSource.AGENT
+            )
+            await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
+            return
 
         await self.update_state_after_step()
 
@@ -1667,59 +1673,5 @@ class AgentController:
             self.log(
                 'warn',
                 f'Error caching history: {e}',
-            )
-            return
-
-    async def try_process_prompt_using_history_semantic_cache(
-        self, action: MessageAction
-    ) -> None:
-        try:
-            response = (
-                await litellm.cache.async_get_cache(**{'prompt': action.content})
-                if litellm.cache
-                else None
-            )
-            if response and isinstance(response, list) and len(response) > 0:
-                cached_events = [event_from_dict(event) for event in response]
-                # skip the first event, which is the user message
-                cached_events = cached_events[1:]
-                if cached_events and len(cached_events) > 0:
-                    # only add the last AgentFinishAction to the history, cuz it's the most valued one
-                    for event in reversed(cached_events):
-                        if (
-                            isinstance(event, Action)
-                            and event.source == EventSource.AGENT
-                            and (
-                                isinstance(event, AgentFinishAction)
-                                or isinstance(event, MessageAction)
-                            )
-                        ):
-                            try:
-                                self.update_state_before_step()
-                                # reset event id so we can add it to the event stream as new
-                                event.id = Event.INVALID_ID
-                                # Set action_cached attribute if it exists
-                                if hasattr(event, 'action_cached'):
-                                    event.action_cached = True
-                                self.event_stream.add_event(event, EventSource.AGENT)
-                                self.state.history.append(event)
-                                await self.set_agent_state_to(
-                                    AgentState.AWAITING_USER_INPUT
-                                )
-                            except Exception as e:
-                                self.log(
-                                    'error',
-                                    f'Error updating state before step: {e}',
-                                )
-                            break
-                    self.log(
-                        'info',
-                        f'Cache hit for user message: {len(cached_events)} events found',
-                    )
-                    return
-        except Exception as e:
-            self.log(
-                'error',
-                f'Error using semantic cache to process prompt: {e}',
             )
             return

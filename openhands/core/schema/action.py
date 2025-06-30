@@ -97,3 +97,6 @@ class ActionType(str, Enum):
 
     A2A_SEND_TASK = 'a2a_send_task'
     """Send a task to a remote agent."""
+
+    LLM_RESPONSE_CACHE = 'llm_response_cache'
+    """Caches the response from the LLM."""
