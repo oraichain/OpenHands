@@ -28,11 +28,11 @@ class DBConnectionPool:
                 self._initializing = True
 
                 # Get database connection info from environment
-                user = os.getenv('POSTGRES_USER')
-                password = os.getenv('POSTGRES_PASSWORD')
-                database = os.getenv('POSTGRES_DB')
-                host = os.getenv('POSTGRES_HOST', 'localhost')
-                port = os.getenv('POSTGRES_PORT', '5432')
+                user = os.getenv('PGBOUNCER_DB_USER')
+                password = os.getenv('PGBOUNCER_DB_PASSWORD')
+                database = os.getenv('PGBOUNCER_DB_NAME')
+                host = os.getenv('PGBOUNCER_DB_HOST', 'localhost')
+                port = os.getenv('PGBOUNCER_DB_PORT', '6432')
 
                 # Build connection string for psycopg3
                 conninfo = f'host={host} port={port} dbname={database} user={user} password={password}'
