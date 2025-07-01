@@ -370,21 +370,34 @@ async def search_conversations(
         filtered_results = []
         for conversation in visible_conversations['items']:
             try:
-                # Create ConversationMetadata object from database record
+                # Support both dict and object
+                conversation_id = getattr(
+                    conversation, 'conversation_id', None
+                ) or conversation.get('conversation_id')
+                title = getattr(conversation, 'title', None) or conversation.get(
+                    'title', ''
+                )
+                user_id = getattr(conversation, 'user_id', None) or conversation.get(
+                    'user_id'
+                )
+                created_at = getattr(
+                    conversation, 'created_at', None
+                ) or conversation.get('created_at')
+
                 conversation_metadata = ConversationMetadata(
-                    conversation_id=conversation.conversation_id,
-                    title=conversation.title or '',
-                    user_id=conversation.user_id,
+                    conversation_id=conversation_id,
+                    title=title,
+                    user_id=user_id,
                     github_user_id=None,
                     selected_repository=None,
                     selected_branch=None,
-                    created_at=conversation.created_at,
-                    last_updated_at=conversation.created_at,
+                    created_at=created_at,
+                    last_updated_at=created_at,
                 )
                 filtered_results.append(conversation_metadata)
             except Exception as e:
                 logger.error(
-                    f'Error creating metadata for conversation {conversation.conversation_id}: {e}'
+                    f'Error creating metadata for conversation {conversation_id}: {e}'
                 )
                 continue
     else:
