@@ -64,12 +64,11 @@ class PromptRefiner:
                 stream=True,
             )
             response = ''
-            async for chunk in stream:  # ✅ FIXED: use async for here
+            async for chunk in stream:
                 delta = chunk.choices[0].delta
                 if hasattr(delta, 'content') and delta.content:
                     response += delta.content
                     yield delta.content
-            logger.debug('Streaming complete.')
 
         except OpenAIError as e:
             logger.exception(f'Streaming chat failed with Error: {e}')
@@ -85,6 +84,13 @@ agent = PromptRefiner(model=REWRITE_LLM_NAME)
 async def human_feedback(prompt: str) -> str:
     result = await agent.generate_response(prompt=prompt, system_prompt=HUMAN_FEEDBACK)
     return result
+
+
+async def human_feedback_streaming(prompt: str) -> AsyncGenerator[str, None]:
+    async for chunk in agent.generate_streaming_response(
+        prompt=prompt, system_prompt=HUMAN_FEEDBACK
+    ):
+        yield chunk
 
 
 # asyncio.run(optimize_prompt("Analyze a farming pool on Raydium and assess its risk level."))

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from openhands.core.schema import ActionType
 from openhands.events.action.action import Action, ActionSecurityRisk
@@ -12,8 +13,9 @@ class HumanFeedbackAction(Action):
     original_prompt: str
     wait_for_response: bool = False
     action: str = ActionType.HUMAN_FEEDBACK
-    security_risk: ActionSecurityRisk | None = None
-    mode: str | None = None
+    security_risk: Optional[ActionSecurityRisk] = None
+    mode: Optional[str] = None
+    enable_think: bool = False
 
     @property
     def message(self) -> str:

@@ -94,6 +94,7 @@ from openhands.server.mem0 import (
     process_single_event_for_mem0,
     search_knowledge_mem0,
 )
+from openhands.server.planning.planning import human_feedback
 from openhands.server.thesis_auth import (
     check_feature_credit,
     search_knowledge,
@@ -791,18 +792,53 @@ class AgentController:
                 )
 
                 if is_first_user_message:
-                    from openhands.server.planning.planning import human_feedback
+                    from openhands.server.planning.planning import HUMAN_FEEDBACK, agent
 
-                    feedback_questions = await human_feedback(action.content)
-                    if feedback_questions:
-                        feedback_action = HumanFeedbackAction(
-                            human_feedback_questions=feedback_questions,
-                            original_prompt=action.content,
-                            wait_for_response=True,
-                        )
-                        self._pending_action = feedback_action
-                        self.event_stream.add_event(feedback_action, EventSource.AGENT)
-                        return
+                    # Stream human feedback questions
+                    accumulated_feedback_questions = ''
+                    try:
+                        async for chunk in agent.generate_streaming_response(
+                            prompt=action.content, system_prompt=HUMAN_FEEDBACK
+                        ):
+                            accumulated_feedback_questions += chunk
+                            streaming_feedback_action = StreamingMessageAction(
+                                content=chunk,
+                                wait_for_response=True,
+                            )
+                            self.event_stream.add_event(
+                                streaming_feedback_action, EventSource.AGENT
+                            )
+                            await asyncio.sleep(0.01)
+
+                        # After streaming is complete, set the final human feedback action
+                        if accumulated_feedback_questions:
+                            final_feedback_action = HumanFeedbackAction(
+                                human_feedback_questions=accumulated_feedback_questions,
+                                original_prompt=action.content,
+                                wait_for_response=True,
+                                enable_think=False,
+                            )
+                            self._pending_action = final_feedback_action
+                            self.event_stream.add_event(
+                                final_feedback_action, EventSource.AGENT
+                            )
+                            return
+
+                    except Exception as e:
+                        self.log('error', f'Error streaming human feedback: {e}')
+                        # Fallback to non-streaming version
+                        feedback_questions = await human_feedback(action.content)
+                        if feedback_questions:
+                            feedback_action = HumanFeedbackAction(
+                                human_feedback_questions=feedback_questions,
+                                original_prompt=action.content,
+                                wait_for_response=True,
+                            )
+                            self._pending_action = feedback_action
+                            self.event_stream.add_event(
+                                feedback_action, EventSource.AGENT
+                            )
+                            return
 
                 recall_type = RecallType.KNOWLEDGE
 
