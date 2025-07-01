@@ -42,7 +42,12 @@ class KafkaEventConsumer:
                 'bootstrap_servers': config.kafka.bootstrap_servers,
                 'group_id': f'{config.kafka.consumer_group_prefix}.{self.consumer_group}',
                 'value_deserializer': lambda m: json.loads(m.decode('utf-8')),
-                **config.kafka.consumer_config,
+                'enable_auto_commit': False,  # We handle commits manually to prevent message loops
+                'auto_offset_reset': 'latest',  # Start from latest messages for new consumers
+                'session_timeout_ms': 30000,  # 30 seconds
+                'heartbeat_interval_ms': 10000,  # 10 seconds
+                'max_poll_records': 100,  # Process in smaller batches
+                **config.kafka.consumer_config,  # Allow overrides from config
             }
 
             logger.debug(
@@ -122,6 +127,7 @@ class KafkaEventConsumer:
                                     logger.debug(
                                         f'⏭️ Skipping event {event_type} - session mismatch ({message_session_id} != {self.session_id})'
                                     )
+                                    # Still need to "process" this message by continuing, so it gets committed
                                     continue
 
                                 logger.info(
@@ -146,24 +152,28 @@ class KafkaEventConsumer:
                                             f'❌ Error in event handler for {self.consumer_group}: {e}',
                                             exc_info=True,
                                         )
+                                        # Continue processing other handlers and don't fail the message
 
                             except Exception as e:
                                 logger.error(
                                     f'❌ Error processing Kafka message in {self.consumer_group}: {e}',
                                     exc_info=True,
                                 )
+                                # Continue to next message - we still want to commit this one
 
-                    # Manually commit offsets since auto_commit is disabled
-                    if message_pack:
-                        try:
-                            self._consumer.commit()
+                    # Always commit offsets after processing messages to prevent redelivery
+                    # This should happen whether we processed 0 or N messages
+                    try:
+                        self._consumer.commit()
+                        if message_pack:  # Only log if we actually had messages
                             logger.debug(
-                                f'✅ Committed offsets for {self.consumer_group}'
+                                f'✅ Committed offsets for {self.consumer_group} after processing {sum(len(msgs) for msgs in message_pack.values())} messages'
                             )
-                        except Exception as e:
-                            logger.error(
-                                f'❌ Error committing Kafka offsets for {self.consumer_group}: {e}'
-                            )
+                    except Exception as e:
+                        logger.error(
+                            f'❌ Error committing Kafka offsets for {self.consumer_group}: {e}'
+                        )
+                        # This is critical - if we can't commit, we might reprocess messages
 
                 except Exception as e:
                     if not self._stop_event.is_set():

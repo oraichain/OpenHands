@@ -65,8 +65,20 @@ class KafkaEventStream(EventStore):
     ) -> None:
         pass
 
-    def add_event(self, event: Event, source: EventSource) -> None:
-        """Add event to stream and publish to Kafka topics"""
+    def add_event(
+        self,
+        event: Event,
+        source: EventSource,
+        target_consumers: list[str] | None = None,
+    ) -> None:
+        """Add event to stream and publish to Kafka topics
+
+        Args:
+            event: The event to add
+            source: The source of the event
+            target_consumers: Optional list of specific consumers to target (e.g., ['server', 'agent_controller'])
+                            If None, publishes to all consumers
+        """
         if event.id != Event.INVALID_ID:
             raise ValueError(
                 f'Event already has an ID:{event.id}. It was probably added back to the EventStream from inside a handler, triggering a loop.'
@@ -104,22 +116,43 @@ class KafkaEventStream(EventStore):
             self._store_cache_page(current_write_page)
 
             # Publish to Kafka topics
-            self._publish_event(data)
+            self._publish_event(data, target_consumers)
 
-    def _publish_event(self, event_data: dict):
-        """Publish event to all relevant Kafka topics"""
+    def _publish_event(
+        self, event_data: dict, target_consumers: list[str] | None = None
+    ):
+        """Publish event to relevant Kafka topics
+
+        Args:
+            event_data: The event data to publish
+            target_consumers: Optional list of specific consumers to target
+        """
         if not self._producer:
             logger.warning('No Kafka producer available, event not published')
             return
 
         try:
-            # Publish to all topic types - consumers will filter what they need
+            # Determine which topics to publish to
+            # if target_consumers:
+            #     topics = [
+            #         f'{config.kafka.topic_prefix}.events.{consumer}'
+            #         for consumer in target_consumers
+            #     ]
+            # else:
+            #     # Publish to all topic types - consumers will filter what they need
+            #     topics = [
+            #         f'{config.kafka.topic_prefix}.events.agent_controller',
+            #         f'{config.kafka.topic_prefix}.events.server',
+            #         f'{config.kafka.topic_prefix}.events.runtime',
+            #         f'{config.kafka.topic_prefix}.events.security_analyzer',
+            #         f'{config.kafka.topic_prefix}.events.memory',
+            #     ]
             topics = [
                 f'{config.kafka.topic_prefix}.events.agent_controller',
                 f'{config.kafka.topic_prefix}.events.server',
                 f'{config.kafka.topic_prefix}.events.runtime',
-                f'{config.kafka.topic_prefix}.events.security_analyzer',
-                f'{config.kafka.topic_prefix}.events.memory',
+                # f'{config.kafka.topic_prefix}.events.security_analyzer',
+                # f'{config.kafka.topic_prefix}.events.memory',
             ]
 
             session_id = event_data.get('session_id')

@@ -792,9 +792,10 @@ class AgentController:
             await self._search_knowledge(action.content)
 
             recall_action = RecallAction(query=action.content, recall_type=recall_type)
-            self._pending_action = recall_action
+            # self._pending_action = recall_action
             # this is source=USER because the user message is the trigger for the microagent retrieval
-            self.event_stream.add_event(recall_action, EventSource.USER)
+            # self.event_stream.add_event(recall_action, EventSource.USER)
+            self._publish_agent_event(recall_action, EventSource.USER)
 
             if self.get_agent_state() != AgentState.RUNNING:
                 await self.set_agent_state_to(AgentState.RUNNING)
@@ -893,7 +894,7 @@ class AgentController:
                 confirmation_state = ActionConfirmationStatus.REJECTED
             self._pending_action.confirmation_state = confirmation_state  # type: ignore[attr-defined]
             self._pending_action._id = None  # type: ignore[attr-defined]
-            self.event_stream.add_event(self._pending_action, EventSource.AGENT)
+            self._publish_agent_event(self._pending_action)
 
         self.state.agent_state = new_state
 
@@ -1004,7 +1005,7 @@ class AgentController:
 
             # emit the delegate result observation
             obs = AgentDelegateObservation(outputs=delegate_outputs, content=content)
-            self.event_stream.add_event(obs, EventSource.AGENT)
+            self._publish_agent_event(obs)
         else:
             # delegate state is ERROR
             # emit AgentDelegateObservation with error content
@@ -1017,7 +1018,7 @@ class AgentController:
 
             # emit the delegate result observation
             obs = AgentDelegateObservation(outputs=delegate_outputs, content=content)
-            self.event_stream.add_event(obs, EventSource.AGENT)
+            self._publish_agent_event(obs)
 
         # unset delegate so parent can resume normal handling
         self.delegate = None
@@ -1097,35 +1098,32 @@ class AgentController:
                         )
 
                         if not should_proceed:
-                            self.event_stream.add_event(
+                            self._publish_agent_event(
                                 ReportVerificationObservation(
                                     result=False,
                                     content=reason,
                                     file_path=file_path,
-                                ),
-                                EventSource.AGENT,
+                                )
                             )
                             content = f'{finish_message}'
                             content += f'\n\n{reason}'
-                            self.event_stream.add_event(
+                            self._publish_agent_event(
                                 MessageAction(
                                     content=content,
                                     wait_for_response=True,
-                                ),
-                                EventSource.AGENT,
+                                )
                             )
                             await self.set_agent_state_to(
                                 AgentState.AWAITING_USER_INPUT
                             )
                             action = NullAction()
                         else:
-                            self.event_stream.add_event(
+                            self._publish_agent_event(
                                 ReportVerificationObservation(
                                     result=True,
                                     content=reason,
                                     file_path=file_path,
-                                ),
-                                EventSource.AGENT,
+                                )
                             )
                     except Exception as e:
                         self.log(
@@ -1138,11 +1136,10 @@ class AgentController:
                 FunctionCallValidationError,
                 FunctionCallNotExistsError,
             ) as e:
-                self.event_stream.add_event(
+                self._publish_agent_event(
                     ErrorObservation(
                         content=str(e),
-                    ),
-                    EventSource.AGENT,
+                    )
                 )
                 return
             except LLMNoActionError:
@@ -1189,7 +1186,8 @@ class AgentController:
             # Create and log metrics for frontend display
             self._prepare_metrics_for_frontend(action)
 
-            self.event_stream.add_event(action, action._source)  # type: ignore [attr-defined]
+            # Publish agent action using the helper method for consistent targeting
+            self._publish_agent_event(action, action._source)  # type: ignore [attr-defined]
 
         await self.update_state_after_step()
 
@@ -1311,10 +1309,7 @@ class AgentController:
             )
 
         # Emit conclusion as a MessageAction
-        self.event_stream.add_event(
-            MessageAction(content=conclusion),
-            EventSource.AGENT,
-        )
+        self._publish_agent_event(MessageAction(content=conclusion))
 
         # Create and emit AgentFinishAction
         finish_action = AgentFinishAction(
@@ -1324,7 +1319,7 @@ class AgentController:
             }
         )
         self.state.outputs = finish_action.outputs  # Update state
-        self.event_stream.add_event(finish_action, EventSource.AGENT)
+        self._publish_agent_event(finish_action)
         await self.set_agent_state_to(AgentState.FINISHED)
 
     def get_state(self) -> State:
@@ -1497,12 +1492,11 @@ class AgentController:
             self.state.start_id = self.state.history[0].id
 
         # Add an error event to trigger another step by the agent
-        self.event_stream.add_event(
+        self._publish_agent_event(
             CondensationAction(
                 forgotten_events_start_id=min(forgotten_event_ids),
                 forgotten_events_end_id=max(forgotten_event_ids),
-            ),
-            EventSource.AGENT,
+            )
         )
 
     def _apply_conversation_window(self, events: list[Event]) -> list[Event]:
@@ -1663,7 +1657,6 @@ class AgentController:
     def _process_kafka_event(self, event: Event) -> None:
         """Process events received from Kafka consumer"""
         try:
-            # Add debugging to see if this method is being called
             event_type = (
                 event.action
                 if hasattr(event, 'action')
@@ -1671,12 +1664,41 @@ class AgentController:
                 if hasattr(event, 'observation')
                 else type(event).__name__
             )
-            self.log(
-                'info',
-                f'🎯 AgentController received Kafka event: {event_type} (id={event.id})',
-            )
 
-            # Schedule the async operation to run in the main event loop
-            asyncio.run_coroutine_threadsafe(self._on_event(event), self.loop)
+            # Schedule the async operation to run in the main event loop and wait for completion
+            future = asyncio.run_coroutine_threadsafe(self._on_event(event), self.loop)
+
+            # Wait for the async operation to complete with a reasonable timeout
+            try:
+                future.result(timeout=30.0)  # 30 second timeout
+                self.log(
+                    'info', f'✅ AgentController processed Kafka event: {event_type}'
+                )
+            except Exception as e:
+                self.log(
+                    'error', f'❌ AgentController async event processing failed: {e}'
+                )
+                raise
+
         except Exception as e:
-            self.log('error', f'Error processing Kafka event: {e}')
+            self.log('error', f'❌ AgentController error processing Kafka event: {e}')
+
+    def _publish_agent_event(
+        self, event: Event, source: EventSource = EventSource.AGENT
+    ) -> None:
+        """Helper method to publish agent events with explicit targeting for Kafka streams"""
+        from openhands.events.kafka_stream import KafkaEventStream
+
+        if isinstance(self.event_stream, KafkaEventStream):
+            # Determine target consumers based on action type
+            target_consumers = ['server']  # Always send to server for UI updates
+
+            # Check if this is a runnable action that needs to be executed by Runtime
+            if hasattr(event, 'runnable') and getattr(event, 'runnable', False):
+                # Runnable actions need to go to Runtime for execution
+                target_consumers.append('runtime')
+            self.event_stream.add_event(
+                event, source, target_consumers=target_consumers
+            )
+        else:
+            self.event_stream.add_event(event, source)
