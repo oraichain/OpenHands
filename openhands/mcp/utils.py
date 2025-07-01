@@ -196,7 +196,7 @@ async def call_tool_mcp(mcp_clients: list[MCPClient], action: McpAction) -> Obse
         The observation from the MCP server
     """
     if not mcp_clients:
-        raise ValueError('No MCP clients found')
+        return ErrorObservation('No MCP clients found')
     logger.info(f'MCP action received: {action}')
     # Find the MCP agent that has the matching tool name
     matching_client = None
@@ -206,7 +206,9 @@ async def call_tool_mcp(mcp_clients: list[MCPClient], action: McpAction) -> Obse
             matching_client = client
             break
     if matching_client is None:
-        raise ValueError(f'No matching MCP agent found for tool name: {action.name}')
+        return ErrorObservation(
+            f'No matching MCP agent found for tool name: {action.name}'
+        )
     args_dict = json.loads(action.arguments) if action.arguments else {}
     try:
         response = await matching_client.call_tool(action.name, args_dict)
