@@ -62,12 +62,22 @@ class ConversationModule:
             logger.error(f'Error updating research view: {str(e)}')
             return False
 
-    async def _get_conversation_visibility(self, conversation_id: str, user_id: str):
+    async def _get_conversation_visibility(
+        self, conversation_id: str, user_id: str | list[str]
+    ):
         try:
-            query = Conversation.select().where(
-                (Conversation.c.conversation_id == conversation_id)
-                & (Conversation.c.user_id == user_id)
-            )
+            # Handle user_id as string or list
+            if isinstance(user_id, list):
+                query = Conversation.select().where(
+                    (Conversation.c.conversation_id == conversation_id)
+                    & (Conversation.c.user_id.in_(user_id))
+                )
+            else:
+                query = Conversation.select().where(
+                    (Conversation.c.conversation_id == conversation_id)
+                    & (Conversation.c.user_id == user_id)
+                )
+
             existing_record = await database.fetch_one(query)
 
             return {
@@ -413,7 +423,7 @@ class ConversationModule:
 
     async def _get_conversation_visibility_by_user_id(
         self,
-        user_id: str | None,
+        user_id: str | list[str] | None,
         page: int = 1,
         limit: int = 10,
         keyword: str | None = None,
@@ -432,9 +442,15 @@ class ConversationModule:
                     base_filter, Conversation.c.title.ilike(f'%{keyword}%')
                 )
 
+            # Handle user_id as string or list
+            if isinstance(user_id, list):
+                user_filter = Conversation.c.user_id.in_(user_id)
+            else:
+                user_filter = Conversation.c.user_id == user_id
+
             query = (
                 Conversation.select()
-                .where(Conversation.c.user_id == user_id)
+                .where(user_filter)
                 .where(base_filter)
                 .order_by(desc(Conversation.c.created_at))
                 .offset(offset)
@@ -445,7 +461,7 @@ class ConversationModule:
             total_query = (
                 select(func.count())
                 .select_from(Conversation)
-                .where(Conversation.c.user_id == user_id)
+                .where(user_filter)
                 .where(base_filter)
             )
             total = await database.fetch_val(total_query)

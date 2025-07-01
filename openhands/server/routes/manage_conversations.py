@@ -2,7 +2,7 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from fastapi import (
     APIRouter,
@@ -16,6 +16,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from openhands.core.config import AppConfig
 from openhands.core.config.llm_config import LLMConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.core.schema.research import ResearchMode
@@ -27,7 +28,6 @@ from openhands.integrations.provider import (
 )
 from openhands.integrations.service_types import Repository
 from openhands.server.auth import (
-    get_github_user_id,
     get_provider_tokens,
     get_user_id,
 )
@@ -51,11 +51,16 @@ from openhands.server.thesis_auth import (
     get_thread_by_id,
 )
 from openhands.server.types import LLMAuthenticationError, MissingSettingsError
+from openhands.storage.conversation.conversation_store import ConversationStore
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
+from openhands.storage.data_models.conversation_metadata_result_set import (
+    ConversationMetadataResultSet,
+)
 from openhands.storage.data_models.conversation_status import ConversationStatus
 from openhands.utils.async_utils import wait_all
 from openhands.utils.conversation_summary import generate_conversation_title
 from openhands.utils.get_user_setting import get_user_setting
+from openhands.utils.search_utils import offset_to_page_id, page_id_to_offset
 
 app = APIRouter(prefix='/api')
 
@@ -83,6 +88,164 @@ class ChangeVisibilityRequest(BaseModel):
 class ConversationVisibility(BaseModel):
     is_published: bool
     hidden_prompt: bool
+
+
+class MergedConversationStore(ConversationStore):
+    """
+    A conversation store that merges multiple conversation stores from different user addresses.
+    This provides a unified interface to access conversations across all user addresses.
+    """
+
+    def __init__(self, conversation_stores: list[ConversationStore]):
+        self.conversation_stores = conversation_stores
+
+    async def save_metadata(self, metadata: ConversationMetadata) -> None:
+        """Save metadata to the first available store."""
+        if self.conversation_stores:
+            await self.conversation_stores[0].save_metadata(metadata)
+        else:
+            raise RuntimeError('No conversation stores available')
+
+    async def get_metadata(self, conversation_id: str) -> ConversationMetadata:
+        """Get metadata from any of the stores that contains it."""
+        for store in self.conversation_stores:
+            try:
+                return await store.get_metadata(conversation_id)
+            except FileNotFoundError:
+                continue
+        raise FileNotFoundError(
+            f'Conversation {conversation_id} not found in any store'
+        )
+
+    async def delete_metadata(self, conversation_id: str) -> None:
+        """Delete metadata from all stores that contain it."""
+        for store in self.conversation_stores:
+            try:
+                await store.delete_metadata(conversation_id)
+            except FileNotFoundError:
+                continue
+
+    async def exists(self, conversation_id: str) -> bool:
+        """Check if conversation exists in any of the stores."""
+        for store in self.conversation_stores:
+            if await store.exists(conversation_id):
+                return True
+        return False
+
+    async def validate_metadata(
+        self, conversation_id: str, user_id: str, github_user_id: str
+    ) -> bool:
+        """Validate that conversation belongs to the current user across all stores."""
+        for store in self.conversation_stores:
+            try:
+                if await store.validate_metadata(
+                    conversation_id, user_id, github_user_id
+                ):
+                    return True
+            except Exception:
+                continue
+        return False
+
+    async def get_all_metadata(
+        self, conversation_ids: Iterable[str]
+    ) -> list[ConversationMetadata]:
+        """Get metadata for multiple conversations in parallel across all stores."""
+        # First, try to get all conversations from the first store
+        if self.conversation_stores:
+            try:
+                return await self.conversation_stores[0].get_all_metadata(
+                    conversation_ids
+                )
+            except Exception:
+                pass
+
+        # Fallback: get conversations one by one from any store
+        results = []
+        for conv_id in conversation_ids:
+            try:
+                metadata = await self.get_metadata(conv_id)
+                results.append(metadata)
+            except FileNotFoundError:
+                continue
+        return results
+
+    async def search(
+        self,
+        page_id: str | None = None,
+        limit: int = 20,
+        filter_conversation_ids: list[str] | None = None,
+    ) -> ConversationMetadataResultSet:
+        """Search conversations across all stores and merge results."""
+        if not self.conversation_stores:
+            return ConversationMetadataResultSet(results=[], next_page_id=None)
+
+        # Search all conversation stores
+        all_conversations = []
+        for store in self.conversation_stores:
+            try:
+                result_set = await store.search(
+                    page_id=None,  # We'll handle pagination manually
+                    limit=1000,  # Get all conversations from this store
+                    filter_conversation_ids=filter_conversation_ids,
+                )
+                all_conversations.extend(result_set.results)
+            except Exception as e:
+                logger.warning(f'Failed to search conversation store: {e}')
+                continue
+
+        # Remove duplicates based on conversation_id
+        seen_ids = set()
+        unique_conversations = []
+        for conv in all_conversations:
+            if conv.conversation_id not in seen_ids:
+                seen_ids.add(conv.conversation_id)
+                unique_conversations.append(conv)
+
+        # Sort by created_at (newest first)
+        unique_conversations.sort(
+            key=lambda x: x.created_at or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+
+        # Apply pagination
+        total_conversations = len(unique_conversations)
+        start = page_id_to_offset(page_id)
+        end = min(limit + start, total_conversations)
+
+        paginated_conversations = unique_conversations[start:end]
+        next_page_id = offset_to_page_id(end, end < total_conversations)
+
+        return ConversationMetadataResultSet(
+            results=paginated_conversations, next_page_id=next_page_id
+        )
+
+    @classmethod
+    async def get_instance(
+        cls, config: AppConfig, user_id: str | None, github_user_id: str | None
+    ) -> ConversationStore:
+        """This method is not used for MergedConversationStore."""
+        raise NotImplementedError('Use create_from_address_list instead')
+
+    @classmethod
+    async def create_from_address_list(
+        cls, config: AppConfig, user_address_list: list[str]
+    ) -> 'MergedConversationStore':
+        """Create a merged conversation store from a list of user addresses."""
+        conversation_stores = []
+
+        for user_address in user_address_list:
+            try:
+                store = await ConversationStoreImpl.get_instance(
+                    config, user_address, None
+                )
+                conversation_stores.append(store)
+            except Exception as e:
+                logger.warning(
+                    f'Failed to get conversation store for {user_address}: {e}'
+                )
+                continue
+
+        return cls(conversation_stores)
 
 
 async def _create_new_conversation(
@@ -354,27 +517,36 @@ async def search_conversations(
     page: int = 1,
     keyword: str | None = None,
 ) -> ConversationInfoResultSet:
-    user_id = get_user_id(request)
-    conversation_store = await ConversationStoreImpl.get_instance(
-        config, user_id, get_github_user_id(request)
+    # user_id = get_user_id(request)
+
+    # Get all user addresses for this user
+    user_address_list = get_user_address_list(request)
+
+    # Create merged conversation store from all user addresses
+    merged_conversation_store = await MergedConversationStore.create_from_address_list(
+        config, user_address_list
     )
 
-    # get conversation visibility by user id
+    # Get conversation visibility by user id (using all addresses)
     visible_conversations = (
         await conversation_module._get_conversation_visibility_by_user_id(
-            user_id, page, limit, keyword
+            user_address_list, page, limit, keyword
         )
     )
+
     if len(visible_conversations['items']) == 0:
         return ConversationInfoResultSet(results=[], next_page_id=None)
+
     visible_conversation_ids = [
         conversation['conversation_id']
         for conversation in visible_conversations['items']
     ]
 
-    conversation_metadata_result_set = await conversation_store.search(
+    # Search using the merged conversation store
+    conversation_metadata_result_set = await merged_conversation_store.search(
         page_id, limit, filter_conversation_ids=visible_conversation_ids
     )
+
     # Filter out conversations older than max_age
     now = datetime.now(timezone.utc)
     max_age = config.conversation_max_age_seconds
@@ -410,20 +582,23 @@ async def search_conversations(
 async def get_conversation(
     conversation_id: str, request: Request
 ) -> ConversationInfo | None:
-    conversation_store = await ConversationStoreImpl.get_instance(
-        config, get_user_id(request), get_github_user_id(request)
+    # Get all user addresses for this user
+    user_address_list = get_user_address_list(request)
+
+    # Create merged conversation store from all user addresses
+    merged_conversation_store = await MergedConversationStore.create_from_address_list(
+        config, user_address_list
     )
+
     try:
-        metadata = await conversation_store.get_metadata(conversation_id)
+        metadata = await merged_conversation_store.get_metadata(conversation_id)
         is_running = await conversation_manager.is_agent_loop_running(conversation_id)
         conversation_info = await _get_conversation_info(metadata, is_running)
-        # existed_conversation = await conversation_module._get_conversation_by_id(
-        #     conversation_id, str(get_user_id(request))
-        # )
-        # if existed_conversation:
-        #     conversation_info.research_mode = existed_conversation.configs.get('research_mode', None)
         return conversation_info
     except FileNotFoundError:
+        return None
+    except Exception as e:
+        logger.warning(f'Error accessing merged conversation store: {e}')
         return None
 
 
@@ -510,25 +685,33 @@ async def update_conversation(
     request: Request, conversation_id: str, title: str = Body(embed=True)
 ) -> bool:
     user_id = get_user_id(request)
-    conversation_store = await ConversationStoreImpl.get_instance(
-        config, user_id, get_github_user_id(request)
+    user_address_list = get_user_address_list(request)
+
+    # Create merged conversation store from all user addresses
+    merged_conversation_store = await MergedConversationStore.create_from_address_list(
+        config, user_address_list
     )
-    metadata = await conversation_store.get_metadata(conversation_id)
-    if not metadata:
-        return False
 
-    # If title is empty or unspecified, auto-generate it
-    if not title or title.isspace():
-        title = await auto_generate_title(conversation_id, user_id)
+    try:
+        metadata = await merged_conversation_store.get_metadata(conversation_id)
 
-        # If we still don't have a title, use the default
+        # If title is empty or unspecified, auto-generate it
         if not title or title.isspace():
-            title = get_default_conversation_title(conversation_id)
+            title = await auto_generate_title(conversation_id, user_id)
 
-    metadata.title = title
-    await conversation_store.save_metadata(metadata)
-    await conversation_module._update_title_conversation(conversation_id, title)
-    return True
+            # If we still don't have a title, use the default
+            if not title or title.isspace():
+                title = get_default_conversation_title(conversation_id)
+
+        metadata.title = title
+        await merged_conversation_store.save_metadata(metadata)
+        await conversation_module._update_title_conversation(conversation_id, title)
+        return True
+    except FileNotFoundError:
+        return False
+    except Exception as e:
+        logger.warning(f'Error accessing merged conversation store: {e}')
+        return False
 
 
 @app.delete('/conversations/{conversation_id}')
@@ -573,11 +756,19 @@ async def change_visibility(
     file: Optional[UploadFile] = None,
 ) -> bool:
     user_id = get_user_id(request)
-    conversation_store = await ConversationStoreImpl.get_instance(
-        config, user_id, get_github_user_id(request)
+    user_address_list = get_user_address_list(request)
+
+    # Create merged conversation store from all user addresses
+    merged_conversation_store = await MergedConversationStore.create_from_address_list(
+        config, user_address_list
     )
-    metadata = await conversation_store.get_metadata(conversation_id)
-    if not metadata:
+
+    try:
+        metadata = await merged_conversation_store.get_metadata(conversation_id)
+    except FileNotFoundError:
+        return False
+    except Exception as e:
+        logger.warning(f'Error accessing merged conversation store: {e}')
         return False
 
     # Handle file upload if provided
@@ -615,10 +806,14 @@ async def get_conversation_visibility(
     conversation_id: str,
     request: Request,
 ) -> bool:
-    user_id = get_user_id(request)
-    return await conversation_module._get_conversation_visibility(
-        conversation_id, str(user_id)
+    user_address_list = get_user_address_list(request)
+
+    # Get conversation visibility using all user addresses
+    visibility = await conversation_module._get_conversation_visibility(
+        conversation_id, user_address_list
     )
+
+    return visibility
 
 
 async def _get_conversation_info(
@@ -645,3 +840,39 @@ async def _get_conversation_info(
             extra={'session_id': conversation.conversation_id},
         )
         return None
+
+
+def get_user_address_list(request: Request) -> list[str]:
+    """
+    Get all user addresses from the ThesisUser object.
+
+    Args:
+        request: FastAPI request object containing user state
+
+    Returns:
+        List of user addresses (publicAddress, solanaThesisAddress, ethThesisAddress)
+    """
+    user = request.state.user
+    addresses = []
+
+    # Add publicAddress if it exists
+    if user.publicAddress:
+        addresses.append(user.publicAddress)
+
+    # Add solanaThesisAddress if it exists
+    if user.solanaThesisAddress:
+        addresses.append(user.solanaThesisAddress)
+
+    # Add ethThesisAddress if it exists
+    if user.ethThesisAddress:
+        addresses.append(user.ethThesisAddress)
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_addresses = []
+    for addr in addresses:
+        if addr not in seen:
+            seen.add(addr)
+            unique_addresses.append(addr)
+
+    return unique_addresses
