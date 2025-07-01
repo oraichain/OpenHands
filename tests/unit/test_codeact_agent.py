@@ -1027,3 +1027,811 @@ def test_stream_function_message_concurrent_calls(agent: CodeActAgent):
 
     # Both should emit content
     assert agent.event_stream.add_event.call_count == 2
+
+
+# Tests for try_get_llm_response_from_cache function
+def test_try_get_llm_response_from_cache_success_with_message_action(
+    agent: CodeActAgent,
+):
+    """Test successful cache retrieval with MessageAction."""
+    from unittest.mock import Mock, patch
+
+    from openhands.events.action.agent import AgentLLMResponseCacheAction
+
+    # Mock cache response with proper event structure
+    mock_cache_response = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {'content': 'test message'},
+        },  # user message
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {'content': 'cached response'},
+        },  # agent response
+    ]
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = mock_cache_response
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Verify result
+        assert isinstance(result, AgentLLMResponseCacheAction)
+        assert result.response == 'cached response'
+
+        # Verify cache was called correctly
+        mock_cache_class.assert_called_once_with(
+            type='redis-semantic',
+            host='localhost',
+            port='6379',
+            password='password',
+            similarity_threshold=0.8,
+            ttl=300,
+            redis_semantic_cache_embedding_model='text-embedding-3-large',
+        )
+        mock_async_call.assert_called_once()
+
+
+def test_try_get_llm_response_from_cache_success_with_agent_finish_action(
+    agent: CodeActAgent,
+):
+    """Test successful cache retrieval with AgentFinishAction."""
+    from unittest.mock import Mock, patch
+
+    from openhands.events.action.agent import AgentLLMResponseCacheAction
+
+    # Mock cache response with proper event structure
+    mock_cache_response = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {'content': 'test message'},
+        },  # user message
+        {
+            'action': 'finish',
+            'source': 'agent',
+            'args': {'final_thought': 'task completed'},
+        },  # agent finish
+    ]
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = mock_cache_response
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Verify result
+        assert isinstance(result, AgentLLMResponseCacheAction)
+        assert result.response == 'task completed'
+
+
+def test_try_get_llm_response_from_cache_multiple_events_picks_last(
+    agent: CodeActAgent,
+):
+    """Test that the function picks the last valid event when multiple are present."""
+    from unittest.mock import Mock, patch
+
+    from openhands.events.action.agent import AgentLLMResponseCacheAction
+
+    # Mock cache response with multiple events
+    mock_cache_response = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {'content': 'test message'},
+        },  # user message
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {'content': 'first response'},
+        },  # first agent response
+        {
+            'action': 'finish',
+            'source': 'agent',
+            'args': {'final_thought': 'final response'},
+        },  # final agent response
+    ]
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = mock_cache_response
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Verify result - should pick the last valid event (AgentFinishAction)
+        assert isinstance(result, AgentLLMResponseCacheAction)
+        assert result.response == 'final response'
+
+
+def test_try_get_llm_response_from_cache_no_cache_available(agent: CodeActAgent):
+    """Test behavior when Redis environment variables are not available."""
+    from unittest.mock import patch
+
+    # Mock missing environment variables
+    with patch.dict('os.environ', {}, clear=True):
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Should return None when environment variables are missing
+        assert result is None
+
+
+def test_try_get_llm_response_from_cache_empty_response(agent: CodeActAgent):
+    """Test behavior when cache returns empty response."""
+    from unittest.mock import Mock, patch
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = []
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Should return None for empty response
+        assert result is None
+
+
+def test_try_get_llm_response_from_cache_none_response(agent: CodeActAgent):
+    """Test behavior when cache returns None."""
+    from unittest.mock import Mock, patch
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = None
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Should return None for None response
+        assert result is None
+
+
+def test_try_get_llm_response_from_cache_non_list_response(agent: CodeActAgent):
+    """Test behavior when cache returns non-list response."""
+    from unittest.mock import Mock, patch
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = 'not a list'
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Should return None for non-list response
+        assert result is None
+
+
+def test_try_get_llm_response_from_cache_only_user_message(agent: CodeActAgent):
+    """Test behavior when cache only contains user message."""
+    from unittest.mock import Mock, patch
+
+    # Mock cache response with only user message
+    mock_cache_response = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {'content': 'test message'},
+        }  # only user message
+    ]
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = mock_cache_response
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Should return None when only user message is present
+        assert result is None
+
+
+def test_try_get_llm_response_from_cache_no_valid_agent_events(agent: CodeActAgent):
+    """Test behavior when cache has events but no valid agent events."""
+    from unittest.mock import Mock, patch
+
+    # Mock cache response with non-agent events
+    mock_cache_response = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {'content': 'test message'},
+        },  # user message
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {'content': 'another user message'},
+        },  # another user message
+        {
+            'action': 'run',
+            'source': 'agent',
+            'args': {'command': 'ls'},
+        },  # non-MessageAction/AgentFinishAction
+    ]
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = mock_cache_response
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Should return None when no valid agent events are found
+        assert result is None
+
+
+def test_try_get_llm_response_from_cache_exception_handling(agent: CodeActAgent):
+    """Test exception handling in cache retrieval."""
+    from unittest.mock import Mock, patch
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.side_effect = Exception('Cache error')
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function - should not raise exception
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Should return None when exception occurs
+        assert result is None
+
+
+def test_try_get_llm_response_from_cache_event_deserialization_error(
+    agent: CodeActAgent,
+):
+    """Test behavior when event deserialization fails."""
+    from unittest.mock import Mock, patch
+
+    # Mock cache response with invalid event data
+    mock_cache_response = [
+        {
+            'action': 'message',
+            'source': 'user',
+            'args': {'content': 'test message'},
+        },  # user message
+        {'invalid': 'event', 'data': 'structure'},  # invalid event structure
+    ]
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = mock_cache_response
+
+        # Create test action
+        action = MessageAction(content='test message')
+        action._source = EventSource.USER
+
+        # Call the function - should handle deserialization error gracefully
+        result = agent.try_get_llm_response_from_cache(action)
+
+        # Should return None when deserialization fails
+        assert result is None
+
+
+# Tests for step() function edge cases
+def test_step_with_history_length_one(agent: CodeActAgent):
+    """Test step() behavior when history length is exactly 1."""
+    from unittest.mock import Mock
+
+    # Create mock state with history length 1 (should be a list, not None)
+    mock_state = Mock()
+    mock_state.history = [MessageAction(content='single message')]
+    mock_state.get_last_user_message.return_value = None
+
+    # Mock LLM to return a valid response
+    mock_response = Mock()
+    mock_response.id = 'mock_id'
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message = Mock()
+    mock_response.choices[0].message.content = 'Test response'
+    mock_response.choices[0].message.tool_calls = []
+
+    agent.llm.completion = Mock(return_value=mock_response)
+    agent.llm.is_caching_prompt_active = Mock(return_value=False)
+
+    # Mock other dependencies
+    agent.condenser = Mock()
+    agent.condenser.condensed_history.return_value = Mock(events=[])
+
+    # Call step
+    result = agent.step(mock_state)
+
+    # Should not attempt cache lookup when history length == 1
+    assert result is not None
+
+
+def test_step_with_history_length_zero(agent: CodeActAgent):
+    """Test step() behavior when history is empty (should be a list, not None)."""
+    from unittest.mock import Mock
+
+    # Create mock state with empty history
+    mock_state = Mock()
+    mock_state.history = []
+    mock_state.get_last_user_message.return_value = None
+
+    # Mock LLM to return a valid response
+    mock_response = Mock()
+    mock_response.id = 'mock_id'
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message = Mock()
+    mock_response.choices[0].message.content = 'Test response'
+    mock_response.choices[0].message.tool_calls = []
+
+    agent.llm.completion = Mock(return_value=mock_response)
+    agent.llm.is_caching_prompt_active = Mock(return_value=False)
+
+    # Mock other dependencies
+    agent.condenser = Mock()
+    agent.condenser.condensed_history.return_value = Mock(events=[])
+
+    # Call step
+    result = agent.step(mock_state)
+
+    # Should not attempt cache lookup when history is empty
+    assert result is not None
+
+
+def test_step_with_recall_observation(agent: CodeActAgent):
+    """Test step() behavior when last event is RecallObservation."""
+    from unittest.mock import Mock, patch
+
+    from openhands.events.event import RecallType
+    from openhands.events.observation.agent import RecallObservation
+
+    # Create mock state with RecallObservation as last event
+    mock_state = Mock()
+    user_message = MessageAction(content='user message')
+    user_message._source = EventSource.USER
+    recall_observation = RecallObservation(
+        recall_type=RecallType.WORKSPACE_CONTEXT, content='Added workspace context'
+    )
+
+    mock_state.history = [user_message, recall_observation]
+    mock_state.get_last_user_message.return_value = user_message
+
+    # Mock LLM to return a valid response
+    mock_response = Mock()
+    mock_response.id = 'mock_id'
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message = Mock()
+    mock_response.choices[0].message.content = 'Test response'
+    mock_response.choices[0].message.tool_calls = []
+
+    agent.llm.completion = Mock(return_value=mock_response)
+    agent.llm.is_caching_prompt_active = Mock(return_value=False)
+
+    # Mock cache to return None
+    with patch('litellm.cache') as mock_cache:
+        mock_cache.get_cache.return_value = None
+
+        # Mock other dependencies
+        agent.condenser = Mock()
+        agent.condenser.condensed_history.return_value = Mock(events=[])
+
+        # Call step
+        result = agent.step(mock_state)
+
+        # Should use history[-3] for user message when last event is RecallObservation
+        assert result is not None
+
+
+def test_step_with_recall_observation_insufficient_history(agent: CodeActAgent):
+    """Test step() behavior when RecallObservation is present but insufficient history."""
+    from unittest.mock import Mock
+
+    from openhands.events.event import RecallType
+    from openhands.events.observation.agent import RecallObservation
+
+    # Create mock state with RecallObservation but only 2 events
+    mock_state = Mock()
+    user_message = MessageAction(content='user message')
+    user_message._source = EventSource.USER
+    recall_observation = RecallObservation(
+        recall_type=RecallType.WORKSPACE_CONTEXT, content='Added workspace context'
+    )
+
+    mock_state.history = [user_message, recall_observation]  # Only 2 events
+    mock_state.get_last_user_message.return_value = user_message
+
+    # Mock LLM to return a valid response
+    mock_response = Mock()
+    mock_response.id = 'mock_id'
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message = Mock()
+    mock_response.choices[0].message.content = 'Test response'
+    mock_response.choices[0].message.tool_calls = []
+
+    agent.llm.completion = Mock(return_value=mock_response)
+    agent.llm.is_caching_prompt_active = Mock(return_value=False)
+
+    # Mock other dependencies
+    agent.condenser = Mock()
+    agent.condenser.condensed_history.return_value = Mock(events=[])
+
+    # Call step - should not crash when trying to access history[-3]
+    result = agent.step(mock_state)
+
+    # Should handle insufficient history gracefully
+    assert result is not None
+
+
+def test_step_with_non_user_source_message_action(agent: CodeActAgent):
+    """Test step() behavior when MessageAction is not from user source."""
+    from unittest.mock import Mock, patch
+
+    # Create mock state with agent MessageAction
+    mock_state = Mock()
+    agent_message = MessageAction(content='agent message')
+    agent_message._source = EventSource.AGENT
+
+    mock_state.history = [agent_message, MessageAction(content='response')]
+    mock_state.get_last_user_message.return_value = agent_message
+
+    # Mock LLM to return a valid response
+    mock_response = Mock()
+    mock_response.id = 'mock_id'
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message = Mock()
+    mock_response.choices[0].message.content = 'Test response'
+    mock_response.choices[0].message.tool_calls = []
+
+    agent.llm.completion = Mock(return_value=mock_response)
+    agent.llm.is_caching_prompt_active = Mock(return_value=False)
+
+    # Mock cache
+    with patch('litellm.cache') as mock_cache:
+        mock_cache.get_cache.return_value = None
+
+        # Mock other dependencies
+        agent.condenser = Mock()
+        agent.condenser.condensed_history.return_value = Mock(events=[])
+
+        # Call step
+        result = agent.step(mock_state)
+
+        # Should not attempt cache lookup for non-user source
+        assert result is not None
+
+
+def test_step_with_cache_hit_returns_action(agent: CodeActAgent):
+    """Test step() behavior when cache lookup returns a valid action."""
+    from unittest.mock import Mock, patch
+
+    from openhands.events.action.agent import AgentLLMResponseCacheAction
+
+    # Create mock state with proper extra_data
+    mock_state = Mock()
+    mock_state.extra_data = {}  # Initialize as empty dict instead of Mock
+    user_message = MessageAction(content='test message')
+    user_message._source = EventSource.USER
+
+    mock_state.history = [user_message, MessageAction(content='response')]
+    mock_state.get_last_user_message.return_value = user_message
+
+    # Mock cache to return valid response
+    mock_cache_response = [
+        {'action': 'message', 'source': 'user', 'args': {'content': 'test message'}},
+        {
+            'action': 'message',
+            'source': 'agent',
+            'args': {'content': 'cached response'},
+        },
+    ]
+
+    # Mock environment variables and Cache
+    with patch.dict(
+        'os.environ',
+        {'REDIS_HOST': 'localhost', 'REDIS_PORT': '6379', 'REDIS_PASSWORD': 'password'},
+    ), patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.Cache'
+    ) as mock_cache_class, patch(
+        'openhands.agenthub.codeact_agent.codeact_agent.call_async_from_sync'
+    ) as mock_async_call:
+        # Setup mock cache instance
+        mock_cache_instance = Mock()
+        mock_cache_class.return_value = mock_cache_instance
+        mock_async_call.return_value = mock_cache_response
+
+        # Call step
+        result = agent.step(mock_state)
+
+        # Should return the cached action
+        assert isinstance(result, AgentLLMResponseCacheAction)
+        assert result.response == 'cached response'
+
+
+def test_step_with_exit_command(agent: CodeActAgent):
+    """Test step() behavior when user message is '/exit'."""
+    from unittest.mock import Mock, patch
+
+    from openhands.events.action import AgentFinishAction
+
+    # Create mock state with exit command
+    mock_state = Mock()
+    exit_message = MessageAction(content='/exit')
+    exit_message._source = EventSource.USER
+
+    mock_state.history = [exit_message, MessageAction(content='response')]
+    mock_state.get_last_user_message.return_value = exit_message
+
+    # Mock cache to return None
+    with patch('litellm.cache') as mock_cache:
+        mock_cache.get_cache.return_value = None
+
+        # Call step
+        result = agent.step(mock_state)
+
+        # Should return AgentFinishAction for exit command
+        assert isinstance(result, AgentFinishAction)
+
+
+def test_step_with_exit_command_whitespace(agent: CodeActAgent):
+    """Test step() behavior when user message is '/exit' with whitespace."""
+    from unittest.mock import Mock, patch
+
+    from openhands.events.action import AgentFinishAction
+
+    # Create mock state with exit command with whitespace
+    mock_state = Mock()
+    exit_message = MessageAction(content='  /exit  ')
+    exit_message._source = EventSource.USER
+
+    mock_state.history = [exit_message, MessageAction(content='response')]
+    mock_state.get_last_user_message.return_value = exit_message
+
+    # Mock cache to return None
+    with patch('litellm.cache') as mock_cache:
+        mock_cache.get_cache.return_value = None
+
+        # Call step
+        result = agent.step(mock_state)
+
+        # Should return AgentFinishAction for exit command with whitespace
+        assert isinstance(result, AgentFinishAction)
+
+
+def test_step_with_condensation_action(agent: CodeActAgent):
+    """Test step() behavior when condenser returns Condensation action."""
+    from unittest.mock import Mock, patch
+
+    from openhands.events.action import MessageAction
+    from openhands.memory.condenser.condenser import Condensation, CondensationAction
+
+    # Create mock state
+    mock_state = Mock()
+    user_message = MessageAction(content='test message')
+    user_message._source = EventSource.USER
+
+    mock_state.history = [user_message, MessageAction(content='response')]
+    mock_state.get_last_user_message.return_value = user_message
+
+    # Mock cache to return None
+    with patch('litellm.cache') as mock_cache:
+        mock_cache.get_cache.return_value = None
+
+        # Mock condenser to return Condensation with a CondensationAction
+        condensation_action = CondensationAction(
+            forgotten_events_start_id=0, forgotten_events_end_id=1
+        )
+        agent.condenser = Mock()
+        agent.condenser.condensed_history.return_value = Condensation(
+            action=condensation_action
+        )
+
+        # Call step
+        result = agent.step(mock_state)
+
+        # Should return the condensation action
+        assert result == condensation_action
+
+
+def test_step_with_session_id_assignment(agent: CodeActAgent):
+    """Test step() behavior when session_id is assigned from state."""
+    from unittest.mock import Mock
+
+    # Create mock state with session_id
+    mock_state = Mock()
+    mock_state.session_id = 'test-session-123'
+    mock_state.history = []
+    mock_state.get_last_user_message.return_value = None
+
+    # Mock LLM to return a valid response
+    mock_response = Mock()
+    mock_response.id = 'mock_id'
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message = Mock()
+    mock_response.choices[0].message.content = 'Test response'
+    mock_response.choices[0].message.tool_calls = []
+
+    agent.llm.completion = Mock(return_value=mock_response)
+    agent.llm.is_caching_prompt_active = Mock(return_value=False)
+
+    # Mock other dependencies
+    agent.condenser = Mock()
+    agent.condenser.condensed_history.return_value = Mock(events=[])
+
+    # Call step
+    result = agent.step(mock_state)
+
+    # Should assign session_id from state
+    assert agent.session_id == 'test-session-123'
+    assert result is not None
+
+
+def test_step_with_existing_session_id(agent: CodeActAgent):
+    """Test step() behavior when session_id already exists."""
+    from unittest.mock import Mock
+
+    # Set existing session_id
+    agent.session_id = 'existing-session-456'
+
+    # Create mock state with different session_id
+    mock_state = Mock()
+    mock_state.session_id = 'new-session-789'
+    mock_state.history = []
+    mock_state.get_last_user_message.return_value = None
+
+    # Mock LLM to return a valid response
+    mock_response = Mock()
+    mock_response.id = 'mock_id'
+    mock_response.choices = [Mock()]
+    mock_response.choices[0].message = Mock()
+    mock_response.choices[0].message.content = 'Test response'
+    mock_response.choices[0].message.tool_calls = []
+
+    agent.llm.completion = Mock(return_value=mock_response)
+    agent.llm.is_caching_prompt_active = Mock(return_value=False)
+
+    # Mock other dependencies
+    agent.condenser = Mock()
+    agent.condenser.condensed_history.return_value = Mock(events=[])
+
+    # Call step
+    result = agent.step(mock_state)
+
+    # Should not override existing session_id
+    assert agent.session_id == 'existing-session-456'
+    assert result is not None

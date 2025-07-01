@@ -5,8 +5,8 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Optional, override
 
-import litellm  # noqa
 from httpx import request
+from litellm.caching import Cache
 
 import openhands.agenthub.codeact_agent.function_calling as codeact_function_calling
 from openhands.a2a.A2AManager import A2AManager
@@ -40,7 +40,7 @@ from openhands.runtime.plugins import (
     JupyterRequirement,
     PluginRequirement,
 )
-from openhands.utils.async_utils import call_async_from_sync
+from openhands.utils.async_utils import GENERAL_TIMEOUT, call_async_from_sync
 from openhands.utils.prompt import PromptManager
 
 
@@ -362,9 +362,11 @@ class CodeActAgent(Agent):
                             {
                                 'message': {
                                     'role': 'assistant',
-                                    'content': accumulated_content
-                                    if accumulated_content
-                                    else None,
+                                    'content': (
+                                        accumulated_content
+                                        if accumulated_content
+                                        else None
+                                    ),
                                     'tool_calls': formatted_tool_calls,
                                 },
                                 'index': 0,
@@ -537,12 +539,14 @@ class CodeActAgent(Agent):
         if self.pending_actions:
             return self.pending_actions.popleft()
 
-        if state.history and len(state.history) > 1:
+        if state.history and len(state.history) > 0:
             # user message
-            last_event = state.history[-1]
-            user_message = state.history[-2]
-            if isinstance(last_event, RecallObservation) and len(state.history) > 2:
-                user_message = state.history[-3]
+            user_message = state.history[-1]
+            if len(state.history) > 1:
+                last_event = state.history[-1]
+                user_message = state.history[-2]
+                if isinstance(last_event, RecallObservation) and len(state.history) > 2:
+                    user_message = state.history[-3]
             if (
                 user_message
                 and isinstance(user_message, MessageAction)
@@ -832,10 +836,20 @@ class CodeActAgent(Agent):
         self, action: MessageAction
     ) -> AgentLLMResponseCacheAction | None:
         try:
-            response = (
-                litellm.cache.get_cache(**{'prompt': action.content})
-                if litellm.cache
-                else None
+            # NOTE: re-initialize the cache to avoid "close in a different loop" error of asyncio. If s1 knows a better way, please let me know.
+            litellm_cache = Cache(
+                type='redis-semantic',
+                host=os.environ['REDIS_HOST'],
+                port=os.environ['REDIS_PORT'],
+                password=os.environ['REDIS_PASSWORD'],
+                similarity_threshold=0.8,  # similarity threshold for cache hits, 0 == no similarity, 1 = exact matches, 0.5 == 50% similarity
+                ttl=300,
+                redis_semantic_cache_embedding_model='text-embedding-3-large',
+            )
+            response = call_async_from_sync(
+                litellm_cache.async_get_cache,
+                GENERAL_TIMEOUT,
+                **{'prompt': action.content},
             )
             if response and isinstance(response, list) and len(response) > 0:
                 cached_events = [event_from_dict(event) for event in response]
@@ -853,9 +867,11 @@ class CodeActAgent(Agent):
                             )
                         ):
                             return AgentLLMResponseCacheAction(
-                                response=event.content
-                                if isinstance(event, MessageAction)
-                                else event.final_thought
+                                response=(
+                                    event.content
+                                    if isinstance(event, MessageAction)
+                                    else event.final_thought
+                                )
                             )
                     logger.info(
                         f'Cache hit for user message: {len(cached_events)} events found'

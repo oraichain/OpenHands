@@ -1149,11 +1149,14 @@ class AgentController:
             self.event_stream.add_event(action, action._source)  # type: ignore [attr-defined]
 
         if isinstance(action, AgentLLMResponseCacheAction):
+            message_action = MessageAction(
+                content=action.response,
+            )
+            self.state.history.append(message_action)
+            await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
             self.event_stream.add_event(
                 StreamingMessageAction(content=action.response), EventSource.AGENT
             )
-            await self.set_agent_state_to(AgentState.AWAITING_USER_INPUT)
-            return
 
         await self.update_state_after_step()
 
