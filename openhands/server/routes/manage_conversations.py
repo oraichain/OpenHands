@@ -407,7 +407,8 @@ async def search_conversations(
         )
 
         visible_conversation_ids = [
-            conversation.conversation_id
+            getattr(conversation, 'conversation_id', None)
+            or conversation.get('conversation_id')
             for conversation in visible_conversations['items']
         ]
 
@@ -429,7 +430,8 @@ async def search_conversations(
         ]
 
     conversation_ids = set(
-        conversation.conversation_id for conversation in filtered_results
+        getattr(conversation, 'conversation_id', None) or conversation.conversation_id
+        for conversation in filtered_results
     )
     running_conversations = await conversation_manager.get_running_agent_loops(
         get_user_id(request), set(conversation_ids)
@@ -438,7 +440,11 @@ async def search_conversations(
         results=await wait_all(
             _get_conversation_info(
                 conversation=conversation,
-                is_running=conversation.conversation_id in running_conversations,
+                is_running=(
+                    getattr(conversation, 'conversation_id', None)
+                    or conversation.conversation_id
+                )
+                in running_conversations,
             )
             for conversation in filtered_results
         ),
