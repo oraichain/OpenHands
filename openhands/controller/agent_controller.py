@@ -44,7 +44,6 @@ from openhands.evaluation import should_step_after_call_evaluation_endpoint
 from openhands.events import (
     EventSource,
     EventStream,
-    EventStreamSubscriber,
     RecallType,
 )
 from openhands.events.action import (
@@ -66,6 +65,8 @@ from openhands.events.action.agent import CondensationAction, RecallAction
 from openhands.events.async_event_store_wrapper import AsyncEventStoreWrapper
 from openhands.events.event import Event
 from openhands.events.event_store import EventStore
+from openhands.events.kafka_consumer import KafkaEventConsumer
+from openhands.events.kafka_stream import KafkaEventStream
 from openhands.events.observation import (
     AgentDelegateObservation,
     AgentStateChangedObservation,
@@ -84,6 +85,7 @@ from openhands.events.serialization.event import (
     event_to_trajectory,
     truncate_content,
 )
+from openhands.events.stream import EventStreamSubscriber
 from openhands.llm.llm import LLM
 from openhands.llm.metrics import Metrics
 from openhands.server.mem0 import (
@@ -114,7 +116,7 @@ class AgentController:
     id: str
     agent: Agent
     max_iterations: int
-    event_stream: EventStream
+    event_stream: EventStream | KafkaEventStream
     state: State
     confirmation_mode: bool
     agent_to_llm_config: dict[str, LLMConfig]
@@ -138,11 +140,13 @@ class AgentController:
     user_id: str | None = None
     raw_followup_conversation_id: str | None = None
     followup_conversation_events: list[dict] = []
+    _kafka_consumer: KafkaEventConsumer | None = None
+    loop: asyncio.AbstractEventLoop
 
     def __init__(
         self,
         agent: Agent,
-        event_stream: EventStream,
+        event_stream: EventStream | KafkaEventStream,
         max_iterations: int,
         max_budget_per_task: float | None = None,
         agent_to_llm_config: dict[str, LLMConfig] | None = None,
@@ -187,10 +191,46 @@ class AgentController:
         # the event stream must be set before maybe subscribing to it
         self.event_stream = event_stream
 
-        # subscribe to the event stream if this is not a delegate
+        # Use Kafka consumer for event processing if using KafkaEventStream
         if not self.is_delegate:
-            self.event_stream.subscribe(
-                EventStreamSubscriber.AGENT_CONTROLLER, self.on_event, self.id
+            from openhands.events.kafka_stream import KafkaEventStream
+
+            if isinstance(event_stream, KafkaEventStream):
+                logger.info(
+                    f'[Agent Controller {self.id}] Creating Kafka consumer for AgentController'
+                )
+                try:
+                    self._kafka_consumer = KafkaEventConsumer(
+                        consumer_group=f'agent_controller_{self.id}',
+                        topic_suffix='agent_controller',
+                        session_id=self.id,
+                    )
+                    self._kafka_consumer.add_event_handler(self._process_kafka_event)
+                    self._kafka_consumer.start_consumer()
+                    logger.info(
+                        f'[Agent Controller {self.id}] ✅ Successfully created Kafka consumer'
+                    )
+                except Exception as e:
+                    logger.error(
+                        f'[Agent Controller {self.id}] ❌ Failed to create Kafka consumer: {e}'
+                    )
+                    logger.error(
+                        f'[Agent Controller {self.id}] ⚠️ CRITICAL: AgentController cannot function without Kafka consumer!'
+                    )
+                    raise RuntimeError(
+                        f'Failed to create Kafka consumer for AgentController: {e}'
+                    )
+            else:
+                logger.info(
+                    f'[Agent Controller {self.id}] Using traditional event stream subscription (not Kafka)'
+                )
+                # Fallback to old subscription method for non-Kafka streams
+                self.event_stream.subscribe(
+                    EventStreamSubscriber.AGENT_CONTROLLER, self.on_event, self.id
+                )
+        else:
+            logger.info(
+                f'[Agent Controller {self.id}] Skipping event stream setup (is_delegate=True)'
             )
 
         # state from the previous session, state from a parent agent, or a fresh state
@@ -220,6 +260,14 @@ class AgentController:
         self.raw_followup_conversation_id = raw_followup_conversation_id
         self.followup_conversation_events = []
         print(f'raw_followup_conversation_id: {self.raw_followup_conversation_id}')
+
+        # Store reference to the main event loop for Kafka event processing
+        try:
+            self.loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # If no event loop exists, create one
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
 
     async def close(self, set_stop_state=True) -> None:
         """Closes the agent controller, canceling any ongoing tasks and unsubscribing from the event stream.
@@ -251,9 +299,12 @@ class AgentController:
             )
         )
 
-        # unsubscribe from the event stream
-        # only the root parent controller subscribes to the event stream
-        if not self.is_delegate:
+        # Stop Kafka consumer or unsubscribe from event stream
+        if self._kafka_consumer:
+            self._kafka_consumer.stop_consumer()
+        elif not self.is_delegate:
+            from openhands.events.stream import EventStreamSubscriber
+
             self.event_stream.unsubscribe(
                 EventStreamSubscriber.AGENT_CONTROLLER, self.id
             )
@@ -434,8 +485,6 @@ class AgentController:
 
         # continue parent processing only if there's no active delegate
         asyncio.get_event_loop().run_until_complete(self._on_event(event))
-
-        # I want to
 
     async def _on_event(self, event: Event) -> None:
         if hasattr(event, 'hidden') and event.hidden:
@@ -1610,3 +1659,24 @@ class AgentController:
             None,
         )
         return self._cached_first_user_message
+
+    def _process_kafka_event(self, event: Event) -> None:
+        """Process events received from Kafka consumer"""
+        try:
+            # Add debugging to see if this method is being called
+            event_type = (
+                event.action
+                if hasattr(event, 'action')
+                else event.observation
+                if hasattr(event, 'observation')
+                else type(event).__name__
+            )
+            self.log(
+                'info',
+                f'🎯 AgentController received Kafka event: {event_type} (id={event.id})',
+            )
+
+            # Schedule the async operation to run in the main event loop
+            asyncio.run_coroutine_threadsafe(self._on_event(event), self.loop)
+        except Exception as e:
+            self.log('error', f'Error processing Kafka event: {e}')

@@ -122,47 +122,66 @@ bootstrap_servers = "kafka-1.prod.example.com:9092,kafka-2.prod.example.com:9092
 topic_prefix = "openhands"
 consumer_group_prefix = "openhands"
 
+# === PRODUCER CONFIG (Production-Ready Settings) ===
 [kafka.producer_config]
-acks = "all"
-enable_idempotence = true
-retries = 2147483647  # Integer.MAX_VALUE
+# === RELIABILITY & DURABILITY ===
+acks = "all"                    # Wait for all in-sync replicas
+enable_idempotence = true       # Prevent duplicate messages
+retries = 2147483647           # Max retries (practically infinite)
+max_in_flight_requests_per_connection = 5  # Maintain ordering with idempotence
 
-retry_backoff_ms = 100
-retry_backoff_max_ms = 32000
-max_in_flight_requests_per_connection = 5
+# === COMPRESSION ===
+# Using gzip instead of snappy - more universally available and better compression ratio
+compression_type = "gzip"      # Alternative: "lz4" for speed, "none" for no compression
 
-compression_type = "snappy"
-batch_size = 65536        # 64KB batches for better throughput
-linger_ms = 20           # Wait up to 20ms to fill batches
+# === BATCHING & THROUGHPUT ===
+batch_size = 32768             # 32KB batches (sweet spot for most use cases)
+linger_ms = 10                 # Wait up to 10ms to fill batches (balance latency/throughput)
+buffer_memory = 134217728      # 128MB producer buffer (2x previous for high throughput)
 
-# Memory settings
-buffer_memory = 67108864  # 64MB producer buffer
-max_block_ms = 60000     # Block for 60 seconds if buffer is full
+# === TIMEOUTS & BLOCKING ===
+max_block_ms = 30000          # Block for 30 seconds if buffer is full
+request_timeout_ms = 30000    # 30 second request timeout
+delivery_timeout_ms = 300000  # 5 minutes total delivery timeout (includes retries)
 
-# === TIMEOUT SETTINGS ===
-request_timeout_ms = 30000      # 30 second request timeout
-delivery_timeout_ms = 120000    # 2 minute total delivery timeout
+# === RETRY LOGIC ===
+retry_backoff_ms = 100        # Base retry delay
 
+# === CONNECTION MANAGEMENT ===
+connections_max_idle_ms = 540000     # 9 minutes idle connection timeout
+reconnect_backoff_ms = 50           # Base reconnection delay
+reconnect_backoff_max_ms = 1000     # Max reconnection delay
+
+# === MONITORING & METRICS ===
+# These help with observability in production
+metadata_max_age_ms = 300000        # 5 minutes metadata refresh
+metrics_sample_window_ms = 30000    # 30 seconds metrics window
+metrics_num_samples = 2             # Number of samples to maintain
+
+# === CONSUMER CONFIG (Production-Ready Settings) ===
 [kafka.consumer_config]
-enable_auto_commit = false
-auto_offset_reset = "earliest"
-isolation_level = "read_committed"
+# === OFFSET MANAGEMENT ===
+enable_auto_commit = false     # Manual offset management for at-least-once processing
+auto_offset_reset = "earliest" # Start from beginning if no offset found
+isolation_level = "read_committed"  # Only read committed messages
 
-fetch_min_bytes = 50000          # Wait for at least 50KB
-fetch_max_wait_ms = 500          # But don't wait more than 500ms
-max_partition_fetch_bytes = 1048576  # 1MB max per partition
+# === FETCHING BEHAVIOR ===
+fetch_min_bytes = 1024         # Minimum 1KB (balance latency vs efficiency)
+fetch_max_wait_ms = 500        # Max wait 500ms for fetch_min_bytes
+max_partition_fetch_bytes = 1048576  # 1MB max per partition fetch
 
-max_poll_records = 100           # Process up to 100 records per poll
-max_poll_interval_ms = 300000    # 5 minutes max between polls
+# === POLLING & SESSION MANAGEMENT ===
+max_poll_records = 500         # Process up to 500 records per poll (balance throughput/memory)
+max_poll_interval_ms = 300000  # 5 minutes max between polls
+session_timeout_ms = 30000     # 30 seconds session timeout (faster failure detection)
+heartbeat_interval_ms = 10000  # 10 seconds heartbeat (1/3 of session timeout)
 
-session_timeout_ms = 45000       # 45 seconds
-heartbeat_interval_ms = 15000    # 15 seconds
+# === CONNECTION & RETRY SETTINGS ===
+connections_max_idle_ms = 540000     # 9 minutes idle connection timeout
+reconnect_backoff_ms = 50           # Base reconnection delay
+reconnect_backoff_max_ms = 1000     # Max reconnection delay
+retry_backoff_ms = 100              # Base retry delay for failed requests
 
-group_id_timeout_ms = 5000
-
-connections_max_idle_ms = 540000  # 9 minutes
-reconnect_backoff_ms = 50
-reconnect_backoff_max_ms = 1000
 
 #################################### LLM #####################################
 # Configuration for LLM models (group name starts with 'llm')

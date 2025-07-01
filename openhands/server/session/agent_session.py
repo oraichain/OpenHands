@@ -16,6 +16,8 @@ from openhands.core.schema.agent import AgentState
 from openhands.core.schema.research import ResearchMode
 from openhands.events.action import ChangeAgentStateAction, MessageAction
 from openhands.events.event import Event, EventSource
+from openhands.events.factory import create_event_stream
+from openhands.events.kafka_stream import KafkaEventStream
 from openhands.events.stream import EventStream
 from openhands.integrations.provider import PROVIDER_TOKEN_TYPE, ProviderHandler
 from openhands.integrations.service_types import Repository
@@ -42,7 +44,7 @@ class AgentSession:
 
     sid: str
     user_id: str | None
-    event_stream: EventStream
+    event_stream: EventStream | KafkaEventStream
     file_store: FileStore
     controller: AgentController | None = None
     runtime: Runtime | None = None
@@ -88,7 +90,7 @@ class AgentSession:
 
         # Create event stream using factory - will be properly initialized when config is available
 
-        self.event_stream = EventStream(sid, file_store, user_id)
+        self.event_stream = create_event_stream(sid, file_store, user_id)
 
     async def start(
         self,

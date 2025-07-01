@@ -2,6 +2,7 @@ import asyncio
 import time
 from copy import deepcopy
 from logging import LoggerAdapter
+from typing import Callable
 
 import socketio
 
@@ -14,6 +15,7 @@ from openhands.core.schema import AgentState
 from openhands.core.schema.research import ResearchMode
 from openhands.events.action import MessageAction, NullAction
 from openhands.events.event import Event, EventSource
+from openhands.events.kafka_consumer import KafkaEventConsumer
 from openhands.events.observation import (
     AgentStateChangedObservation,
     CmdOutputObservation,
@@ -21,7 +23,6 @@ from openhands.events.observation import (
 )
 from openhands.events.observation.error import ErrorObservation
 from openhands.events.serialization import event_from_dict, event_to_dict
-from openhands.events.stream import EventStreamSubscriber
 from openhands.llm.llm import LLM
 from openhands.server.mcp_cache import mcp_tools_cache
 from openhands.server.session.agent_session import AgentSession
@@ -46,6 +47,8 @@ class Session:
     logger: LoggerAdapter
     space_id: int | None
     thread_follow_up: int | None
+    _kafka_consumer: KafkaEventConsumer | None = None
+    _conversation_update_callback: Callable | None = None
 
     def __init__(
         self,
@@ -72,9 +75,26 @@ class Session:
             thread_follow_up=thread_follow_up,
             raw_followup_conversation_id=raw_followup_conversation_id,
         )
-        self.agent_session.event_stream.subscribe(
-            EventStreamSubscriber.SERVER, self.on_event, self.sid
-        )
+
+        # Use Kafka consumer for event processing if using KafkaEventStream
+        from openhands.events.kafka_stream import KafkaEventStream
+
+        if isinstance(self.agent_session.event_stream, KafkaEventStream):
+            self._kafka_consumer = KafkaEventConsumer(
+                consumer_group=f'server_session_{sid}',
+                topic_suffix='server',
+                session_id=sid,
+            )
+            self._kafka_consumer.add_event_handler(self._process_kafka_event)
+            self._kafka_consumer.start_consumer()
+        else:
+            # Fallback to old subscription method for non-Kafka streams
+            from openhands.events.stream import EventStreamSubscriber
+
+            self.agent_session.event_stream.subscribe(
+                EventStreamSubscriber.SERVER, self.on_event, self.sid
+            )
+
         # Copying this means that when we update variables they are not applied to the shared global configuration!
         self.config = deepcopy(config)
         self.loop = asyncio.get_event_loop()
@@ -93,6 +113,11 @@ class Session:
                 to=ROOM_KEY.format(sid=self.sid),
             )
         self.is_alive = False
+
+        # Stop Kafka consumer
+        if self._kafka_consumer:
+            self._kafka_consumer.stop_consumer()
+
         await self.agent_session.close()
 
     async def initialize_agent(
@@ -292,13 +317,37 @@ class Session:
         Args:
             event: The agent event (Observation or Action).
         """
+        event_type = (
+            event.action
+            if hasattr(event, 'action')
+            else event.observation
+            if hasattr(event, 'observation')
+            else type(event).__name__
+        )
+        event_source = getattr(event, 'source', 'unknown')
+
+        self.logger.info(
+            f'📝 Session {self.sid} _on_event processing: {event_type} (source={event_source})'
+        )
+
         if isinstance(event, NullAction):
+            self.logger.debug(f'⏭️ Session {self.sid} skipping NullAction')
             return
         if isinstance(event, NullObservation):
+            self.logger.debug(f'⏭️ Session {self.sid} skipping NullObservation')
             return
         if event.source == EventSource.AGENT:
+            self.logger.info(
+                f'🤖 Session {self.sid} sending AGENT event to websocket: {event_type}'
+            )
             await self.send(event_to_dict(event))
+            self.logger.info(
+                f'✅ Session {self.sid} sent AGENT event to websocket: {event_type}'
+            )
         elif event.source == EventSource.USER:
+            self.logger.info(
+                f'👤 Session {self.sid} sending USER event to websocket: {event_type}'
+            )
             await self.send(event_to_dict(event))
         # NOTE: ipython observations are not sent here currently
         elif event.source == EventSource.ENVIRONMENT and isinstance(
@@ -307,6 +356,9 @@ class Session:
             # feedback from the environment to agent actions is understood as agent events by the UI
             event_dict = event_to_dict(event)
             event_dict['source'] = EventSource.AGENT
+            self.logger.info(
+                f'🌍 Session {self.sid} sending ENVIRONMENT event as AGENT to websocket: {event_type}'
+            )
             await self.send(event_dict)
             if (
                 isinstance(event, AgentStateChangedObservation)
@@ -320,10 +372,25 @@ class Session:
             # send error events as agent events to the UI
             event_dict = event_to_dict(event)
             event_dict['source'] = EventSource.AGENT
+            self.logger.info(
+                f'❌ Session {self.sid} sending ERROR event as AGENT to websocket: {event_type}'
+            )
             await self.send(event_dict)
+        else:
+            self.logger.debug(
+                f'⏭️ Session {self.sid} skipping event: {event_type} (source={event_source})'
+            )
 
     async def dispatch(self, data: dict):
+        self.logger.info(
+            f'📨 Session.dispatch received data: {data.get("action", "unknown")}'
+        )
+
         event = event_from_dict(data.copy())
+        self.logger.info(
+            f'📝 Created event: {type(event).__name__} (id: {getattr(event, "id", "unset")})'
+        )
+
         # This checks if the model supports images
         if isinstance(event, MessageAction) and event.image_urls:
             controller = self.agent_session.controller
@@ -338,7 +405,12 @@ class Session:
                         'Model does not support image upload, change to a different model or try without an image.'
                     )
                     return
+
+        self.logger.info(
+            f'🚀 Adding event {type(event).__name__} to event stream (session: {self.sid})'
+        )
         self.agent_session.event_stream.add_event(event, EventSource.USER)
+        self.logger.info(f'✅ Event {type(event).__name__} added to event stream')
 
     async def send(self, data: dict[str, object]):
         if asyncio.get_running_loop() != self.loop:
@@ -349,14 +421,29 @@ class Session:
     async def _send(self, data: dict[str, object]) -> bool:
         try:
             if not self.is_alive:
+                self.logger.warning(
+                    f'🚫 Session {self.sid} not alive, cannot send data'
+                )
                 return False
             if self.sio:
+                self.logger.debug(
+                    f'📡 Session {self.sid} emitting to websocket: {data.get("action", data.get("observation", "unknown"))}'
+                )
                 await self.sio.emit('oh_event', data, to=ROOM_KEY.format(sid=self.sid))
+                self.logger.debug(
+                    f'✅ Session {self.sid} emitted to websocket successfully'
+                )
+            else:
+                self.logger.warning(
+                    f'🚫 Session {self.sid} no socket.io connection available'
+                )
             await asyncio.sleep(0.001)  # This flushes the data to the client
             self.last_active_ts = int(time.time())
             return True
         except RuntimeError as e:
-            self.logger.error(f'Error sending data to websocket: {str(e)}')
+            self.logger.error(
+                f'❌ Session {self.sid} error sending data to websocket: {str(e)}'
+            )
             self.is_alive = False
             return False
 
@@ -384,3 +471,39 @@ class Session:
         asyncio.run_coroutine_threadsafe(
             self._send_status_message(msg_type, id, message), self.loop
         )
+
+    def _process_kafka_event(self, event: Event) -> None:
+        """Process events received from Kafka consumer"""
+        try:
+            event_type = (
+                event.action
+                if hasattr(event, 'action')
+                else event.observation
+                if hasattr(event, 'observation')
+                else type(event).__name__
+            )
+            event_source = getattr(event, 'source', 'unknown')
+
+            self.logger.info(
+                f'🎯 Session {self.sid} received Kafka event: {event_type} (id={event.id}, source={event_source})'
+            )
+
+            # Schedule the async operation to run in the main event loop
+            asyncio.run_coroutine_threadsafe(self._on_event(event), self.loop)
+
+            # Also call conversation update callback if set
+            if self._conversation_update_callback:
+                self._conversation_update_callback(event)
+
+            self.logger.info(
+                f'✅ Session {self.sid} processed Kafka event: {event_type}'
+            )
+        except Exception as e:
+            self.logger.error(
+                f'❌ Session {self.sid} error processing Kafka event: {e}',
+                exc_info=True,
+            )
+
+    def set_conversation_update_callback(self, callback: Callable) -> None:
+        """Set the conversation update callback for this session"""
+        self._conversation_update_callback = callback

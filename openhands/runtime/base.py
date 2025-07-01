@@ -42,6 +42,8 @@ from openhands.events.action.a2a_action import (
 )
 from openhands.events.action.mcp import McpAction
 from openhands.events.event import Event
+from openhands.events.kafka_consumer import KafkaEventConsumer
+from openhands.events.kafka_stream import KafkaEventStream
 from openhands.events.observation import (
     AgentThinkObservation,
     CmdOutputObservation,
@@ -113,11 +115,13 @@ class Runtime(FileEditRuntimeMixin):
     initial_env_vars: dict[str, str]
     attach_to_existing: bool
     status_callback: Callable | None
+    loop: asyncio.AbstractEventLoop
+    _kafka_consumer: KafkaEventConsumer | None = None
 
     def __init__(
         self,
         config: AppConfig,
-        event_stream: EventStream,
+        event_stream: EventStream | KafkaEventStream,
         sid: str = 'default',
         plugins: list[PluginRequirement] | None = None,
         env_vars: dict[str, str] | None = None,
@@ -132,9 +136,20 @@ class Runtime(FileEditRuntimeMixin):
         self.sid = sid
         self.event_stream = event_stream
         self.mnemonic = mnemonic
-        self.event_stream.subscribe(
-            EventStreamSubscriber.RUNTIME, self.on_event, self.sid
-        )
+
+        # Use Kafka consumer for event processing if using KafkaEventStream
+        if isinstance(event_stream, KafkaEventStream):
+            self._kafka_consumer = KafkaEventConsumer(
+                consumer_group=f'runtime_{sid}', topic_suffix='runtime', session_id=sid
+            )
+            self._kafka_consumer.add_event_handler(self._process_kafka_event)
+            self._kafka_consumer.start_consumer()
+        else:
+            # Fallback to old subscription method for non-Kafka streams
+            self.event_stream.subscribe(
+                EventStreamSubscriber.RUNTIME, self.on_event, self.sid
+            )
+
         self.plugins = (
             copy.deepcopy(plugins) if plugins is not None and len(plugins) > 0 else []
         )
@@ -177,6 +192,14 @@ class Runtime(FileEditRuntimeMixin):
         self.git_provider_tokens = git_provider_tokens
         self.a2a_manager = a2a_manager
 
+        # Store reference to the main event loop for Kafka event processing
+        try:
+            self.loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # If no event loop exists, create one
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+
     def setup_initial_env(self) -> None:
         if self.attach_to_existing:
             return
@@ -193,7 +216,9 @@ class Runtime(FileEditRuntimeMixin):
         This should only be called by conversation manager or closing the session.
         If called for instance by error handling, it could prevent recovery.
         """
-        pass
+        # Stop Kafka consumer
+        if self._kafka_consumer:
+            self._kafka_consumer.stop_consumer()
 
     @classmethod
     async def delete(cls, conversation_id: str) -> None:
@@ -261,7 +286,7 @@ class Runtime(FileEditRuntimeMixin):
 
     def on_event(self, event: Event) -> None:
         if isinstance(event, Action):
-            asyncio.get_event_loop().run_until_complete(self._handle_action(event))
+            asyncio.run_coroutine_threadsafe(self._handle_action(event), self.loop)
 
     async def _export_latest_git_provider_tokens(self, event: Action) -> None:
         """
@@ -670,3 +695,11 @@ class Runtime(FileEditRuntimeMixin):
     @property
     def additional_agent_instructions(self) -> str:
         return ''
+
+    def _process_kafka_event(self, event: Event) -> None:
+        """Process events received from Kafka consumer"""
+        try:
+            # Use existing event processing logic
+            self.on_event(event)
+        except Exception as e:
+            self.log('error', f'Error processing Kafka event: {e}')

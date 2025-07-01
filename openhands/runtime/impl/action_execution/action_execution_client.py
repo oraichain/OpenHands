@@ -30,6 +30,7 @@ from openhands.events.action import (
 from openhands.events.action.action import Action
 from openhands.events.action.files import FileEditSource
 from openhands.events.action.mcp import McpAction
+from openhands.events.kafka_stream import KafkaEventStream
 from openhands.events.observation import (
     AgentThinkObservation,
     ErrorObservation,
@@ -69,7 +70,7 @@ class ActionExecutionClient(Runtime):
     def __init__(
         self,
         config: AppConfig,
-        event_stream: EventStream,
+        event_stream: EventStream | KafkaEventStream,
         sid: str = 'default',
         plugins: list[PluginRequirement] | None = None,
         env_vars: dict[str, str] | None = None,
@@ -249,7 +250,9 @@ class ActionExecutionClient(Runtime):
         else:
             return ''
 
-    def send_action_for_execution(self, action: Action, action_semaphore: bool = True) -> Observation:
+    def send_action_for_execution(
+        self, action: Action, action_semaphore: bool = True
+    ) -> Observation:
         if (
             isinstance(action, FileEditAction)
             and action.impl_source == FileEditSource.LLM_BASED_EDIT

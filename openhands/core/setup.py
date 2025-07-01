@@ -16,6 +16,7 @@ from openhands.core.config import (
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
 from openhands.events.event import Event
+from openhands.events.kafka_stream import KafkaEventStream
 from openhands.integrations.provider import ProviderToken, ProviderType, SecretStore
 from openhands.llm.llm import LLM
 from openhands.memory.memory import Memory
@@ -135,7 +136,7 @@ def initialize_repository_for_runtime(
 
 def create_memory(
     runtime: Runtime,
-    event_stream: EventStream,
+    event_stream: EventStream | KafkaEventStream,
     sid: str,
     selected_repository: str | None = None,
     repo_directory: str | None = None,

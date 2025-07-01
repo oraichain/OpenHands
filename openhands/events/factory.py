@@ -1,4 +1,3 @@
-from openhands.core.config.app_config import AppConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.kafka_stream import KafkaEventStream
 from openhands.events.stream import EventStream
@@ -8,7 +7,6 @@ from openhands.storage import FileStore
 def create_event_stream(
     sid: str,
     file_store: FileStore,
-    config: AppConfig,
     user_id: str | None = None,
     max_delay_time: float = 0.5,
 ) -> EventStream | KafkaEventStream:
@@ -24,6 +22,9 @@ def create_event_stream(
     Returns:
         EventStream or KafkaEventStream based on configuration
     """
+    from openhands.core.config import load_app_config
+
+    config = load_app_config()
 
     if config.kafka.enabled:
         logger.info(f'Creating Kafka event stream for session {sid}')

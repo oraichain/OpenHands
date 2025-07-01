@@ -7,13 +7,19 @@ from fastapi import Request
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action.action import Action, ActionSecurityRisk
 from openhands.events.event import Event
+from openhands.events.kafka_consumer import KafkaEventConsumer
+from openhands.events.kafka_stream import KafkaEventStream
 from openhands.events.stream import EventStream, EventStreamSubscriber
 
 
 class SecurityAnalyzer:
     """Security analyzer that receives all events and analyzes agent actions for security risks."""
 
-    def __init__(self, event_stream: EventStream) -> None:
+    event_stream: EventStream | KafkaEventStream
+    loop: asyncio.AbstractEventLoop
+    _kafka_consumer: KafkaEventConsumer | None = None
+
+    def __init__(self, event_stream: EventStream | KafkaEventStream) -> None:
         """Initializes a new instance of the SecurityAnalyzer class.
 
         Args:
@@ -21,12 +27,41 @@ class SecurityAnalyzer:
         """
         self.event_stream = event_stream
 
-        def sync_on_event(event: Event) -> None:
-            asyncio.create_task(self.on_event(event))
+        # Store reference to the main event loop for Kafka event processing
+        try:
+            self.loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # If no event loop exists, create one
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
 
-        self.event_stream.subscribe(
-            EventStreamSubscriber.SECURITY_ANALYZER, sync_on_event, str(uuid4())
-        )
+        # Use Kafka consumer for event processing if using KafkaEventStream
+        from openhands.events.kafka_stream import KafkaEventStream
+
+        if isinstance(event_stream, KafkaEventStream):
+            self._kafka_consumer = KafkaEventConsumer(
+                consumer_group=f'security_analyzer_{event_stream.sid}',
+                topic_suffix='security_analyzer',
+                session_id=event_stream.sid,
+            )
+            self._kafka_consumer.add_event_handler(self._process_kafka_event)
+            self._kafka_consumer.start_consumer()
+        else:
+            # Fallback to old subscription method for non-Kafka streams
+            def sync_on_event(event: Event) -> None:
+                asyncio.create_task(self.on_event(event))
+
+            self.event_stream.subscribe(
+                EventStreamSubscriber.SECURITY_ANALYZER, sync_on_event, str(uuid4())
+            )
+
+    def _process_kafka_event(self, event: Event) -> None:
+        """Process events received from Kafka consumer"""
+        try:
+            # Schedule the async operation to run in the main event loop
+            asyncio.run_coroutine_threadsafe(self.on_event(event), self.loop)
+        except Exception as e:
+            logger.error(f'Error processing Kafka event in SecurityAnalyzer: {e}')
 
     async def on_event(self, event: Event) -> None:
         """Handles the incoming event, and when Action is received, analyzes it for security risks."""
@@ -64,4 +99,6 @@ class SecurityAnalyzer:
 
     async def close(self) -> None:
         """Cleanup resources allocated by the SecurityAnalyzer."""
-        pass
+        # Stop Kafka consumer
+        if self._kafka_consumer:
+            self._kafka_consumer.stop_consumer()

@@ -8,6 +8,7 @@ import openhands
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action.agent import RecallAction
 from openhands.events.event import Event, EventSource, RecallType
+from openhands.events.kafka_stream import KafkaEventStream
 from openhands.events.observation.agent import (
     MicroagentKnowledge,
     RecallObservation,
@@ -36,13 +37,13 @@ class Memory:
     """
 
     sid: str
-    event_stream: EventStream
+    event_stream: EventStream | KafkaEventStream
     status_callback: Callable | None
     loop: asyncio.AbstractEventLoop | None
 
     def __init__(
         self,
-        event_stream: EventStream,
+        event_stream: EventStream | KafkaEventStream,
         sid: str,
         status_callback: Callable | None = None,
         enable_microagents: bool = True,

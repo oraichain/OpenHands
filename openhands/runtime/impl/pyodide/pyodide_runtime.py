@@ -6,6 +6,7 @@ from openhands.a2a.A2AManager import A2AManager
 from openhands.core.config import AppConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
+from openhands.events.kafka_stream import KafkaEventStream
 from openhands.runtime.impl.action_execution.action_execution_client import (
     ActionExecutionClient,
 )
@@ -20,7 +21,7 @@ class PyodideRuntime(ActionExecutionClient):
     def __init__(
         self,
         config: AppConfig,
-        event_stream: EventStream,
+        event_stream: EventStream | KafkaEventStream,
         sid: str = 'default',
         plugins: list[PluginRequirement] | None = None,
         env_vars: dict[str, str] | None = None,

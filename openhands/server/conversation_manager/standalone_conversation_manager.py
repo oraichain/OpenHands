@@ -359,13 +359,25 @@ class StandaloneConversationManager(ConversationManager):
             )
             # This does not get added when resuming an existing conversation
             try:
-                session.agent_session.event_stream.subscribe(
-                    EventStreamSubscriber.SERVER,
-                    self._create_conversation_update_callback(
-                        user_id, github_user_id, sid
-                    ),
-                    UPDATED_AT_CALLBACK_ID,
-                )
+                # Handle conversation updates differently for Kafka vs traditional streams
+                from openhands.events.kafka_stream import KafkaEventStream
+
+                if isinstance(session.agent_session.event_stream, KafkaEventStream):
+                    # For Kafka streams, set the callback on the Session
+                    session.set_conversation_update_callback(
+                        self._create_conversation_update_callback(
+                            user_id, github_user_id, sid
+                        )
+                    )
+                else:
+                    # For traditional streams, use the old subscription method
+                    session.agent_session.event_stream.subscribe(
+                        EventStreamSubscriber.SERVER,
+                        self._create_conversation_update_callback(
+                            user_id, github_user_id, sid
+                        ),
+                        UPDATED_AT_CALLBACK_ID,
+                    )
             except ValueError:
                 pass  # Already subscribed - take no action
 

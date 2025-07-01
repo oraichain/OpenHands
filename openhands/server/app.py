@@ -13,7 +13,6 @@ import openhands.agenthub  # noqa F401 (we import this to get the agents registe
 from openhands import __version__
 
 # Import for Kafka initialization
-from openhands.events.kafka_stream import SharedKafkaConsumerManager
 from openhands.server.backend_pre_start import init
 from openhands.server.db import database, engine
 from openhands.server.initial_data import init as init_initial_data
@@ -53,20 +52,6 @@ async def _lifespan(app: FastAPI):
                 config.dict_mcp_config, config.dict_search_engine_config
             )
 
-        # Initialize Kafka consumers if enabled
-        if config.kafka.enabled:
-            logger.info('Initializing Kafka warm-up consumers')
-            kafka_config = {
-                'bootstrap_servers': config.kafka.bootstrap_servers,
-                'topic_prefix': config.kafka.topic_prefix,
-                'consumer_group_prefix': config.kafka.consumer_group_prefix,
-                'producer_config': config.kafka.producer_config,
-                'consumer_config': config.kafka.consumer_config,
-            }
-            kafka_manager = SharedKafkaConsumerManager()
-            kafka_manager.initialize(kafka_config)
-            logger.info('Kafka warm-up consumers initialized successfully')
-
         # Start conversation manager
         async with conversation_manager:
             yield
@@ -74,16 +59,6 @@ async def _lifespan(app: FastAPI):
         logger.error(f'Error during startup: {e}')
         raise
     finally:
-        # Shutdown Kafka consumers if they were initialized
-        if config.kafka.enabled:
-            try:
-                logger.info('Shutting down Kafka consumers')
-                kafka_manager = SharedKafkaConsumerManager()
-                kafka_manager.close()
-                logger.info('Kafka consumers shut down successfully')
-            except Exception as e:
-                logger.error(f'Error shutting down Kafka consumers: {e}')
-
         # Disconnect from database
         await database.disconnect()
 
