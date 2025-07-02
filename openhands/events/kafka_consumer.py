@@ -86,7 +86,6 @@ class KafkaEventConsumer:
                 logger.error(f'Error stopping Kafka consumer: {e}')
 
     def _consume_events(self):
-        """Main consumer loop that processes Kafka messages"""
         if not self._consumer:
             return
 
@@ -159,22 +158,7 @@ class KafkaEventConsumer:
                                     f'❌ Error processing Kafka message in {self.consumer_group}: {e}',
                                     exc_info=True,
                                 )
-                                # Continue to next message - we still want to commit this one
-
-                    # Always commit offsets after processing messages to prevent redelivery
-                    # This should happen whether we processed 0 or N messages
-                    try:
-                        self._consumer.commit()
-                        if message_pack:  # Only log if we actually had messages
-                            logger.debug(
-                                f'✅ Committed offsets for {self.consumer_group} after processing {sum(len(msgs) for msgs in message_pack.values())} messages'
-                            )
-                    except Exception as e:
-                        logger.error(
-                            f'❌ Error committing Kafka offsets for {self.consumer_group}: {e}'
-                        )
-                        # This is critical - if we can't commit, we might reprocess messages
-
+                    self._consumer.commit()
                 except Exception as e:
                     if not self._stop_event.is_set():
                         logger.error(
