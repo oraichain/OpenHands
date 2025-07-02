@@ -13,9 +13,6 @@ class ActionType(str, Enum):
     HUMAN_FEEDBACK = 'human_feedback'
     """Represents a additional information from user about their initial prompt."""
 
-    STREAMING_HUMAN_FEEDBACK = 'streaming_human_feedback'
-    """Represents a streaming human feedback message chunk for UI display only."""
-
     START = 'start'
     """Starts a new development task OR send chat from the user. Only sent by the client.
     """

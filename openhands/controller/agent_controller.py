@@ -87,6 +87,7 @@ from openhands.events.serialization.event import (
 )
 from openhands.llm.llm import LLM
 from openhands.llm.metrics import Metrics
+from openhands.server.human_feedback import hf_llm
 from openhands.server.mem0 import (
     _db_pool_instance,
     _extract_content_from_event,
@@ -94,7 +95,6 @@ from openhands.server.mem0 import (
     process_single_event_for_mem0,
     search_knowledge_mem0,
 )
-from openhands.server.planning.planning import human_feedback
 from openhands.server.thesis_auth import (
     check_feature_credit,
     search_knowledge,
@@ -222,6 +222,8 @@ class AgentController:
         self.raw_followup_conversation_id = raw_followup_conversation_id
         self.followup_conversation_events = []
         print(f'raw_followup_conversation_id: {self.raw_followup_conversation_id}')
+
+        self._has_asked_human_feedback = False
 
     async def close(self, set_stop_state=True) -> None:
         """Closes the agent controller, canceling any ongoing tasks and unsubscribing from the event stream.
@@ -690,32 +692,6 @@ class AgentController:
                     if events and len(events) > 0:
                         self.agent.update_agent_knowledge_base(events)
 
-    async def _combine_prompt_with_feedback(
-        self, original_prompt: str, questions: str, answers: str
-    ) -> str:
-        """
-        Combine the original prompt with the human feedback questions and answers.
-
-        Args:
-            original_prompt (str): The original prompt.
-            questions (str): The human feedback questions.
-            answers (str): The user's answers to the human feedback questions.
-
-        Returns:
-            str: The enhanced prompt.
-        """
-        # Process to generate the enhanced prompt and the message told the user that we will conduct a research
-        instruction = """
-        Based on the user's original input and their responses to the clarification questions, your task is to synthesize a clear summary of their intent and preferences.
-        Then, inform the user that you will now proceed to conduct a focused search or analysis aligned with their clarified needs.
-        """
-        return (
-            f'User original input: {original_prompt} \n'
-            + f'Clarify intent questions: {questions} \n'
-            + f'User answers for questions: {answers} \n'
-            + instruction
-        )
-
     async def _handle_message_action(self, action: MessageAction) -> None:
         """Handles message actions from the event stream.
 
@@ -750,6 +726,15 @@ class AgentController:
             # set pending_action while we search for information
 
             # if this is the first user message for this agent, matters for the microagent info type
+            first_user_message = self._first_user_message()
+            is_first_user_message = (
+                action.id == first_user_message.id if first_user_message else False
+            )
+            recall_type = (
+                RecallType.WORKSPACE_CONTEXT
+                if is_first_user_message
+                else RecallType.KNOWLEDGE
+            )
             if (
                 action.mode == ResearchMode.DEEP_RESEARCH
                 and self.user_id
@@ -770,78 +755,70 @@ class AgentController:
                     )
                     return
 
+                if not self._has_asked_human_feedback:
+                    self.log('debug', 'Asking human feedback')
+                    self._has_asked_human_feedback = True
+                    accumulated_feedback_questions = ''
+
+                    context = [
+                        event
+                        for event in self.state.history
+                        if isinstance(event, MessageAction)
+                    ]
+
+                    async for chunk in hf_llm.generate_streaming_response(
+                        prompt=action.content, context=context
+                    ):
+                        accumulated_feedback_questions += chunk
+                        streaming_feedback_action = StreamingMessageAction(
+                            content=chunk,
+                            wait_for_response=True,
+                        )
+                        self.event_stream.add_event(
+                            streaming_feedback_action, EventSource.AGENT
+                        )
+                        await asyncio.sleep(0.01)
+
+                    # After streaming is complete, set the final human feedback action
+                    if accumulated_feedback_questions:
+                        feedback_action = HumanFeedbackAction(
+                            human_feedback_questions=accumulated_feedback_questions,
+                            original_prompt=action.content,
+                            wait_for_response=True,
+                            enable_think=False,
+                        )
+                        self._pending_action = feedback_action
+                        self.event_stream.add_event(feedback_action, EventSource.AGENT)
+
+                        # update new knowledge base with the user message
+                        await self._search_knowledge(action.content)
+
+                        recall_action = RecallAction(
+                            query=action.content, recall_type=recall_type
+                        )
+                        # this is source=USER because the user message is the trigger for the microagent retrieval
+                        self.event_stream.add_event(recall_action, EventSource.USER)
+                        return
+
             if isinstance(self._pending_action, HumanFeedbackAction):
-                enhanced_prompt = await self._combine_prompt_with_feedback(
-                    self._pending_action.original_prompt,
-                    self._pending_action.human_feedback_questions,
-                    action.content,
-                )
-                self.log('debug', f'Enhanced prompt: {enhanced_prompt}')
-                enhanced_action = MessageAction(content=enhanced_prompt)
-                recall_type = RecallType.WORKSPACE_CONTEXT
+                self.log('debug', 'Handling human feedback')
+                original_prompt = self._pending_action.original_prompt
+
+                recall_type = RecallType.KNOWLEDGE
                 recall_action = RecallAction(
-                    query=enhanced_action.content, recall_type=recall_type
+                    query=original_prompt, recall_type=recall_type
                 )
                 self._pending_action = recall_action
                 self.event_stream.add_event(recall_action, EventSource.USER)
+                self._has_asked_human_feedback = False
 
             else:
-                first_user_message = self._first_user_message()
-                is_first_user_message = (
-                    action.id == first_user_message.id if first_user_message else False
+                self.log('debug', 'Handling normal user message')
+                recall_type = (
+                    RecallType.WORKSPACE_CONTEXT
+                    if is_first_user_message
+                    else RecallType.KNOWLEDGE
                 )
-
-                if is_first_user_message:
-                    from openhands.server.planning.planning import HUMAN_FEEDBACK, agent
-
-                    # Stream human feedback questions
-                    accumulated_feedback_questions = ''
-                    try:
-                        async for chunk in agent.generate_streaming_response(
-                            prompt=action.content, system_prompt=HUMAN_FEEDBACK
-                        ):
-                            accumulated_feedback_questions += chunk
-                            streaming_feedback_action = StreamingMessageAction(
-                                content=chunk,
-                                wait_for_response=True,
-                            )
-                            self.event_stream.add_event(
-                                streaming_feedback_action, EventSource.AGENT
-                            )
-                            await asyncio.sleep(0.01)
-
-                        # After streaming is complete, set the final human feedback action
-                        if accumulated_feedback_questions:
-                            final_feedback_action = HumanFeedbackAction(
-                                human_feedback_questions=accumulated_feedback_questions,
-                                original_prompt=action.content,
-                                wait_for_response=True,
-                                enable_think=False,
-                            )
-                            self._pending_action = final_feedback_action
-                            self.event_stream.add_event(
-                                final_feedback_action, EventSource.AGENT
-                            )
-                            return
-
-                    except Exception as e:
-                        self.log('error', f'Error streaming human feedback: {e}')
-                        # Fallback to non-streaming version
-                        feedback_questions = await human_feedback(action.content)
-                        if feedback_questions:
-                            feedback_action = HumanFeedbackAction(
-                                human_feedback_questions=feedback_questions,
-                                original_prompt=action.content,
-                                wait_for_response=True,
-                            )
-                            self._pending_action = feedback_action
-                            self.event_stream.add_event(
-                                feedback_action, EventSource.AGENT
-                            )
-                            return
-
-                recall_type = RecallType.KNOWLEDGE
-
                 # update new knowledge base with the user message
                 await self._search_knowledge(action.content)
 
