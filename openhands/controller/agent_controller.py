@@ -779,6 +779,14 @@ class AgentController:
                     {'role': 'user', 'content': prompt_full},
                 ]
 
+                # wait for 0.5 seconds to make sure the user message is processed
+                if is_first_user_message:
+                    self.log(
+                        'debug',
+                        'Waiting for 1 seconds to make sure the user message is processed',
+                    )
+                    await asyncio.sleep(1)
+
                 async for chunk in streaming_llm.async_streaming_completion(
                     messages=messages, stream=True
                 ):
