@@ -118,6 +118,8 @@ class State:
     extra_data: dict[str, Any] = field(default_factory=dict)
     last_error: str = ''
     user_id: str | None = None
+    is_defi_search: bool = False
+    disable_mcp_defi_search: bool = False
 
     def save_to_session(self, sid: str, file_store: FileStore, user_id: str | None):
         # Check if we're using DatabaseFileStore

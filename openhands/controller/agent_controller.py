@@ -63,6 +63,7 @@ from openhands.events.action import (
 from openhands.events.action.agent import CondensationAction, RecallAction
 
 # Add new imports for event retrieval
+from openhands.events.action.mcp import McpAction
 from openhands.events.async_event_store_wrapper import AsyncEventStoreWrapper
 from openhands.events.event import Event
 from openhands.events.event_store import EventStore
@@ -517,12 +518,25 @@ class AgentController:
         # self.log(
         #     log_level, str(observation_to_print), extra={'msg_type': 'OBSERVATION'}
         # )
-
         if observation.llm_metrics is not None:
             self.agent.llm.metrics.merge(observation.llm_metrics)
-
-        # this happens for runnable actions and microagent actions
         if self._pending_action and self._pending_action.id == observation.cause:
+            if (
+                isinstance(self._pending_action, McpAction)
+                and getattr(
+                    self._pending_action.tool_call_metadata, 'function_name', None
+                )
+                == 'defi_search_mcp_tool_call'
+            ):
+                if (
+                    isinstance(observation.content, str)
+                    and 'DeFI search result important private data '
+                    in observation.content
+                ):
+                    print('DefiSearch successful, setting state to done.')
+                    self.state.is_defi_search = True
+                else:
+                    self.state.disable_mcp_defi_search = True
             if self.state.agent_state == AgentState.AWAITING_USER_CONFIRMATION:
                 return
             self._pending_action = None
@@ -683,6 +697,8 @@ class AgentController:
             action (MessageAction): The message action to handle.
         """
         if action.source == EventSource.USER:
+            self.state.is_defi_search = False
+            self.state.disable_mcp_defi_search = False
             # Use info level if LOG_ALL_EVENTS is set
             log_level = (
                 'info' if os.getenv('LOG_ALL_EVENTS') in ('true', '1') else 'debug'

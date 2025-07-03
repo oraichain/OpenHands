@@ -162,7 +162,12 @@ class CodeActAgent(Agent):
         super().reset()
         self.pending_actions.clear()
 
-    def _select_tools_based_on_mode(self, research_mode: str | None) -> list[dict]:
+    def _select_tools_based_on_mode(
+        self,
+        research_mode: str | None,
+        is_defi_search: bool,
+        disable_mcp_defi_search: bool,
+    ) -> list[dict]:
         """Selects the tools based on the mode of the agent."""
         if research_mode == ResearchMode.FOLLOW_UP:
             selected_tools = [FinishTool]
@@ -181,15 +186,19 @@ class CodeActAgent(Agent):
                 if tool['function']['name'] not in existing_names
             ]
             selected_tools.extend(unique_search_tools)
-
-            # Add MCP tools, avoiding duplicates
-            existing_names = {tool['function']['name'] for tool in selected_tools}
-            unique_mcp_tools = [
-                tool
-                for tool in self.mcp_tools
-                if tool['function']['name'] not in existing_names
-            ]
-            selected_tools.extend(unique_mcp_tools)
+            if not is_defi_search:
+                # Add MCP tools, avoiding duplicates
+                existing_names = {tool['function']['name'] for tool in selected_tools}
+                unique_mcp_tools = [
+                    tool
+                    for tool in self.mcp_tools
+                    if tool['function']['name'] not in existing_names
+                    and not (
+                        disable_mcp_defi_search
+                        and tool['function']['name'] == 'defi_search_mcp_tool_call'
+                    )
+                ]
+                selected_tools.extend(unique_mcp_tools)
         else:
             # For other modes, combine tools and search_tools with deduplication
             selected_tools = deepcopy(self.tools)
@@ -565,6 +574,7 @@ class CodeActAgent(Agent):
         # event we'll just return that instead of an action. The controller will
         # immediately ask the agent to step again with the new view.
         condensed_history: list[Event] = []
+
         match self.condenser.condensed_history(state):
             case View(events=events):
                 condensed_history = events
@@ -622,12 +632,15 @@ class CodeActAgent(Agent):
             'messages': formatted_messages,
         }
         params['extra_body'] = {'metadata': state.to_llm_metadata(agent_name=self.name)}
+
         # if chat mode, we need to use the search tools
-        params['tools'] = self._select_tools_based_on_mode(research_mode)
+        params['tools'] = self._select_tools_based_on_mode(
+            research_mode, state.is_defi_search, state.disable_mcp_defi_search
+        )
         params['tools'] = check_tools(params['tools'], self.llm.config)
         if self.enable_streaming:
             params['stream_options'] = {'include_usage': True}
-        logger.info(f'Messages: {messages}')
+        # logger.info(f'Messages: {messages}')
         last_message = messages[-1]
         response = None
         if (

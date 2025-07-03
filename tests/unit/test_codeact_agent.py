@@ -450,7 +450,7 @@ def test_select_tools_based_on_mode_chat_mode(agent: CodeActAgent):
     ]
 
     # Test with CHAT mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
+    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT, False, False)
 
     # Should include simplified tools, pyodide tools, and search tools
     tool_names = [tool['function']['name'] for tool in tools]
@@ -474,7 +474,7 @@ def test_select_tools_based_on_mode_follow_up_mode(agent: CodeActAgent):
     agent.config.enable_pyodide = False
 
     # Test with FOLLOW_UP mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.FOLLOW_UP)
+    tools = agent._select_tools_based_on_mode(ResearchMode.FOLLOW_UP, False, False)
 
     # Should only include FinishTool
     assert len(tools) == 1
@@ -489,7 +489,7 @@ def test_select_tools_based_on_mode_no_mcp_tools(agent: CodeActAgent):
     ]
 
     # Test with CHAT mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
+    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT, False, False)
 
     # Should include base tools and search tools
     tool_names = [tool['function']['name'] for tool in tools]
@@ -525,7 +525,7 @@ def test_select_tools_based_on_mode_missing_pyodide_tools(agent: CodeActAgent):
     )
 
     # Test with CHAT mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
+    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT, False, False)
 
     # Should not fall back to base tools since there are pyodide tools present
     assert len(tools) == 4
@@ -565,7 +565,7 @@ def test_select_tools_based_on_mode_duplicate_tools(agent: CodeActAgent):
     ]
 
     # Test with other mode
-    tools = agent._select_tools_based_on_mode('OTHER_MODE')
+    tools = agent._select_tools_based_on_mode('OTHER_MODE', False, False)
 
     # Should deduplicate tools
     tool_names = [tool['function']['name'] for tool in tools]
@@ -600,7 +600,7 @@ def test_select_tools_based_on_mode_deep_research(agent: CodeActAgent):
     agent.config.a2a_server_urls = ['http://example.com']
 
     # Test with DEEP_RESEARCH mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.DEEP_RESEARCH)
+    tools = agent._select_tools_based_on_mode(ResearchMode.DEEP_RESEARCH, False, False)
 
     # Should include all tools
     tool_names = [tool['function']['name'] for tool in tools]
@@ -636,7 +636,7 @@ def test_select_tools_based_on_mode_cache_control(agent: CodeActAgent):
     ]
 
     # Test with CHAT mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
+    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT, False, False)
 
     # Check only the last tool has cache control
     assert 'cache_control' in tools[-1]
@@ -653,7 +653,7 @@ def test_select_tools_based_on_mode_cache_control(agent: CodeActAgent):
     ]
 
     # Test with CHAT mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
+    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT, False, False)
 
     # Check cache control is set on last tool
     assert 'cache_control' in tools[-1]
@@ -676,7 +676,7 @@ def test_select_tools_based_on_mode_non_claude(agent: CodeActAgent):
     ]
 
     # Test with CHAT mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
+    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT, False, False)
 
     # Check no cache control is set
     for tool in tools:
@@ -691,7 +691,7 @@ def test_select_tools_based_on_mode_empty_tools(agent: CodeActAgent):
     agent.search_tools = []
 
     # Test with CHAT mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT)
+    tools = agent._select_tools_based_on_mode(ResearchMode.CHAT, False, False)
 
     # Should return empty list
     assert len(tools) == 0
@@ -703,7 +703,7 @@ def test_select_tools_based_on_mode_a2a_tools(agent: CodeActAgent):
     agent.config.a2a_server_urls = ['http://example.com']
 
     # Test with DEEP_RESEARCH mode
-    tools = agent._select_tools_based_on_mode(ResearchMode.DEEP_RESEARCH)
+    tools = agent._select_tools_based_on_mode(ResearchMode.DEEP_RESEARCH, False, False)
 
     # Should include A2A tools
     tool_names = [tool['function']['name'] for tool in tools]
