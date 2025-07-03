@@ -1,6 +1,5 @@
 import asyncio
 import copy
-import json
 import os
 import traceback
 import uuid
@@ -528,19 +527,11 @@ class AgentController:
                 )
                 == 'defi_search_mcp_tool_call'
             ):
-                raw_content = observation.content
-                parsed_content: dict = {}
-                if isinstance(raw_content, str):
-                    try:
-                        loaded_json = json.loads(raw_content)
-                        if isinstance(loaded_json, dict):
-                            parsed_content = loaded_json
-                    except json.JSONDecodeError:
-                        pass  # Let parsed_content remain {}
-
-                # The result of DefiSearch should be a list.
-                # This correctly checks if the 'DefiSearch' key exists and the list is not empty.
-                if parsed_content.get('DefiSearch'):
+                if (
+                    isinstance(observation.content, str)
+                    and 'DeFI search result important private data '
+                    in observation.content
+                ):
                     print('DefiSearch successful, setting state to done.')
                     self.state.is_defi_search = True
                 else:
