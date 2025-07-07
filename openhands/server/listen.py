@@ -59,6 +59,7 @@ app = socketio.ASGIApp(sio, other_asgi_app=base_app)
 
 if os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT'):
     from opentelemetry.instrumentation.asyncio import AsyncioInstrumentor
+    from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
     from opentelemetry.instrumentation.threading import ThreadingInstrumentor
@@ -68,6 +69,7 @@ if os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT'):
     AsyncioInstrumentor().instrument()
     ThreadingInstrumentor().instrument()
     PsycopgInstrumentor().instrument()
+    AsyncPGInstrumentor().instrument()
 
     if os.getenv('TRACELOOP_BASE_URL'):
         Traceloop.init(
