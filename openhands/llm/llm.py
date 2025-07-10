@@ -51,35 +51,35 @@ LLM_RETRY_EXCEPTIONS: tuple[type[Exception], ...] = (
 # cache prompt supporting models
 # remove this when we gemini and deepseek are supported
 CACHE_PROMPT_SUPPORTED_MODELS = [
-    'claude-3-7-sonnet-20250219',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-5-sonnet-20240620',
-    'claude-3-5-haiku-20241022',
-    'claude-3-haiku-20240307',
-    'claude-3-opus-20240229',
-    'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+    "claude-3-7-sonnet-20250219",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet-20240620",
+    "claude-3-5-haiku-20241022",
+    "claude-3-haiku-20240307",
+    "claude-3-opus-20240229",
+    "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
 ]
 
 # function calling supporting models
 FUNCTION_CALLING_SUPPORTED_MODELS = [
-    'claude-3-7-sonnet-20250219',
-    'claude-3-5-sonnet',
-    'claude-3-5-sonnet-20240620',
-    'claude-3-5-sonnet-20241022',
-    'claude-3.5-haiku',
-    'claude-3-5-haiku-20241022',
-    'gpt-4o-mini',
-    'gpt-4o',
-    'o1-2024-12-17',
-    'o3-mini-2025-01-31',
-    'o3-mini',
-    'gemini-2.5-pro',
-    'gemini-2.5-pro-preview-05-06',
-    'Llama-4-Maverick-17B-128E-Instruct-FP8',
-    'Qwen3-235B-A22B-fp8-tput',
-    'grok-3-mini',
-    'grok-3-mini-beta',
-    'skylark-prod-250415',
+    "claude-3-7-sonnet-20250219",
+    "claude-3-5-sonnet",
+    "claude-3-5-sonnet-20240620",
+    "claude-3-5-sonnet-20241022",
+    "claude-3.5-haiku",
+    "claude-3-5-haiku-20241022",
+    "gpt-4o-mini",
+    "gpt-4o",
+    "o1-2024-12-17",
+    "o3-mini-2025-01-31",
+    "o3-mini",
+    "gemini-2.5-pro",
+    "gemini-2.5-pro-preview-05-06",
+    "Llama-4-Maverick-17B-128E-Instruct-FP8",
+    "Qwen3-235B-A22B-fp8-tput",
+    "grok-3-mini",
+    "grok-3-mini-beta",
+    "skylark-prod-250415",
     "grok-4-0709",
 ]
 
@@ -92,18 +92,18 @@ REASONING_EFFORT_SUPPORTED_MODELS = [
 ]
 
 MODELS_WITHOUT_STOP_WORDS = [
-    'o1-mini',
-    'o1-preview',
-    'o1',
-    'o1-2024-12-17',
-    'o4-mini',
+    "o1-mini",
+    "o1-preview",
+    "o1",
+    "o1-2024-12-17",
+    "o4-mini",
 ]
 
-FORMATTED_MODELS = ['llama-4-maverick-17b-128e-instruct']
+FORMATTED_MODELS = ["llama-4-maverick-17b-128e-instruct"]
 
-MODELS_USING_MAX_COMPLETION_TOKENS = ['o4-mini']
+MODELS_USING_MAX_COMPLETION_TOKENS = ["o4-mini"]
 
-MODELS_WITH_TEMPERATURE_DEFAULT_AS_1 = ['o4-mini']
+MODELS_WITH_TEMPERATURE_DEFAULT_AS_1 = ["o4-mini"]
 
 
 class LLM(RetryMixin, DebugMixin):
@@ -172,13 +172,8 @@ class LLM(RetryMixin, DebugMixin):
 
         # set up the completion function
         kwargs: dict[str, Any] = {
-<<<<<<< HEAD
-            'temperature': self.config.temperature,
-            'max_tokens': self.config.max_output_tokens,
-=======
             "temperature": self.config.temperature,
-            "max_completion_tokens": self.config.max_output_tokens,
->>>>>>> feat/grok-4
+            "max_tokens": self.config.max_output_tokens,
         }
         if (
             self.config.model.lower() in REASONING_EFFORT_SUPPORTED_MODELS
@@ -194,16 +189,16 @@ class LLM(RetryMixin, DebugMixin):
             kwargs.pop("max_completion_tokens")
 
         if self.config.model in MODELS_USING_MAX_COMPLETION_TOKENS:
-            kwargs['max_completion_tokens'] = self.config.max_output_tokens
-            kwargs.pop('max_tokens')
+            kwargs["max_completion_tokens"] = self.config.max_output_tokens
+            kwargs.pop("max_tokens")
 
         if self.config.model in MODELS_WITH_TEMPERATURE_DEFAULT_AS_1:
-            kwargs['temperature'] = 1
+            kwargs["temperature"] = 1
 
-        if self.config.model.startswith('bedrock/converse'):
-            kwargs['aws_access_key_id'] = os.getenv('AWS_ACCESS_KEY_ID')
-            kwargs['aws_secret_access_key'] = os.getenv('AWS_SECRET_ACCESS_KEY')
-            kwargs['aws_region_name'] = os.getenv('AWS_REGION_NAME')
+        if self.config.model.startswith("bedrock/converse"):
+            kwargs["aws_access_key_id"] = os.getenv("AWS_ACCESS_KEY_ID")
+            kwargs["aws_secret_access_key"] = os.getenv("AWS_SECRET_ACCESS_KEY")
+            kwargs["aws_region_name"] = os.getenv("AWS_REGION_NAME")
 
         self._completion = partial(
             litellm_completion,
@@ -223,7 +218,7 @@ class LLM(RetryMixin, DebugMixin):
 
         self._completion_unwrapped = self._completion
 
-        @workflow(name='llm_completion')
+        @workflow(name="llm_completion")
         @self.retry_decorator(
             num_retries=self.config.num_retries,
             retry_exceptions=LLM_RETRY_EXCEPTIONS,
@@ -238,14 +233,14 @@ class LLM(RetryMixin, DebugMixin):
 
             messages: list[dict[str, Any]] | dict[str, Any] = []
             mock_function_calling = not self.is_function_calling_active()
-            logger.debug(f'Mock function calling: {mock_function_calling}')
+            logger.debug(f"Mock function calling: {mock_function_calling}")
             # Add session_id and user_id as span attributes if they exist
             try:
                 span = trace.get_current_span()
                 if self.session_id:
-                    span.set_attribute('session_id', self.session_id)
+                    span.set_attribute("session_id", self.session_id)
                 if self.user_id:
-                    span.set_attribute('user_id', self.user_id)
+                    span.set_attribute("user_id", self.user_id)
             except Exception:
                 pass
 
@@ -273,46 +268,34 @@ class LLM(RetryMixin, DebugMixin):
             # if the agent or caller has defined tools, and we mock via prompting, convert the messages
             if mock_function_calling and "tools" in kwargs:
                 messages = convert_fncall_messages_to_non_fncall_messages(
-<<<<<<< HEAD
                     messages,
-                    kwargs['tools'],
+                    kwargs["tools"],
                     add_in_context_learning_example=bool(
-                        'openhands-lm' not in self.config.model
+                        "openhands-lm" not in self.config.model
                     ),
-                    research_mode=kwargs.get('research_mode', None),
+                    research_mode=kwargs.get("research_mode", None),
                 )
                 # logger.debug(f'Messages before transform: {messages}')
-                if self.config.model.split('/')[-1] in FORMATTED_MODELS:
-                    logger.debug('Transforming messages for llama')
+                if self.config.model.split("/")[-1] in FORMATTED_MODELS:
+                    logger.debug("Transforming messages for llama")
                     messages = transform_messages_for_llama(messages)
 
                 # logger.debug(f'Messages: {messages}')
-                kwargs['messages'] = messages
-=======
-                    messages, kwargs["tools"]
-                )
                 kwargs["messages"] = messages
->>>>>>> feat/grok-4
 
                 # add stop words if the model supports it
                 if self.config.model not in MODELS_WITHOUT_STOP_WORDS:
                     kwargs["stop"] = STOP_WORDS
 
-<<<<<<< HEAD
-                mock_fncall_tools = kwargs.pop('tools')
-                if 'openhands-lm' in self.config.model:
+                mock_fncall_tools = kwargs.pop("tools")
+                if "openhands-lm" in self.config.model:
                     # If we don't have this, we might run into issue when serving openhands-lm
                     # using SGLang
                     # BadRequestError: litellm.BadRequestError: OpenAIException - Error code: 400 - {'object': 'error', 'message': '400', 'type': 'Failed to parse fc related info to json format!', 'param': None, 'code': 400}
-                    kwargs['tool_choice'] = 'none'
+                    kwargs["tool_choice"] = "none"
                 else:
                     # tool_choice should not be specified when mocking function calling
-                    kwargs.pop('tool_choice', None)
-=======
-                mock_fncall_tools = kwargs.pop("tools")
-                # tool_choice should not be specified when mocking function calling
-                kwargs.pop("tool_choice", None)
->>>>>>> feat/grok-4
+                    kwargs.pop("tool_choice", None)
 
             # if we have no messages, something went very wrong
             if not messages:
@@ -335,20 +318,12 @@ class LLM(RetryMixin, DebugMixin):
             # Record start time for latency measurement
             start_time = time.time()
             # we don't support streaming here, thus we get a ModelResponse
-<<<<<<< HEAD
             # logger.debug(
             #     f'LLM: calling litellm completion with model: {self.config.model}, base_url: {self.config.base_url}, args: {args}, kwargs: {kwargs}'
             # )
             with ensure_httpx_close():
                 resp: ModelResponse = self._completion_unwrapped(*args, **kwargs)
-            logger.debug(f'Response raw: {resp}')
-=======
-            logger.debug(
-                f"LLM: calling litellm completion with model: {self.config.model}, base_url: {self.config.base_url}, args: {args}, kwargs: {kwargs}"
-            )
-            resp: ModelResponse = self._completion_unwrapped(*args, **kwargs)
-
->>>>>>> feat/grok-4
+            logger.debug(f"Response raw: {resp}")
             # Calculate and record latency
             latency = time.time() - start_time
             response_id = resp.get("id", "unknown")
@@ -358,17 +333,12 @@ class LLM(RetryMixin, DebugMixin):
 
             # if we mocked function calling, and we have tools, convert the response back to function calling format
             if mock_function_calling and mock_fncall_tools is not None:
-<<<<<<< HEAD
                 if len(resp.choices) < 1:
                     raise LLMNoResponseError(
-                        'Response choices is less than 1 - This is only seen in Gemini models so far. Response: '
+                        "Response choices is less than 1 - This is only seen in Gemini models so far. Response: "
                         + str(resp)
                     )
 
-=======
-                logger.debug(f"Response choices: {len(resp.choices)}")
-                assert len(resp.choices) >= 1
->>>>>>> feat/grok-4
                 non_fncall_response_message = resp.choices[0].message
                 fn_call_messages_with_response = (
                     convert_non_fncall_messages_to_fncall_messages(
@@ -383,24 +353,17 @@ class LLM(RetryMixin, DebugMixin):
                     )
                 resp.choices[0].message = fn_call_response_message
 
-<<<<<<< HEAD
             # Check if resp has 'choices' key with at least one item
-            if not resp.get('choices') or len(resp['choices']) < 1:
+            if not resp.get("choices") or len(resp["choices"]) < 1:
                 raise LLMNoResponseError(
-                    'Response choices is less than 1 - This is only seen in Gemini models so far. Response: '
+                    "Response choices is less than 1 - This is only seen in Gemini models so far. Response: "
                     + str(resp)
                 )
 
-            message_back: str = resp['choices'][0]['message']['content'] or ''
-            tool_calls: list[ChatCompletionMessageToolCall] = resp['choices'][0][
-                'message'
-            ].get('tool_calls', [])
-=======
             message_back: str = resp["choices"][0]["message"]["content"] or ""
             tool_calls: list[ChatCompletionMessageToolCall] = resp["choices"][0][
                 "message"
             ].get("tool_calls", [])
->>>>>>> feat/grok-4
             if tool_calls:
                 for tool_call in tool_calls:
                     fn_name = tool_call.function.name
@@ -412,22 +375,22 @@ class LLM(RetryMixin, DebugMixin):
 
             # post-process the response first to calculate cost
             cost = self._post_completion(resp)
-            if cost and resp.get('usage'):
+            if cost and resp.get("usage"):
                 try:
-                    resp['usage']['cost'] = cost
-                    span.set_attribute('llm.cost', cost)
+                    resp["usage"]["cost"] = cost
+                    span.set_attribute("llm.cost", cost)
                 except Exception:
                     pass
 
             # Add cost and token usage to the current span
-            usage = resp.get('usage')
+            usage = resp.get("usage")
             if usage:
                 try:
                     span = trace.get_current_span()
-                    prompt_tokens = usage.get('prompt_tokens', 0)
-                    completion_tokens = usage.get('completion_tokens', 0)
-                    span.set_attribute('llm.usage.prompt_tokens', prompt_tokens)
-                    span.set_attribute('llm.usage.completion_tokens', completion_tokens)
+                    prompt_tokens = usage.get("prompt_tokens", 0)
+                    completion_tokens = usage.get("completion_tokens", 0)
+                    span.set_attribute("llm.usage.prompt_tokens", prompt_tokens)
+                    span.set_attribute("llm.usage.completion_tokens", completion_tokens)
                 except Exception:
                     pass
 
@@ -477,7 +440,7 @@ class LLM(RetryMixin, DebugMixin):
         """
         return self._completion
 
-    @workflow(name='init_model_info')
+    @workflow(name="init_model_info")
     def init_model_info(self) -> None:
         if self._tried_model_info:
             return
@@ -491,27 +454,18 @@ class LLM(RetryMixin, DebugMixin):
         if self.config.model.startswith("litellm_proxy/"):
             # IF we are using LiteLLM proxy, get model info from LiteLLM proxy
             # GET {base_url}/v1/model/info with litellm_model_id as path param
-<<<<<<< HEAD
-            base_url = self.config.base_url.strip() if self.config.base_url else ''
-            if not base_url.startswith(('http://', 'https://')):
-                base_url = 'http://' + base_url
+            base_url = self.config.base_url.strip() if self.config.base_url else ""
+            if not base_url.startswith(("http://", "https://")):
+                base_url = "http://" + base_url
 
             with httpx.Client() as client:
                 response = client.get(
-                    f'{base_url}/v1/model/info',
+                    f"{base_url}/v1/model/info",
                     headers={
-                        'Authorization': f'Bearer {self.config.api_key.get_secret_value() if self.config.api_key else None}'
+                        "Authorization": f"Bearer {self.config.api_key.get_secret_value() if self.config.api_key else None}"
                     },
                 )
 
-=======
-            response = requests.get(
-                f"{self.config.base_url}/v1/model/info",
-                headers={
-                    "Authorization": f"Bearer {self.config.api_key.get_secret_value() if self.config.api_key else None}"
-                },
-            )
->>>>>>> feat/grok-4
             resp_json = response.json()
             if "data" not in resp_json:
                 logger.error(
@@ -699,9 +653,9 @@ class LLM(RetryMixin, DebugMixin):
             prompt_tokens_details: PromptTokensDetails = usage.get(
                 "prompt_tokens_details"
             )
-            model_extra = usage.get('model_extra', {})
-            cache_read_input_tokens = model_extra.get('cache_read_input_tokens', 0)
-            cache_write_tokens = model_extra.get('cache_creation_input_tokens', 0)
+            model_extra = usage.get("model_extra", {})
+            cache_read_input_tokens = model_extra.get("cache_read_input_tokens", 0)
+            cache_write_tokens = model_extra.get("cache_creation_input_tokens", 0)
 
             cache_hit_tokens = (
                 prompt_tokens_details.cached_tokens
@@ -713,14 +667,6 @@ class LLM(RetryMixin, DebugMixin):
             if cache_hit_tokens:
                 stats += "Input tokens (cache hit): " + str(cache_hit_tokens) + "\n"
 
-<<<<<<< HEAD
-=======
-            # For Anthropic, the cache writes have a different cost than regular input tokens
-            # but litellm doesn't separate them in the usage stats
-            # so we can read it from the provider-specific extra field
-            model_extra = usage.get("model_extra", {})
-            cache_write_tokens = model_extra.get("cache_creation_input_tokens", 0)
->>>>>>> feat/grok-4
             if cache_write_tokens:
                 stats += "Input tokens (cache write): " + str(cache_write_tokens) + "\n"
 
@@ -788,11 +734,7 @@ class LLM(RetryMixin, DebugMixin):
             boolean: True if executing a local model.
         """
         if self.config.base_url is not None:
-<<<<<<< HEAD
-            for substring in ['localhost', '127.0.0.10.0.0.0']:
-=======
             for substring in ["localhost", "127.0.0.10.0.0.0"]:
->>>>>>> feat/grok-4
                 if substring in self.config.base_url:
                     return True
         elif self.config.model is not None:
@@ -828,35 +770,29 @@ class LLM(RetryMixin, DebugMixin):
             extra_kwargs["custom_cost_per_token"] = cost_per_token
 
         # try directly get response_cost from response
-<<<<<<< HEAD
-        _hidden_params = getattr(response, '_hidden_params', {})
-
-        cost = _hidden_params.get('additional_headers', {}).get(
-            'llm_provider-x-litellm-response-cost', None
-=======
         _hidden_params = getattr(response, "_hidden_params", {})
+
         cost = _hidden_params.get("additional_headers", {}).get(
             "llm_provider-x-litellm-response-cost", None
->>>>>>> feat/grok-4
         )
         if cost is not None:
             cost = float(cost)
             logger.debug(f"Got response_cost from response: {cost}")
 
         # Update _hidden_params to fix cost calculation for litellm_proxy models
-        if hasattr(response, '_hidden_params'):
+        if hasattr(response, "_hidden_params"):
             custom_llm_provider = None
-            if 'claude' in self.config.model:
-                custom_llm_provider = 'anthropic'
-            elif 'gemini' in self.config.model:
-                custom_llm_provider = 'google'
-            elif 'gpt' in self.config.model:
-                custom_llm_provider = 'openai'
+            if "claude" in self.config.model:
+                custom_llm_provider = "anthropic"
+            elif "gemini" in self.config.model:
+                custom_llm_provider = "google"
+            elif "gpt" in self.config.model:
+                custom_llm_provider = "openai"
             if response._hidden_params is None:
                 response._hidden_params = {}
-            response._hidden_params['custom_llm_provider'] = custom_llm_provider
+            response._hidden_params["custom_llm_provider"] = custom_llm_provider
         else:
-            response._hidden_params = {'custom_llm_provider': None}
+            response._hidden_params = {"custom_llm_provider": None}
 
         try:
             #
@@ -865,7 +801,7 @@ class LLM(RetryMixin, DebugMixin):
                     cost = litellm_completion_cost(
                         completion_response=response, **extra_kwargs
                     )
-                    logger.debug(f'Got cost from litellm: {cost}')
+                    logger.debug(f"Got cost from litellm: {cost}")
                 except Exception as e:
                     logger.error(f"Error getting cost from litellm: {e}")
 
@@ -911,7 +847,7 @@ class LLM(RetryMixin, DebugMixin):
 
         # let pydantic handle the serialization
         formatted_messages = [message.model_dump() for message in messages]
-        if 'gemini' in self.config.model.lower():
+        if "gemini" in self.config.model.lower():
             formatted_messages = transform_messages_for_gemini(formatted_messages)
         return formatted_messages
 
@@ -931,23 +867,23 @@ def transform_messages_for_llama(messages):
 
     for msg in messages:
         transformed_msg = msg.copy()  # Avoid modifying the original
-        content = msg.get('content')
+        content = msg.get("content")
 
         # Check if content is a list (structured format)
         if isinstance(content, list):
             # Extract the 'text' field from the first item (assuming it's a text type)
-            if content and isinstance(content[0], dict) and 'text' in content[0]:
-                transformed_msg['content'] = content[0]['text']
+            if content and isinstance(content[0], dict) and "text" in content[0]:
+                transformed_msg["content"] = content[0]["text"]
             else:
-                raise ValueError(f'Invalid content format in message: {msg}')
+                raise ValueError(f"Invalid content format in message: {msg}")
         # If content is already a string, no transformation needed
         elif isinstance(content, str):
-            transformed_msg['content'] = content
+            transformed_msg["content"] = content
         else:
-            raise ValueError(f'Unsupported content type in message: {msg}')
+            raise ValueError(f"Unsupported content type in message: {msg}")
 
         # Remove cache_control if present, as it's not needed for Llama
-        transformed_msg.pop('cache_control', None)
+        transformed_msg.pop("cache_control", None)
 
         transformed_messages.append(transformed_msg)
 
@@ -960,16 +896,16 @@ def transform_messages_for_gemini(messages):
     to a format compatible with Gemini models, where content is a plain string.
     """
     for message in messages:
-        if message['role'] and message['role'] == 'tool':
-            message['role'] = 'function'
+        if message["role"] and message["role"] == "tool":
+            message["role"] = "function"
             if (
-                message['content']
-                and isinstance(message['content'], list)
-                and len(message['content']) > 0
-                and isinstance(message['content'][0], dict)
-                and 'text' in message['content'][0]
+                message["content"]
+                and isinstance(message["content"], list)
+                and len(message["content"]) > 0
+                and isinstance(message["content"][0], dict)
+                and "text" in message["content"][0]
             ):
-                message['content'] = message['content'][0]['text']
+                message["content"] = message["content"][0]["text"]
             else:
                 logger.warning(
                     f"content format in message not matched for gemini: {message['content']}"
@@ -981,32 +917,32 @@ def transform_messages_for_gemini(messages):
 def check_tools(tools: list, llm_config: LLMConfig) -> list:
     """Checks and modifies tools for compatibility with the current LLM."""
     # Special handling for Gemini models which don't support default fields and have limited format support
-    if 'gemini' in llm_config.model.lower():
+    if "gemini" in llm_config.model.lower():
         logger.info(
-            f'Removing default fields and unsupported formats from tools for Gemini model {llm_config.model} '
+            f"Removing default fields and unsupported formats from tools for Gemini model {llm_config.model} "
             "since Gemini models have limited format support (only 'enum' and 'date-time' for STRING types)."
         )
         # prevent mutation of input tools
         checked_tools = copy.deepcopy(tools)
         # Strip off default fields and unsupported formats that cause errors with gemini-preview
         for tool in checked_tools:
-            if 'function' in tool and 'parameters' in tool['function']:
-                if 'properties' in tool['function']['parameters']:
-                    for prop_name, prop in tool['function']['parameters'][
-                        'properties'
+            if "function" in tool and "parameters" in tool["function"]:
+                if "properties" in tool["function"]["parameters"]:
+                    for prop_name, prop in tool["function"]["parameters"][
+                        "properties"
                     ].items():
                         # Remove default fields
-                        if 'default' in prop:
-                            del prop['default']
+                        if "default" in prop:
+                            del prop["default"]
 
                         # Remove format fields for STRING type parameters if the format is unsupported
                         # Gemini only supports 'enum' and 'date-time' formats for STRING type
-                        if prop.get('type') == 'string' and 'format' in prop:
-                            supported_formats = ['enum', 'date-time']
-                            if prop['format'] not in supported_formats:
+                        if prop.get("type") == "string" and "format" in prop:
+                            supported_formats = ["enum", "date-time"]
+                            if prop["format"] not in supported_formats:
                                 logger.info(
                                     f'Removing unsupported format "{prop["format"]}" for STRING parameter "{prop_name}"'
                                 )
-                                del prop['format']
+                                del prop["format"]
         return checked_tools
     return tools
