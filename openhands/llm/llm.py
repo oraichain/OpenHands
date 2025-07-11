@@ -80,7 +80,6 @@ FUNCTION_CALLING_SUPPORTED_MODELS = [
     "grok-3-mini",
     "grok-3-mini-beta",
     "skylark-prod-250415",
-    "grok-4-0709",
 ]
 
 REASONING_EFFORT_SUPPORTED_MODELS = [
