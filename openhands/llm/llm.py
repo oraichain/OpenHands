@@ -200,6 +200,10 @@ class LLM(RetryMixin, DebugMixin):
             kwargs["aws_secret_access_key"] = os.getenv("AWS_SECRET_ACCESS_KEY")
             kwargs["aws_region_name"] = os.getenv("AWS_REGION_NAME")
 
+        # Token efficient tools for claude-3-7-sonnet-20250219: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/token-efficient-tool-use
+        if self.config.model == 'claude-3-7-sonnet-20250219':
+            kwargs['anthropic-beta'] = 'token-efficient-tools-2025-02-19'
+
         self._completion = partial(
             litellm_completion,
             model=self.config.model,
